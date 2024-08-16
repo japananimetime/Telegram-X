@@ -1940,7 +1940,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
     });
   }
-  
+
   public interface MessagePropertyChecker {
     boolean checkProperty (TdApi.MessageProperties properties);
   }
