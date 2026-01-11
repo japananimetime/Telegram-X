@@ -2229,6 +2229,62 @@ public class MessagesController extends ViewController<MessagesController.Argume
       openLinkedChat(false);
     } else if (id == R.id.btn_openDirectMessages) {
       openLinkedChat(true);
+    } else if (id == R.id.btn_viewAsTopics) {
+      // Set viewAsTopics to true and open forum topics view
+      tdlib.client().send(new TdApi.ToggleChatViewAsTopics(chat.id, true), result -> {
+        if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
+          tdlib.ui().post(() -> {
+            // Navigate directly to forum controller (don't use openChat - chat object not updated yet)
+            long supergroupId = ChatId.toSupergroupId(chat.id);
+            TdApi.Supergroup supergroup = supergroupId != 0 ? tdlib.cache().supergroup(supergroupId) : null;
+            boolean hasForumTabs = supergroup != null && supergroup.hasForumTabs;
+
+            ViewController<?> forumController;
+            if (hasForumTabs) {
+              ForumTopicTabsController tabsController = new ForumTopicTabsController(context, tdlib);
+              tabsController.setArguments(new ForumTopicTabsController.Arguments(chat));
+              forumController = tabsController;
+            } else {
+              ForumTopicsController listController = new ForumTopicsController(context, tdlib);
+              listController.setArguments(new ForumTopicsController.Arguments(chat));
+              forumController = listController;
+            }
+
+            // Navigate and destroy current controller
+            forumController.addOneShotFocusListener(() -> {
+              forumController.destroyStackItemAt(forumController.stackSize() - 2);
+            });
+            navigateTo(forumController);
+          });
+        }
+      });
+    } else if (id == R.id.btn_viewForum) {
+      // Navigate to forum topics view (when viewing a specific topic, e.g., from message link)
+      long supergroupId = ChatId.toSupergroupId(chat.id);
+      TdApi.Supergroup supergroup = supergroupId != 0 ? tdlib.cache().supergroup(supergroupId) : null;
+      boolean hasForumTabs = supergroup != null && supergroup.hasForumTabs;
+
+      ViewController<?> forumController;
+      if (hasForumTabs) {
+        ForumTopicTabsController tabsController = new ForumTopicTabsController(context, tdlib);
+        tabsController.setArguments(new ForumTopicTabsController.Arguments(chat));
+        forumController = tabsController;
+      } else {
+        ForumTopicsController listController = new ForumTopicsController(context, tdlib);
+        listController.setArguments(new ForumTopicsController.Arguments(chat));
+        forumController = listController;
+      }
+      navigateTo(forumController);
+    } else if (id == R.id.btn_startVideoChat) {
+      // Start a new video chat in this group
+      if (chat != null) {
+        tdlib.ui().createVideoChat(this, chat.id, null, 0);
+      }
+    } else if (id == R.id.btn_joinVideoChat) {
+      // Join existing video chat
+      if (chat != null && chat.videoChat != null && chat.videoChat.groupCallId != 0) {
+        tdlib.ui().joinGroupCall(this, chat.videoChat.groupCallId);
+      }
     } else if (id == R.id.btn_manageGroup) {
       manageGroup();
     } else if (id == R.id.btn_deleteThread) {
@@ -4526,6 +4582,32 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (tdlib.hasDirectMessagesChat(getChatId())) {
       ids.append(R.id.btn_openDirectMessages);
       strings.append(R.string.DirectMessages);
+    }
+
+    // Add "View as topics" option for forum chats viewed as unified chat
+    if (tdlib.isForum(chat.id) && messageThread == null && forumTopic == null && !chat.viewAsTopics) {
+      ids.append(R.id.btn_viewAsTopics);
+      strings.append(R.string.ViewAsTopics);
+    }
+
+    // Add "View forum" option when viewing a specific forum topic (e.g., from message link)
+    if (tdlib.isForum(chat.id) && (forumTopic != null || getMessageTopicId() != null)) {
+      ids.append(R.id.btn_viewForum);
+      strings.append(R.string.ViewForum);
+    }
+
+    // Add "Start Video Chat" or "Join Video Chat" option for group chats
+    if (ChatId.isBasicGroup(chat.id) || ChatId.isSupergroup(chat.id)) {
+      TdApi.Chat c = chat;
+      if (c.videoChat != null && c.videoChat.groupCallId != 0) {
+        // Active video chat exists - show join option
+        ids.append(R.id.btn_joinVideoChat);
+        strings.append(R.string.JoinVideoChat);
+      } else if (tdlib.canManageVideoChats(chat.id)) {
+        // No active video chat and user can create one
+        ids.append(R.id.btn_startVideoChat);
+        strings.append(R.string.StartVideoChat);
+      }
     }
 
     if (BuildConfig.DEBUG) {
