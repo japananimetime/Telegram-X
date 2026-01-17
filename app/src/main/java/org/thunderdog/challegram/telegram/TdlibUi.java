@@ -133,6 +133,7 @@ import org.thunderdog.challegram.ui.SettingsThemeController;
 import org.thunderdog.challegram.ui.SettingsWebsitesController;
 import org.thunderdog.challegram.ui.ShareController;
 import org.thunderdog.challegram.ui.SimpleViewPagerController;
+import org.thunderdog.challegram.ui.WebAppController;
 import org.thunderdog.challegram.ui.camera.CameraController;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
@@ -3988,12 +3989,22 @@ public class TdlibUi extends Handler {
       case TdApi.InternalLinkTypeDefaultMessageAutoDeleteTimerSettings.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypeAttachmentMenuBot.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePremiumFeatures.CONSTRUCTOR:
       case TdApi.InternalLinkTypeRestorePurchases.CONSTRUCTOR: {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        break;
+      }
+
+      case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeWebApp webAppLink = (TdApi.InternalLinkTypeWebApp) linkType;
+        openWebAppLink(context, webAppLink.botUsername, webAppLink.webAppShortName, webAppLink.startParameter, webAppLink.mode, openParameters, after);
+        break;
+      }
+
+      case TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeMainWebApp mainWebAppLink = (TdApi.InternalLinkTypeMainWebApp) linkType;
+        openMainWebAppLink(context, mainWebAppLink.botUsername, mainWebAppLink.startParameter, mainWebAppLink.mode, openParameters, after);
         break;
       }
 
@@ -8200,6 +8211,100 @@ public class TdlibUi extends Handler {
             after.runWithBool(true);
           }
         }
+      });
+    });
+  }
+
+  private void openWebAppLink (TdlibDelegate context, String botUsername, String webAppShortName, String startParameter, TdApi.WebAppOpenMode mode, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
+    tdlib.searchPublicChat(botUsername, (chat, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      if (chat.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+
+      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(null, "tgx", mode);
+      tdlib.send(new TdApi.GetWebAppLinkUrl(chat.id, botUserId, webAppShortName, startParameter, null, "tgx", mode), (result, linkError) -> {
+        UI.post(() -> {
+          if (linkError != null) {
+            showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(linkError), openParameters);
+            if (after != null) {
+              after.runWithBool(false);
+            }
+          } else {
+            TdApi.HttpUrl httpUrl = (TdApi.HttpUrl) result;
+            WebAppController controller = new WebAppController(context.context(), tdlib);
+            controller.setArguments(new WebAppController.Args(
+              chat.id,
+              botUserId,
+              botUsername,
+              httpUrl.url,
+              0,
+              mode
+            ));
+            context.context().navigation().navigateTo(controller);
+            if (after != null) {
+              after.runWithBool(true);
+            }
+          }
+        });
+      });
+    });
+  }
+
+  private void openMainWebAppLink (TdlibDelegate context, String botUsername, String startParameter, TdApi.WebAppOpenMode mode, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
+    tdlib.searchPublicChat(botUsername, (chat, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      if (chat.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+
+      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(null, "tgx", mode);
+      tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, startParameter, webAppParams), (result, mainError) -> {
+        UI.post(() -> {
+          if (mainError != null) {
+            showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(mainError), openParameters);
+            if (after != null) {
+              after.runWithBool(false);
+            }
+          } else {
+            TdApi.MainWebApp mainWebApp = (TdApi.MainWebApp) result;
+            WebAppController controller = new WebAppController(context.context(), tdlib);
+            controller.setArguments(new WebAppController.Args(
+              chat.id,
+              botUserId,
+              botUsername,
+              mainWebApp.url,
+              0,
+              mainWebApp.mode
+            ));
+            context.context().navigation().navigateTo(controller);
+            if (after != null) {
+              after.runWithBool(true);
+            }
+          }
+        });
       });
     });
   }

@@ -720,6 +720,10 @@
   <string name="Select">Select</string>
   <string name="Open">Open</string>
   <string name="OpenInExternalApp">Open in…</string>
+  <string name="Reload">Reload</string>
+  <string name="WebApp">Web App</string>
+  <string name="Close">Close</string>
+  <string name="ShareYourPhoneNumberBot">Share your phone number with this bot?</string>
   <string name="failed">failed</string>
   <string name="NothingFound">Nothing found</string>
   <string name="Gallery">Gallery</string>

@@ -1,0 +1,1188 @@
+/*
+ * This file is a part of Telegram X
+ * Copyright © 2014 (tgx-android@pm.me)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * File created on 17/01/2026
+ */
+package org.thunderdog.challegram.ui;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.WebView;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import androidx.annotation.Nullable;
+
+import java.util.Locale;
+
+import org.drinkless.tdlib.TdApi;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.thunderdog.challegram.BaseActivity;
+import org.thunderdog.challegram.Log;
+import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.core.BiometricAuthentication;
+import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.navigation.BackHeaderButton;
+import org.thunderdog.challegram.navigation.DoubleHeaderView;
+import org.thunderdog.challegram.navigation.HeaderView;
+import org.thunderdog.challegram.navigation.Menu;
+import org.thunderdog.challegram.navigation.MoreDelegate;
+import org.thunderdog.challegram.navigation.NavigationController;
+import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Drawables;
+import org.thunderdog.challegram.tool.Fonts;
+import org.thunderdog.challegram.tool.Intents;
+import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.ui.camera.CameraController;
+import org.thunderdog.challegram.unsorted.Size;
+import org.thunderdog.challegram.util.OptionDelegate;
+import org.thunderdog.challegram.v.WebAppProxy;
+import org.thunderdog.challegram.widget.ProgressComponent;
+
+import me.vkryl.android.AnimatorUtils;
+import me.vkryl.android.animator.BoolAnimator;
+import me.vkryl.android.animator.FactorAnimator;
+import me.vkryl.android.widget.FrameLayoutFix;
+import me.vkryl.core.ColorUtils;
+
+public class WebAppController extends WebkitController<WebAppController.Args> implements Menu, MoreDelegate, FactorAnimator.Target, SensorEventListener {
+
+  public static class Args {
+    public final long chatId;
+    public final long botUserId;
+    public final String botUsername;
+    public final String url;
+    public final long launchId;
+    public final TdApi.WebAppOpenMode openMode;
+    public @Nullable MessagesController ownerController;
+
+    public Args (long chatId, long botUserId, String botUsername, String url, long launchId, @Nullable TdApi.WebAppOpenMode openMode) {
+      this.chatId = chatId;
+      this.botUserId = botUserId;
+      this.botUsername = botUsername;
+      this.url = url;
+      this.launchId = launchId;
+      this.openMode = openMode;
+    }
+
+    public Args setOwnerController (MessagesController controller) {
+      this.ownerController = controller;
+      return this;
+    }
+  }
+
+  // UI components
+  private WebView webView;
+  private WebAppProxy webAppProxy;
+  private FrameLayoutFix contentView;
+  private DoubleHeaderView headerCell;
+  private MainButtonView mainButtonView;
+
+  // Main button state
+  private boolean mainButtonVisible = false;
+  private boolean mainButtonActive = true;
+  private boolean mainButtonProgressVisible = false;
+  private String mainButtonText = "";
+  private int mainButtonColor = 0;
+  private int mainButtonTextColor = 0;
+
+  // Back button state
+  private boolean backButtonVisible = false;
+
+  // Settings button state
+  private boolean settingsButtonVisible = false;
+
+  // Expansion state
+  private boolean isExpanded = false;
+
+  // Header/background colors (null means use theme default)
+  private Integer customHeaderColor = null;
+  private Integer customBackgroundColor = null;
+  private Integer customBottomBarColor = null;
+
+  // Animation IDs
+  private static final int ANIMATOR_MAIN_BUTTON = 0;
+  private BoolAnimator mainButtonAnimator;
+
+  public WebAppController (Context context, Tdlib tdlib) {
+    super(context, tdlib);
+  }
+
+  @Override
+  public int getId () {
+    return R.id.controller_webApp;
+  }
+
+  @Override
+  protected int getMenuId () {
+    return R.id.menu_webApp;
+  }
+
+  @Override
+  public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
+    if (id == R.id.menu_webApp) {
+      header.addMoreButton(menu, this);
+    }
+  }
+
+  @Override
+  public void onMenuItemPressed (int id, View view) {
+    if (id == R.id.menu_btn_more) {
+      int[] ids;
+      String[] titles;
+      if (settingsButtonVisible) {
+        ids = new int[] {R.id.btn_settings, R.id.btn_openLink, R.id.btn_reload};
+        titles = new String[] {Lang.getString(R.string.BotSettings), Lang.getString(R.string.OpenInExternalApp), Lang.getString(R.string.Reload)};
+      } else {
+        ids = new int[] {R.id.btn_openLink, R.id.btn_reload};
+        titles = new String[] {Lang.getString(R.string.OpenInExternalApp), Lang.getString(R.string.Reload)};
+      }
+      showMore(ids, titles, 0);
+    }
+  }
+
+  @Override
+  public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_openLink) {
+      if (getArguments() != null) {
+        Intents.openUri(getArguments().url);
+      }
+    } else if (id == R.id.btn_reload) {
+      if (webView != null) {
+        webView.reload();
+      }
+    } else if (id == R.id.btn_settings) {
+      onWebAppSettingsButtonPressed();
+    }
+  }
+
+  @SuppressLint("AddJavascriptInterface")
+  @Override
+  protected void onCreateWebView (DoubleHeaderView headerCell, WebView webView) {
+    this.webView = webView;
+    this.headerCell = headerCell;
+
+    // Get the content view (parent of webView)
+    this.contentView = (FrameLayoutFix) webView.getParent();
+
+    Args args = getArguments();
+    if (args != null) {
+      headerCell.setTitle(args.botUsername != null ? args.botUsername : Lang.getString(R.string.WebApp));
+      headerCell.setSubtitle(Lang.getString(R.string.WebApp));
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+        webAppProxy = new WebAppProxy(this);
+        webView.addJavascriptInterface(webAppProxy, "TelegramWebviewProxy");
+      }
+
+      // Create and add main button
+      mainButtonView = new MainButtonView(context());
+      mainButtonView.setVisibility(View.GONE);
+      mainButtonView.setOnClickListener(v -> onMainButtonClicked());
+      contentView.addView(mainButtonView, FrameLayoutFix.newParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f),
+        Gravity.BOTTOM
+      ));
+
+      // Initialize animator
+      mainButtonAnimator = new BoolAnimator(ANIMATOR_MAIN_BUTTON, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+
+      // Set up layout change listener for viewport reporting
+      webView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+        if (bottom - top != oldBottom - oldTop) {
+          sendViewportData();
+        }
+      });
+
+      webView.loadUrl(args.url);
+    }
+  }
+
+  @Override
+  public boolean canSlideBackFrom (NavigationController navigationController, float x, float y) {
+    return y < Size.getHeaderPortraitSize() || x <= Screen.dp(15f);
+  }
+
+  @Override
+  protected int getBackButton () {
+    return backButtonVisible ? BackHeaderButton.TYPE_BACK : BackHeaderButton.TYPE_CLOSE;
+  }
+
+  @Override
+  public boolean onBackPressed (boolean fromTop) {
+    if (backButtonVisible) {
+      onWebAppBackButtonPressed();
+      return true;
+    }
+    return super.onBackPressed(fromTop);
+  }
+
+  @Override
+  public void destroy () {
+    stopAllSensors();
+    super.destroy();
+    if (getArguments() != null && getArguments().launchId != 0) {
+      tdlib.send(new TdApi.CloseWebApp(getArguments().launchId), (result, error) -> {
+        if (error != null) {
+          Log.e("Failed to close web app: %s", error.message);
+        }
+      });
+    }
+  }
+
+  // FactorAnimator.Target implementation
+  @Override
+  public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+    if (id == ANIMATOR_MAIN_BUTTON) {
+      updateMainButtonLayout(factor);
+    }
+  }
+
+  @Override
+  public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
+    if (id == ANIMATOR_MAIN_BUTTON && finalFactor == 0f) {
+      mainButtonView.setVisibility(View.GONE);
+    }
+  }
+
+  private void updateMainButtonLayout (float factor) {
+    if (mainButtonView == null) return;
+
+    int buttonHeight = Screen.dp(48f);
+    int translationY = (int) ((1f - factor) * buttonHeight);
+    mainButtonView.setTranslationY(translationY);
+    mainButtonView.setAlpha(factor);
+
+    // Adjust webView bottom padding
+    int bottomPadding = (int) (buttonHeight * factor);
+    webView.setPadding(0, 0, 0, bottomPadding);
+  }
+
+  // ==================== Web App JavaScript Interface Callbacks ====================
+
+  public void onWebAppReady () {
+    Log.i("WebApp ready");
+    // Send initial viewport data
+    sendViewportData();
+  }
+
+  public void onWebAppClose () {
+    UI.post(this::navigateBack);
+  }
+
+  public void onWebAppSendData (String data) {
+    Args args = getArguments();
+    if (args != null && args.botUserId != 0) {
+      tdlib.send(new TdApi.SendWebAppData(args.botUserId, data), (result, error) -> {
+        if (error != null) {
+          Log.e("Failed to send web app data: %s", error.message);
+        }
+        UI.post(this::navigateBack);
+      });
+    }
+  }
+
+  public void onWebAppOpenLink (String url) {
+    tdlib.ui().openUrl(this, url, null);
+  }
+
+  public void onWebAppRequestPhone () {
+    TdApi.User user = tdlib.myUser();
+    if (user == null) {
+      sendEventToWebApp("phone_requested", "{\"status\":\"cancelled\"}");
+      return;
+    }
+
+    showOptions(
+      Lang.getString(R.string.ShareYourPhoneNumberBot),
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.Share), Lang.getString(R.string.Cancel)},
+      (itemView, id) -> {
+        if (id == R.id.btn_done) {
+          String phone = user.phoneNumber;
+          sendEventToWebApp("phone_requested", "{\"status\":\"sent\",\"phone_number\":\"" + escapeJsonString(phone) + "\"}");
+        } else {
+          sendEventToWebApp("phone_requested", "{\"status\":\"cancelled\"}");
+        }
+        return true;
+      }
+    );
+  }
+
+  public void onWebAppRequestWriteAccess () {
+    Args args = getArguments();
+    if (args == null) {
+      sendEventToWebApp("write_access_requested", "{\"status\":\"cancelled\"}");
+      return;
+    }
+
+    showOptions(
+      Lang.getString(R.string.AllowWriteAccess, tdlib.chatTitle(args.chatId)),
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
+      (itemView, id) -> {
+        if (id == R.id.btn_done) {
+          tdlib.send(new TdApi.AllowBotToSendMessages(args.botUserId), (result, error) -> {
+            UI.post(() -> {
+              if (error != null) {
+                sendEventToWebApp("write_access_requested", "{\"status\":\"cancelled\"}");
+              } else {
+                sendEventToWebApp("write_access_requested", "{\"status\":\"allowed\"}");
+              }
+            });
+          });
+        } else {
+          sendEventToWebApp("write_access_requested", "{\"status\":\"cancelled\"}");
+        }
+        return true;
+      }
+    );
+  }
+
+  // ==================== Main Button ====================
+
+  public void onWebAppSetMainButton (boolean visible, String text, int color, int textColor, boolean isActive, boolean isProgressVisible) {
+    this.mainButtonVisible = visible;
+    this.mainButtonText = text;
+    this.mainButtonColor = color;
+    this.mainButtonTextColor = textColor;
+    this.mainButtonActive = isActive;
+    this.mainButtonProgressVisible = isProgressVisible;
+    UI.post(this::updateMainButton);
+  }
+
+  private void updateMainButton () {
+    if (mainButtonView == null) return;
+
+    mainButtonView.setText(mainButtonText);
+    mainButtonView.setButtonColors(mainButtonColor, mainButtonTextColor);
+    mainButtonView.setActive(mainButtonActive);
+    mainButtonView.setProgressVisible(mainButtonProgressVisible);
+
+    if (mainButtonVisible) {
+      mainButtonView.setVisibility(View.VISIBLE);
+      mainButtonAnimator.setValue(true, true);
+    } else {
+      mainButtonAnimator.setValue(false, true);
+    }
+  }
+
+  private void onMainButtonClicked () {
+    if (!mainButtonActive || mainButtonProgressVisible) return;
+
+    if (webView != null) {
+      webView.evaluateJavascript(
+        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton && " +
+        "window.Telegram.WebApp.MainButton.isActive && " +
+        "window.Telegram.WebApp.MainButton.onClick && window.Telegram.WebApp.MainButton.onClick()",
+        null
+      );
+    }
+  }
+
+  // ==================== Back Button ====================
+
+  public void onWebAppSetBackButton (boolean visible) {
+    if (this.backButtonVisible != visible) {
+      this.backButtonVisible = visible;
+      UI.post(() -> {
+        // Update the header button
+        if (headerView() != null) {
+          headerView().updateButton(getMenuId(), getBackButton(), 0);
+        }
+      });
+    }
+  }
+
+  public void onWebAppBackButtonPressed () {
+    if (webView != null) {
+      webView.evaluateJavascript(
+        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton && " +
+        "window.Telegram.WebApp.BackButton.onClick && window.Telegram.WebApp.BackButton.onClick()",
+        null
+      );
+    }
+  }
+
+  // ==================== Settings Button ====================
+
+  public void onWebAppSetSettingsButton (boolean visible) {
+    this.settingsButtonVisible = visible;
+  }
+
+  private void onWebAppSettingsButtonPressed () {
+    if (webView != null) {
+      webView.evaluateJavascript(
+        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.SettingsButton && " +
+        "window.Telegram.WebApp.SettingsButton.onClick && window.Telegram.WebApp.SettingsButton.onClick()",
+        null
+      );
+    }
+  }
+
+  // ==================== Popups & Dialogs ====================
+
+  public void onWebAppShowAlert (String message, @Nullable Runnable callback) {
+    showOptions(
+      message,
+      new int[] {R.id.btn_done},
+      new String[] {Lang.getString(R.string.OK)},
+      (itemView, id) -> {
+        if (callback != null) {
+          callback.run();
+        }
+        sendEventToWebApp("popup_closed", "{\"button_id\":\"\"}");
+        return true;
+      }
+    );
+  }
+
+  public void onWebAppShowConfirm (String message, @Nullable java.util.function.Consumer<Boolean> callback) {
+    showOptions(
+      message,
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.OK), Lang.getString(R.string.Cancel)},
+      (itemView, id) -> {
+        boolean confirmed = id == R.id.btn_done;
+        if (callback != null) {
+          callback.accept(confirmed);
+        }
+        sendEventToWebApp("popup_closed", "{\"button_id\":\"" + (confirmed ? "ok" : "") + "\"}");
+        return true;
+      }
+    );
+  }
+
+  public void onWebAppShowPopup (String title, String message, JSONArray buttons) {
+    if (buttons == null || buttons.length() == 0) {
+      onWebAppShowAlert(message, null);
+      return;
+    }
+
+    int buttonCount = Math.min(buttons.length(), 3);
+    int[] ids = new int[buttonCount];
+    String[] titles = new String[buttonCount];
+    int[] colors = new int[buttonCount];
+    String[] buttonIds = new String[buttonCount];
+
+    for (int i = 0; i < buttonCount; i++) {
+      JSONObject btn = buttons.optJSONObject(i);
+      if (btn != null) {
+        buttonIds[i] = btn.optString("id", "");
+        String type = btn.optString("type", "default");
+        String text = btn.optString("text", "");
+
+        ids[i] = R.id.btn_done + i;
+
+        switch (type) {
+          case "ok":
+            titles[i] = text.isEmpty() ? Lang.getString(R.string.OK) : text;
+            colors[i] = OptionColor.NORMAL;
+            break;
+          case "close":
+            titles[i] = text.isEmpty() ? Lang.getString(R.string.Close) : text;
+            colors[i] = OptionColor.NORMAL;
+            break;
+          case "cancel":
+            titles[i] = text.isEmpty() ? Lang.getString(R.string.Cancel) : text;
+            colors[i] = OptionColor.NORMAL;
+            break;
+          case "destructive":
+            titles[i] = text;
+            colors[i] = OptionColor.RED;
+            break;
+          default:
+            titles[i] = text;
+            colors[i] = OptionColor.NORMAL;
+            break;
+        }
+      }
+    }
+
+    final String[] finalButtonIds = buttonIds;
+    CharSequence popupMessage = title != null && !title.isEmpty()
+      ? title + "\n\n" + message
+      : message;
+
+    showOptions(
+      popupMessage,
+      ids,
+      titles,
+      colors,
+      null,
+      (itemView, id) -> {
+        int index = id - R.id.btn_done;
+        String selectedId = index >= 0 && index < finalButtonIds.length ? finalButtonIds[index] : "";
+        sendEventToWebApp("popup_closed", "{\"button_id\":\"" + escapeJsonString(selectedId) + "\"}");
+        return true;
+      }
+    );
+  }
+
+  // ==================== Haptic Feedback ====================
+
+  public void onWebAppHapticFeedback (String type, String style) {
+    View view = getViewForApplyingOffsets();
+    if (view == null) return;
+
+    switch (type) {
+      case "impact":
+        switch (style) {
+          case "light":
+            performHapticFeedback(view, 10);
+            break;
+          case "medium":
+            performHapticFeedback(view, 20);
+            break;
+          case "heavy":
+            performHapticFeedback(view, 50);
+            break;
+          case "rigid":
+            performHapticFeedback(view, 30);
+            break;
+          case "soft":
+            performHapticFeedback(view, 15);
+            break;
+        }
+        break;
+      case "notification":
+        switch (style) {
+          case "error":
+            performHapticFeedback(view, 40);
+            break;
+          case "success":
+            performHapticFeedback(view, 25);
+            break;
+          case "warning":
+            performHapticFeedback(view, 35);
+            break;
+        }
+        break;
+      case "selection_change":
+        performHapticFeedback(view, 5);
+        break;
+    }
+  }
+
+  private void performHapticFeedback (View view, int duration) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      Vibrator vibrator = (Vibrator) context().getSystemService(Context.VIBRATOR_SERVICE);
+      if (vibrator != null && vibrator.hasVibrator()) {
+        vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE));
+      }
+    } else {
+      UI.hapticVibrate(view, duration > 20);
+    }
+  }
+
+  // ==================== Viewport & Expansion ====================
+
+  public void onWebAppExpand () {
+    isExpanded = true;
+    sendViewportData();
+  }
+
+  public void onWebAppRequestViewport () {
+    sendViewportData();
+  }
+
+  private void sendViewportData () {
+    if (webView == null) return;
+
+    int height = webView.getHeight();
+    if (mainButtonVisible) {
+      height -= Screen.dp(48f);
+    }
+    int stableHeight = height;
+    boolean expanded = isExpanded;
+
+    String js = String.format(
+      "if (window.Telegram && window.Telegram.WebApp) {" +
+      "  Telegram.WebApp.viewportHeight = %d;" +
+      "  Telegram.WebApp.viewportStableHeight = %d;" +
+      "  Telegram.WebApp.isExpanded = %b;" +
+      "  if (Telegram.WebApp.onEvent) {" +
+      "    Telegram.WebApp.onEvent('viewportChanged', {isStateStable: true});" +
+      "  }" +
+      "}",
+      height, stableHeight, expanded
+    );
+    webView.evaluateJavascript(js, null);
+  }
+
+  // ==================== Dynamic Theme Colors ====================
+
+  public void onWebAppSetHeaderColor (String color) {
+    int parsedColor = parseColor(color);
+    if (parsedColor != 0) {
+      this.customHeaderColor = parsedColor;
+      UI.post(() -> {
+        if (headerCell != null) {
+          // Note: Full header color change requires more complex implementation
+          // For now we can adjust the header view background if exposed
+        }
+      });
+    }
+  }
+
+  public void onWebAppSetBackgroundColor (String color) {
+    int parsedColor = parseColor(color);
+    if (parsedColor != 0) {
+      this.customBackgroundColor = parsedColor;
+      UI.post(() -> {
+        if (contentView != null) {
+          contentView.setBackgroundColor(parsedColor);
+        }
+      });
+    }
+  }
+
+  public void onWebAppSetBottomBarColor (String color) {
+    int parsedColor = parseColor(color);
+    if (parsedColor != 0) {
+      this.customBottomBarColor = parsedColor;
+      // Note: Bottom bar is the main button background, already handled by mainButtonColor
+    }
+  }
+
+  private int parseColor (String colorStr) {
+    if (colorStr == null || colorStr.isEmpty()) return 0;
+    try {
+      if (colorStr.startsWith("#")) {
+        return (int) Long.parseLong(colorStr.substring(1), 16) | 0xFF000000;
+      } else if (colorStr.equals("bg_color")) {
+        return Theme.getColor(ColorId.filling);
+      } else if (colorStr.equals("secondary_bg_color")) {
+        return Theme.getColor(ColorId.fillingPositive);
+      }
+      return 0;
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
+  // ==================== Cloud Storage (Custom Methods) ====================
+
+  public void onWebAppInvokeCustomMethod (String requestId, String method, String parameters) {
+    Args args = getArguments();
+    if (args == null) {
+      sendCustomMethodError(requestId, "No bot context");
+      return;
+    }
+
+    tdlib.send(new TdApi.SendWebAppCustomRequest(args.botUserId, method, parameters), (result, error) -> {
+      UI.post(() -> {
+        if (error != null) {
+          sendCustomMethodError(requestId, error.message);
+        } else {
+          TdApi.CustomRequestResult customResult = (TdApi.CustomRequestResult) result;
+          sendCustomMethodResult(requestId, customResult.result);
+        }
+      });
+    });
+  }
+
+  private void sendCustomMethodResult (String requestId, String result) {
+    String js = String.format(
+      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+      "  Telegram.WebApp.onEvent('custom_method_invoked', {req_id: '%s', result: %s});" +
+      "}",
+      escapeJsonString(requestId), result != null ? result : "null"
+    );
+    if (webView != null) {
+      webView.evaluateJavascript(js, null);
+    }
+  }
+
+  private void sendCustomMethodError (String requestId, String error) {
+    String js = String.format(
+      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+      "  Telegram.WebApp.onEvent('custom_method_invoked', {req_id: '%s', error: '%s'});" +
+      "}",
+      escapeJsonString(requestId), escapeJsonString(error)
+    );
+    if (webView != null) {
+      webView.evaluateJavascript(js, null);
+    }
+  }
+
+  // ==================== Clipboard Access ====================
+
+  public void onWebAppReadClipboard (String requestId) {
+    CharSequence clipText = U.getPasteText(context());
+    String data = clipText != null ? clipText.toString() : null;
+
+    String js;
+    if (data != null) {
+      js = String.format(
+        "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+        "  Telegram.WebApp.onEvent('clipboard_text_received', {req_id: '%s', data: '%s'});" +
+        "}",
+        escapeJsonString(requestId), escapeJsonString(data)
+      );
+    } else {
+      js = String.format(
+        "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+        "  Telegram.WebApp.onEvent('clipboard_text_received', {req_id: '%s'});" +
+        "}",
+        escapeJsonString(requestId)
+      );
+    }
+    if (webView != null) {
+      webView.evaluateJavascript(js, null);
+    }
+  }
+
+  // ==================== Biometric Authentication ====================
+
+  public void onWebAppBiometryGetInfo () {
+    boolean available = BiometricAuthentication.isAvailable();
+    String type = available ? (BiometricAuthentication.ONLY_FINGERPRINT ? "finger" : "face") : "";
+
+    String js = String.format(
+      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+      "  Telegram.WebApp.onEvent('biometry_info_received', {" +
+      "    available: %b," +
+      "    type: '%s'," +
+      "    access_requested: %b," +
+      "    access_granted: %b," +
+      "    device_id: ''," +
+      "    token_saved: false" +
+      "  });" +
+      "}",
+      available, type, biometryAccessRequested, biometryAccessGranted
+    );
+    if (webView != null) {
+      webView.evaluateJavascript(js, null);
+    }
+  }
+
+  private boolean biometryAccessRequested = false;
+  private boolean biometryAccessGranted = false;
+
+  public void onWebAppBiometryRequestAccess (String reason) {
+    if (!BiometricAuthentication.isAvailable()) {
+      sendBiometryAccessResult(false);
+      return;
+    }
+
+    biometryAccessRequested = true;
+
+    showOptions(
+      reason != null && !reason.isEmpty() ? reason : Lang.getString(R.string.ConfirmYourBiometrics),
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
+      (itemView, id) -> {
+        biometryAccessGranted = (id == R.id.btn_done);
+        sendBiometryAccessResult(biometryAccessGranted);
+        return true;
+      }
+    );
+  }
+
+  private void sendBiometryAccessResult (boolean granted) {
+    String js = String.format(
+      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+      "  Telegram.WebApp.onEvent('biometry_auth_requested', {status: '%s'});" +
+      "}",
+      granted ? "authorized" : "failed"
+    );
+    if (webView != null) {
+      webView.evaluateJavascript(js, null);
+    }
+  }
+
+  public void onWebAppBiometryAuthenticate (String reason) {
+    if (!BiometricAuthentication.isAvailable() || !biometryAccessGranted) {
+      sendBiometryAuthResult(false, null);
+      return;
+    }
+
+    BaseActivity activity = context();
+    if (activity == null) {
+      sendBiometryAuthResult(false, null);
+      return;
+    }
+
+    BiometricAuthentication.authenticate(
+      activity,
+      reason != null && !reason.isEmpty() ? reason : Lang.getString(R.string.ConfirmYourBiometrics),
+      Lang.getString(R.string.Cancel),
+      false,
+      new BiometricAuthentication.Callback() {
+        @Override
+        public void onAuthenticated (androidx.biometric.BiometricPrompt.AuthenticationResult result, boolean strong) {
+          UI.post(() -> sendBiometryAuthResult(true, ""));
+        }
+
+        @Override
+        public void onAuthenticationError (CharSequence message, boolean isFatal) {
+          UI.post(() -> sendBiometryAuthResult(false, null));
+        }
+      }
+    );
+  }
+
+  private void sendBiometryAuthResult (boolean success, String token) {
+    String js;
+    if (success) {
+      js = String.format(
+        "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+        "  Telegram.WebApp.onEvent('biometry_auth_requested', {status: 'authorized', token: '%s'});" +
+        "}",
+        token != null ? escapeJsonString(token) : ""
+      );
+    } else {
+      js = "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+           "  Telegram.WebApp.onEvent('biometry_auth_requested', {status: 'failed'});" +
+           "}";
+    }
+    if (webView != null) {
+      webView.evaluateJavascript(js, null);
+    }
+  }
+
+  // ==================== QR Code Scanner ====================
+
+  private boolean qrScannerOpen = false;
+
+  public void onWebAppOpenQrScanner (String text) {
+    if (qrScannerOpen) return;
+    qrScannerOpen = true;
+
+    String subtitle = (text != null && !text.isEmpty()) ? text : Lang.getString(R.string.ScanQRFullSubtitle);
+
+    openInAppCamera(new CameraOpenOptions()
+      .mode(CameraController.MODE_QR)
+      .allowSystem(false)
+      .ignoreAnchor(true)
+      .qrModeSubtitleText(subtitle)
+      .allowAnyQrCode(true)
+      .qrCodeListener(qrCode -> {
+        qrScannerOpen = false;
+        sendEventToWebApp("qr_text_received", "{\"data\":\"" + escapeJsonString(qrCode) + "\"}");
+      })
+    );
+  }
+
+  public void onWebAppCloseQrScanner () {
+    qrScannerOpen = false;
+    // Camera will close automatically when result received or user backs out
+  }
+
+  // ==================== Device Sensors ====================
+
+  private SensorManager sensorManager;
+  private Sensor accelerometer;
+  private Sensor gyroscope;
+  private Sensor rotationVector;
+  private boolean accelerometerStarted = false;
+  private boolean gyroscopeStarted = false;
+  private boolean deviceOrientationStarted = false;
+  private boolean deviceOrientationAbsolute = false;
+
+  private void initSensors () {
+    sensorManager = (SensorManager) context().getSystemService(Context.SENSOR_SERVICE);
+    if (sensorManager != null) {
+      accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+      gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+      rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+    }
+  }
+
+  // Accelerometer
+  public void onWebAppStartAccelerometer (int refreshRate) {
+    if (sensorManager == null) initSensors();
+    if (sensorManager == null || accelerometer == null) {
+      sendEventToWebApp("accelerometer_failed", "{\"error\":\"UNSUPPORTED\"}");
+      return;
+    }
+    if (accelerometerStarted) return;
+
+    int delay = refreshRateToDelay(refreshRate);
+    sensorManager.registerListener(this, accelerometer, delay);
+    accelerometerStarted = true;
+    sendEventToWebApp("accelerometer_started", "{}");
+  }
+
+  public void onWebAppStopAccelerometer () {
+    if (!accelerometerStarted || sensorManager == null) return;
+    sensorManager.unregisterListener(this, accelerometer);
+    accelerometerStarted = false;
+    sendEventToWebApp("accelerometer_stopped", "{}");
+  }
+
+  // Gyroscope
+  public void onWebAppStartGyroscope (int refreshRate) {
+    if (sensorManager == null) initSensors();
+    if (sensorManager == null || gyroscope == null) {
+      sendEventToWebApp("gyroscope_failed", "{\"error\":\"UNSUPPORTED\"}");
+      return;
+    }
+    if (gyroscopeStarted) return;
+
+    int delay = refreshRateToDelay(refreshRate);
+    sensorManager.registerListener(this, gyroscope, delay);
+    gyroscopeStarted = true;
+    sendEventToWebApp("gyroscope_started", "{}");
+  }
+
+  public void onWebAppStopGyroscope () {
+    if (!gyroscopeStarted || sensorManager == null) return;
+    sensorManager.unregisterListener(this, gyroscope);
+    gyroscopeStarted = false;
+    sendEventToWebApp("gyroscope_stopped", "{}");
+  }
+
+  // Device Orientation
+  public void onWebAppStartDeviceOrientation (boolean absolute, int refreshRate) {
+    if (sensorManager == null) initSensors();
+    if (sensorManager == null || rotationVector == null) {
+      sendEventToWebApp("device_orientation_failed", "{\"error\":\"UNSUPPORTED\"}");
+      return;
+    }
+    if (deviceOrientationStarted) return;
+
+    deviceOrientationAbsolute = absolute;
+    int delay = refreshRateToDelay(refreshRate);
+    sensorManager.registerListener(this, rotationVector, delay);
+    deviceOrientationStarted = true;
+    sendEventToWebApp("device_orientation_started", "{}");
+  }
+
+  public void onWebAppStopDeviceOrientation () {
+    if (!deviceOrientationStarted || sensorManager == null) return;
+    sensorManager.unregisterListener(this, rotationVector);
+    deviceOrientationStarted = false;
+    sendEventToWebApp("device_orientation_stopped", "{}");
+  }
+
+  private int refreshRateToDelay (int refreshRate) {
+    if (refreshRate <= 20) return SensorManager.SENSOR_DELAY_FASTEST;
+    if (refreshRate <= 60) return SensorManager.SENSOR_DELAY_GAME;
+    if (refreshRate <= 100) return SensorManager.SENSOR_DELAY_UI;
+    return SensorManager.SENSOR_DELAY_NORMAL;
+  }
+
+  private void stopAllSensors () {
+    if (accelerometerStarted) onWebAppStopAccelerometer();
+    if (gyroscopeStarted) onWebAppStopGyroscope();
+    if (deviceOrientationStarted) onWebAppStopDeviceOrientation();
+  }
+
+  // SensorEventListener implementation
+  @Override
+  public void onSensorChanged (SensorEvent event) {
+    if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+      float x = event.values[0];
+      float y = event.values[1];
+      float z = event.values[2];
+      sendEventToWebApp("accelerometer_changed", String.format(Locale.US, "{\"x\":%.6f,\"y\":%.6f,\"z\":%.6f}", x, y, z));
+    } else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+      float x = event.values[0];
+      float y = event.values[1];
+      float z = event.values[2];
+      sendEventToWebApp("gyroscope_changed", String.format(Locale.US, "{\"x\":%.6f,\"y\":%.6f,\"z\":%.6f}", x, y, z));
+    } else if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+      float[] rotationMatrix = new float[9];
+      float[] orientation = new float[3];
+      SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values);
+      SensorManager.getOrientation(rotationMatrix, orientation);
+
+      // Convert to degrees
+      float alpha = (float) Math.toDegrees(orientation[0]); // Azimuth (compass)
+      float beta = (float) Math.toDegrees(orientation[1]);  // Pitch
+      float gamma = (float) Math.toDegrees(orientation[2]); // Roll
+
+      sendEventToWebApp("device_orientation_changed",
+        String.format(Locale.US, "{\"absolute\":%b,\"alpha\":%.2f,\"beta\":%.2f,\"gamma\":%.2f}",
+          deviceOrientationAbsolute, alpha, beta, gamma));
+    }
+  }
+
+  @Override
+  public void onAccuracyChanged (Sensor sensor, int accuracy) {
+    // Not needed for web apps
+  }
+
+  // ==================== Helper Methods ====================
+
+  private void sendEventToWebApp (String eventName, String eventData) {
+    if (webView == null) return;
+    String js = String.format(
+      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
+      "  Telegram.WebApp.onEvent('%s', %s);" +
+      "}",
+      eventName, eventData
+    );
+    webView.evaluateJavascript(js, null);
+  }
+
+  private String escapeJsonString (String str) {
+    if (str == null) return "";
+    return str.replace("\\", "\\\\")
+              .replace("\"", "\\\"")
+              .replace("\n", "\\n")
+              .replace("\r", "\\r")
+              .replace("\t", "\\t");
+  }
+
+  public TdApi.ThemeParameters getThemeParameters () {
+    TdApi.ThemeParameters params = new TdApi.ThemeParameters();
+    params.backgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.secondaryBackgroundColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.headerBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.bottomBarBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.sectionBackgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.sectionSeparatorColor = Theme.getColor(ColorId.separator) & 0xFFFFFF;
+    params.textColor = Theme.getColor(ColorId.text) & 0xFFFFFF;
+    params.accentTextColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.sectionHeaderTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.subtitleTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.destructiveTextColor = Theme.getColor(ColorId.textNegative) & 0xFFFFFF;
+    params.hintColor = Theme.getColor(ColorId.textPlaceholder) & 0xFFFFFF;
+    params.linkColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.buttonColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.buttonTextColor = Theme.getColor(ColorId.fillingPositiveContent) & 0xFFFFFF;
+    return params;
+  }
+
+  // ==================== Main Button View ====================
+
+  private class MainButtonView extends FrameLayout {
+    private final Paint backgroundPaint;
+    private final Paint textPaint;
+    private final ProgressComponent progress;
+
+    private String text = "";
+    private int backgroundColor = 0xFF007AFF;
+    private int textColor = 0xFFFFFFFF;
+    private boolean active = true;
+    private boolean progressVisible = false;
+
+    public MainButtonView (Context context) {
+      super(context);
+      setWillNotDraw(false);
+
+      backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      backgroundPaint.setColor(backgroundColor);
+
+      textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      textPaint.setTypeface(Fonts.getRobotoMedium());
+      textPaint.setTextSize(Screen.dp(15f));
+      textPaint.setColor(textColor);
+      textPaint.setTextAlign(Paint.Align.CENTER);
+
+      progress = new ProgressComponent(UI.getContext(context), Screen.dp(8f));
+      progress.setUseLargerPaint(Screen.dp(2f));
+      progress.forceColor(textColor);
+    }
+
+    public void setText (String text) {
+      this.text = text != null ? text : "";
+      invalidate();
+    }
+
+    public void setButtonColors (int bgColor, int txtColor) {
+      this.backgroundColor = bgColor;
+      this.textColor = txtColor;
+      backgroundPaint.setColor(bgColor);
+      textPaint.setColor(txtColor);
+      progress.forceColor(txtColor);
+      invalidate();
+    }
+
+    public void setActive (boolean active) {
+      this.active = active;
+      setAlpha(active ? 1f : 0.6f);
+    }
+
+    public void setProgressVisible (boolean visible) {
+      if (this.progressVisible != visible) {
+        this.progressVisible = visible;
+        if (visible) {
+          progress.attachToView(this);
+        } else {
+          progress.detachFromView(this);
+        }
+        invalidate();
+      }
+    }
+
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      int progressSize = Screen.dp(20f);
+      int centerX = getMeasuredWidth() / 2;
+      int centerY = getMeasuredHeight() / 2;
+      progress.setBounds(
+        centerX - progressSize / 2,
+        centerY - progressSize / 2,
+        centerX + progressSize / 2,
+        centerY + progressSize / 2
+      );
+    }
+
+    @Override
+    protected void onDraw (Canvas canvas) {
+      super.onDraw(canvas);
+
+      // Draw background
+      canvas.drawRect(0, 0, getWidth(), getHeight(), backgroundPaint);
+
+      if (progressVisible) {
+        // Draw progress spinner
+        progress.draw(canvas);
+      } else {
+        // Draw text
+        float textY = getHeight() / 2f - (textPaint.descent() + textPaint.ascent()) / 2f;
+        canvas.drawText(text.toUpperCase(), getWidth() / 2f, textY, textPaint);
+      }
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      if (progressVisible) {
+        progress.attachToView(this);
+      }
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      super.onDetachedFromWindow();
+      progress.detachFromView(this);
+    }
+  }
+
+}

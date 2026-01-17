@@ -102,7 +102,10 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
   private void updateTexts (int width) {
     TextColorSet forceWhite = () -> Color.WHITE;
     qrTextTitle = new Text.Builder(Lang.getString(R.string.ScanQRFullTitle), width, Paints.robotoStyleProvider(31), forceWhite).allBold().addFlags(Text.FLAG_ALIGN_CENTER).singleLine().build();
-    qrTextSubtitle = new Text.Builder(Lang.getString(qrSubtitle == 0 ? R.string.ScanQRFullSubtitle : qrSubtitle), width, Paints.robotoStyleProvider(16), forceWhite).addFlags(Text.FLAG_ALIGN_CENTER).maxLineCount(2).build();
+    String subtitleText = qrSubtitleCustomText != null && !qrSubtitleCustomText.isEmpty()
+      ? qrSubtitleCustomText
+      : Lang.getString(qrSubtitle == 0 ? R.string.ScanQRFullSubtitle : qrSubtitle);
+    qrTextSubtitle = new Text.Builder(subtitleText, width, Paints.robotoStyleProvider(16), forceWhite).addFlags(Text.FLAG_ALIGN_CENTER).maxLineCount(2).build();
   }
 
   @Override
@@ -169,6 +172,18 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
   @Override
   public void setQrModeSubtitle (int subtitleRes) {
     this.qrSubtitle = subtitleRes;
+    this.qrSubtitleCustomText = null;
+    if (qrTextTitle != null) {
+      updateTexts(qrTextTitle.getMaxWidth());
+    }
+  }
+
+  private String qrSubtitleCustomText;
+
+  @Override
+  public void setQrModeSubtitleText (String subtitleText) {
+    this.qrSubtitleCustomText = subtitleText;
+    this.qrSubtitle = 0;
     if (qrTextTitle != null) {
       updateTexts(qrTextTitle.getMaxWidth());
     }

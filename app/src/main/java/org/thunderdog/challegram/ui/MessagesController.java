@@ -288,8 +288,6 @@ import me.vkryl.core.lambda.CancellableRunnable;
 import me.vkryl.core.lambda.Future;
 import me.vkryl.core.lambda.RunnableBool;
 import me.vkryl.core.lambda.RunnableData;
-import ni.shikatu.rex.ReXConfig;
-import ni.shikatu.rex.ReXUtils;
 import tgx.td.ChatId;
 import tgx.td.MessageId;
 import tgx.td.Td;
@@ -378,6 +376,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private CameraAccessImageView mediaButton;
   private InvisibleImageView cameraButton, scheduleButton;
   private InvisibleImageView commandButton;
+  private InvisibleImageView botMenuButton;
+  private @Nullable TdApi.BotMenuButton currentBotMenuButton;
   private @Nullable SilentButton silentButton;
 
   private HapticMenuHelper sendAsMenu;
@@ -1246,6 +1246,19 @@ public class MessagesController extends ViewController<MessagesController.Argume
     Views.setClickable(commandButton);
     updateCommandButton(0);
 
+    lp = new LinearLayout.LayoutParams(Screen.dp(ATTACH_BUTTONS_WIDTH), Screen.dp(49f));
+
+    botMenuButton = new InvisibleImageView(context);
+    botMenuButton.setId(R.id.msg_bot_menu);
+    botMenuButton.setColorFilter(Theme.iconColor());
+    addThemeFilterListener(botMenuButton, ColorId.icon);
+    botMenuButton.setScaleType(ImageView.ScaleType.CENTER);
+    botMenuButton.setImageResource(R.drawable.baseline_apps_24);
+    botMenuButton.setOnClickListener(this);
+    botMenuButton.setVisibility(View.INVISIBLE);
+    botMenuButton.setLayoutParams(lp);
+    Views.setClickable(botMenuButton);
+
     if (Config.NEED_SILENT_BROADCAST) {
       lp = new LinearLayout.LayoutParams(Screen.dp(ATTACH_BUTTONS_WIDTH), Screen.dp(49f));
 
@@ -1266,16 +1279,15 @@ public class MessagesController extends ViewController<MessagesController.Argume
     recordButton.setRestrictionListener(this);
     addThemeInvalidateListener(recordButton);
     recordButton.setLayoutParams(lp);
-    if(!ReXConfig.isCommandsButtonHidden()){
-      attachButtons.addView(commandButton);
-    }
+    attachButtons.addView(commandButton);
+    attachButtons.addView(botMenuButton);
     if (silentButton != null) {
       attachButtons.addView(silentButton);
     }
     if (scheduleButton != null) {
       attachButtons.addView(scheduleButton);
     }
-    if (cameraButton != null && !ReXConfig.isCameraButtonHidden()) {
+    if (cameraButton != null) {
       attachButtons.addView(cameraButton);
     }
     attachButtons.addView(mediaButton);
@@ -1516,10 +1528,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       contentView.addView(emojiButton);
       contentView.addView(attachButtons);
       contentView.addView(sendButton);
-      if(!ReXConfig.isSendAsButtonHidden()){
-        contentView.addView(messageSenderButton);
-
-      }
+      contentView.addView(messageSenderButton);
 
       initSearchControls();
       contentView.addView(searchControlsLayout);
@@ -2154,6 +2163,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
         lastCmdResource == R.drawable.baseline_keyboard_24) {
         toggleCommandsKeyboard();
       }
+    } else if (viewId == R.id.msg_bot_menu) {
+      onBotMenuClick();
     } else if (viewId == R.id.btn_search_prev) {
       manager.moveToNextResult(false);
     } else if (viewId == R.id.btn_search_next) {
@@ -2923,7 +2934,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       });
     }
     if(replyBarView != null && messageReplyToExternalMessage != null){
-      showReply(new MessageWithProperties(messageReplyToExternalMessage, ReXUtils.emptyReplyMessageProperties()), messageReplyToExternalMessageQuote, 0, true, true);
+      showReply(new MessageWithProperties(messageReplyToExternalMessage, new TdApi.MessageProperties()), messageReplyToExternalMessageQuote, 0, true, true);
     }
 
     TdApi.Chat headerChat = messageThread != null ? tdlib.chatSync(messageThread.getContextChatId()) : null;
@@ -3046,6 +3057,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       updateCommandButton(0);
       botHelper = null;
     }
+
+    // Update bot menu button visibility
+    updateBotMenuButton();
 
     liveLocation = new LiveLocationHelper(context, tdlib, chat.id, getMessageTopicId(), liveLocationView, false, this);
     liveLocation.init();
@@ -7706,6 +7720,63 @@ public class MessagesController extends ViewController<MessagesController.Argume
     Keyboard.show(inputView);
   }
 
+  private void onBotMenuClick () {
+    if (currentBotMenuButton == null || chat == null) return;
+
+    long botUserId = getChatUserId();
+    if (botUserId == 0) return;
+
+    TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(null, "tgx", null);
+    tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, "", webAppParams), (result, error) -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+        return;
+      }
+      TdApi.MainWebApp mainWebApp = (TdApi.MainWebApp) result;
+      UI.post(() -> {
+        WebAppController controller = new WebAppController(context(), tdlib);
+        TdApi.User bot = tdlib.cache().user(botUserId);
+        String botUsername = bot != null ? bot.usernames != null ? bot.usernames.activeUsernames[0] : null : null;
+        controller.setArguments(new WebAppController.Args(
+          chat.id,
+          botUserId,
+          botUsername,
+          mainWebApp.url,
+          0,
+          mainWebApp.mode
+        ));
+        context().navigation().navigateTo(controller);
+      });
+    });
+  }
+
+  private void updateBotMenuButton () {
+    if (chat == null || !tdlib.isBotChat(chat)) {
+      if (botMenuButton.setVisible(false)) {
+        attachButtons.updatePivot();
+      }
+      currentBotMenuButton = null;
+      return;
+    }
+
+    long botUserId = getChatUserId();
+    TdApi.UserFullInfo userFull = tdlib.cache().userFull(botUserId);
+    TdApi.BotMenuButton menuButton = userFull != null && userFull.botInfo != null
+      ? userFull.botInfo.menuButton : null;
+
+    if (menuButton != null && menuButton.text != null && !menuButton.text.isEmpty()) {
+      currentBotMenuButton = menuButton;
+      if (botMenuButton.setVisible(true)) {
+        attachButtons.updatePivot();
+      }
+    } else {
+      currentBotMenuButton = null;
+      if (botMenuButton.setVisible(false)) {
+        attachButtons.updatePivot();
+      }
+    }
+  }
+
   public void showKeyboard () {
     if (isFocused()) {
       Keyboard.show(inputView);
@@ -8019,6 +8090,50 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onRequestChat (final boolean oneTime, TdApi.KeyboardButtonTypeRequestChat requestChat) {
     // Chat picker not yet implemented - show toast
     UI.showToast(R.string.InternalUrlUnsupported, Toast.LENGTH_SHORT);
+  }
+
+  @Override
+  public void onRequestWebApp (final boolean oneTime, TdApi.KeyboardButtonTypeWebApp webApp) {
+    TdApi.Chat chat = getChat();
+    if (chat == null) {
+      return;
+    }
+    // Get bot user ID from the chat
+    long botUserId = 0;
+    if (chat.type instanceof TdApi.ChatTypePrivate) {
+      botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+    }
+    if (botUserId == 0) {
+      UI.showToast(R.string.InternalUrlUnsupported, Toast.LENGTH_SHORT);
+      return;
+    }
+    final long finalBotUserId = botUserId;
+
+    TdApi.WebAppOpenParameters openParams = new TdApi.WebAppOpenParameters();
+    // GetWebAppUrl is used for keyboard buttons
+    tdlib.send(new TdApi.GetWebAppUrl(finalBotUserId, webApp.url, openParams), (result, error) -> {
+      runOnUiThreadOptional(() -> {
+        if (error != null) {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+        } else {
+          TdApi.HttpUrl httpUrl = (TdApi.HttpUrl) result;
+          String botUsername = tdlib.cache().userName(finalBotUserId);
+          WebAppController controller = new WebAppController(context(), tdlib);
+          controller.setArguments(new WebAppController.Args(
+            getChatId(),
+            finalBotUserId,
+            botUsername,
+            httpUrl.url,
+            0, // GetWebAppUrl doesn't return launchId
+            null
+          ).setOwnerController(this));
+          navigateTo(controller);
+          if (oneTime) {
+            closeCommandKeyboard();
+          }
+        }
+      });
+    });
   }
 
   private GoogleApiClient googleClient;
@@ -11554,6 +11669,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     tdlib.ui().post(() -> {
       if (chat != null && TD.getUserId(chat) == userId) {
         updateBottomBar(true);
+        updateBotMenuButton();
       }
     });
   }

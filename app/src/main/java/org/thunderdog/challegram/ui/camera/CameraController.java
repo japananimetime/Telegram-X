@@ -128,15 +128,23 @@ public class CameraController extends ViewController<Void> implements CameraDele
   private String savedQrCodeData;
   private boolean qrCodeConfirmed;
   private int qrSubtitleRes;
+  private @Nullable String qrSubtitleText;
   private boolean qrModeDebug;
+  private boolean allowAnyQrCode;
   private @AvatarPickerMode int avatarPickerMode = AvatarPickerMode.NONE;
 
-  public void setQrListener (@Nullable QrCodeListener qrCodeListener, @StringRes int subtitleRes, boolean qrModeDebug) {
+  public void setQrListener (@Nullable QrCodeListener qrCodeListener, @StringRes int subtitleRes, @Nullable String subtitleText, boolean qrModeDebug, boolean allowAnyQrCode) {
     this.qrCodeListener = qrCodeListener;
     this.qrSubtitleRes = subtitleRes;
+    this.qrSubtitleText = subtitleText;
     this.qrModeDebug = qrModeDebug;
+    this.allowAnyQrCode = allowAnyQrCode;
     if (this.cameraMode == MODE_QR && rootLayout != null) {
-      rootLayout.setQrModeSubtitle(subtitleRes);
+      if (subtitleText != null && !subtitleText.isEmpty()) {
+        rootLayout.setQrModeSubtitleText(subtitleText);
+      } else {
+        rootLayout.setQrModeSubtitle(subtitleRes);
+      }
       rootLayout.setQrMode(true, qrModeDebug);
     }
   }
@@ -1593,9 +1601,13 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
   @Override
   public void onQrCodeFound (String qrCodeData, @Nullable RectF boundingBox, int height, int width, int rotation, boolean isLegacyZxing) {
-    if (qrCodeListener != null && !qrCodeData.isEmpty() && (qrCodeData.startsWith("tg://") || qrCodeData.startsWith(context.currentTdlib().tMeUrl())) && !qrCodeConfirmed) {
-      savedQrCodeData = qrCodeData;
-      rootLayout.setQrCorner(boundingBox, height, width, rotation, isLegacyZxing);
+    if (qrCodeListener != null && !qrCodeData.isEmpty() && !qrCodeConfirmed) {
+      // Allow any QR code if allowAnyQrCode is set, otherwise only allow Telegram URLs
+      boolean isAcceptable = allowAnyQrCode || qrCodeData.startsWith("tg://") || qrCodeData.startsWith(context.currentTdlib().tMeUrl());
+      if (isAcceptable) {
+        savedQrCodeData = qrCodeData;
+        rootLayout.setQrCorner(boundingBox, height, width, rotation, isLegacyZxing);
+      }
     }
   }
 

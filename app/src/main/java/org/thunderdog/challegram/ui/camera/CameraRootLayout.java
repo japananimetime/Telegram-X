@@ -19,6 +19,7 @@ import android.graphics.RectF;
 import android.view.MotionEvent;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import org.thunderdog.challegram.navigation.ViewController;
@@ -62,6 +63,7 @@ class CameraRootLayout extends FrameLayoutFix {
   public void resetQrCorner () {}
   public void setQrMode (boolean enable, boolean qrModeDebug) {}
   public void setQrModeSubtitle (@StringRes int subtitleRes) {}
+  public void setQrModeSubtitleText (@Nullable String subtitleText) {}
   public void onCameraClosed () {}
   public void setComponentRotation (float rotation) {}
 }

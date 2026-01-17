@@ -53,6 +53,7 @@ import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.MessagesController;
+import org.thunderdog.challegram.ui.WebAppController;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
 import org.thunderdog.challegram.util.DrawableProvider;
 import org.thunderdog.challegram.util.EmojiString;
@@ -1121,10 +1122,54 @@ public class TGInlineKeyboard {
           });
           break;
         }
-        case TdApi.InlineKeyboardButtonTypeCopyText.CONSTRUCTOR:
-        case TdApi.InlineKeyboardButtonTypeWebApp.CONSTRUCTOR:
-          // TODO
+        case TdApi.InlineKeyboardButtonTypeCopyText.CONSTRUCTOR: {
+          TdApi.InlineKeyboardButtonTypeCopyText copyText = (TdApi.InlineKeyboardButtonTypeCopyText) type;
+          UI.copyText(copyText.text, R.string.CopiedText);
           break;
+        }
+        case TdApi.InlineKeyboardButtonTypeWebApp.CONSTRUCTOR: {
+          TdApi.InlineKeyboardButtonTypeWebApp webApp = (TdApi.InlineKeyboardButtonTypeWebApp) type;
+          TdApi.Message msg = parent.getMessage();
+          long botUserId = msg.viaBotUserId != 0 ? msg.viaBotUserId : Td.getSenderUserId(msg);
+          if (botUserId == 0) {
+            break;
+          }
+          makeActive();
+          showProgressDelayed();
+
+          TdApi.WebAppOpenParameters openParams = new TdApi.WebAppOpenParameters();
+          // Theme parameters will be filled by TDLib based on current settings
+
+          context.context.tdlib.send(new TdApi.OpenWebApp(
+            parent.getChatId(),
+            botUserId,
+            webApp.url,
+            null, // topicId
+            null, // replyTo
+            openParams
+          ), (result, error) -> {
+            parent.executeOnUiThreadOptional(() -> {
+              makeInactive();
+              if (error != null) {
+                UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+              } else {
+                TdApi.WebAppInfo webAppInfo = (TdApi.WebAppInfo) result;
+                String botUsername = context.context.tdlib().cache().userName(botUserId);
+                WebAppController controller = new WebAppController(context.context.context(), context.context.tdlib);
+                controller.setArguments(new WebAppController.Args(
+                  parent.getChatId(),
+                  botUserId,
+                  botUsername,
+                  webAppInfo.url,
+                  webAppInfo.launchId,
+                  null // openMode
+                ).setOwnerController(context.context.messagesController()));
+                context.context.context().navigation().navigateTo(controller);
+              }
+            });
+          });
+          break;
+        }
 
         case TdApi.InlineKeyboardButtonTypeCallbackWithPassword.CONSTRUCTOR: {
           final TdApi.InlineKeyboardButtonTypeCallbackWithPassword callbackWithPassword = (TdApi.InlineKeyboardButtonTypeCallbackWithPassword) type;
