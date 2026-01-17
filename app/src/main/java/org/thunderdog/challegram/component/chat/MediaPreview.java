@@ -482,8 +482,6 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageContactRegistered.CONSTRUCTOR:
       case TdApi.MessageUsersShared.CONSTRUCTOR:
@@ -507,7 +505,7 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
         break;
       }
       default: {
-        Td.assertMessageContent_11bff7df();
+        Td.assertMessageContent_e0365d1c();
         throw Td.unsupported(message.content);
       }
     }

@@ -1168,8 +1168,6 @@ public class Lang {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
       case TdApi.MessagePremiumGiftCode.CONSTRUCTOR:
       case TdApi.MessageGiveawayCreated.CONSTRUCTOR:
@@ -1232,7 +1230,7 @@ public class Lang {
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
         break;
       default:
-        Td.assertMessageContent_11bff7df();
+        Td.assertMessageContent_e0365d1c();
         throw Td.unsupported(message.content);
     }
     if (format == null) {

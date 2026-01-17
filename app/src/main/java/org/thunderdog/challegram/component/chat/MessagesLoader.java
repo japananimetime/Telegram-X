@@ -1228,18 +1228,40 @@ public class MessagesLoader implements Client.ResultHandler {
       event.id,
       event.memberId,
       chatId,
-      null,
-      null,
-      tdlib.isSelfSender(event.memberId),
-      false, false, canBeSaved, false,
-      isChannel, false, false, false,
-      event.date, 0,
-      null, null, null, null,
-      null, null, null, null,
-      null, 0, 0,
-      0, 0, 0, 0, null,
-      0, 0,
-      null, null, null, null
+      null, // sendingState
+      null, // schedulingState
+      tdlib.isSelfSender(event.memberId), // isOutgoing
+      false, // isPinned
+      false, // isFromOffline
+      canBeSaved, // canBeSaved
+      false, // hasTimestampedMedia
+      isChannel, // isChannelPost
+      false, // isPaidStarSuggestedPost
+      false, // isPaidTonSuggestedPost
+      false, // containsUnreadMention
+      event.date, // date
+      0, // editDate
+      null, // forwardInfo
+      null, // importInfo
+      null, // interactionInfo
+      null, // unreadReactions
+      null, // factCheck
+      null, // suggestedPostInfo
+      null, // replyTo
+      null, // topicId (MessageTopic)
+      null, // selfDestructType
+      0, // selfDestructIn
+      0, // autoDeleteIn
+      0, // viaBotUserId
+      0, // senderBusinessBotUserId
+      0, // senderBoostCount
+      0, // paidMessageStarCount
+      null, // authorSignature
+      0, // mediaAlbumId
+      0, // effectId
+      null, // restrictionInfo
+      null, // content
+      null // replyMarkup
     );
   }
 

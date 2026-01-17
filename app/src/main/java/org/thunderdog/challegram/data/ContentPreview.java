@@ -714,8 +714,6 @@ public class ContentPreview {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageVideoChatStarted.CONSTRUCTOR:
       case TdApi.MessageGroupCall.CONSTRUCTOR:
       case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
@@ -749,7 +747,7 @@ public class ContentPreview {
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
       default:
-        Td.assertMessageContent_11bff7df();
+        Td.assertMessageContent_e0365d1c();
         throw Td.unsupported(message.content);
     }
     Refresher refresher = null;
@@ -1560,8 +1558,6 @@ public class ContentPreview {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageChecklist.CONSTRUCTOR:
       case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
       case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
@@ -1585,7 +1581,7 @@ public class ContentPreview {
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
       default:
-        Td.assertMessageContent_11bff7df();
+        Td.assertMessageContent_e0365d1c();
         throw new UnsupportedOperationException(Integer.toString(type));
     }
   }
