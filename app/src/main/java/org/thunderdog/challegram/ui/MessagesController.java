@@ -316,7 +316,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   ViewPager.OnPageChangeListener, ViewPagerTopView.OnItemClickListener,
   TGMessage.SelectableDelegate, GlobalAccountListener, EmojiToneHelper.Delegate, ComplexHeaderView.Callback, LiveLocationHelper.Callback, CreatePollController.Callback,
   HapticMenuHelper.Provider, HapticMenuHelper.OnItemClickListener, TdlibSettingsManager.DismissRequestsListener, InputView.SelectionChangeListener,
-  VoiceVideoButtonView.RestrictionListener, SavedMessagesTagsListener {
+  SavedMessagesTagsListener {
 
   private boolean reuseEnabled;
   private boolean destroyInstance;
@@ -1263,7 +1263,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
     recordButton = new VoiceVideoButtonView(context);
     recordButton.setPadding(0, 0, Screen.dp(2f), 0);
     recordButton.setHasTouchControls(true);
-    recordButton.setRestrictionListener(this);
     addThemeInvalidateListener(recordButton);
     recordButton.setLayoutParams(lp);
     if(!ReXConfig.isCommandsButtonHidden()){
@@ -2321,16 +2320,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
         forumController = listController;
       }
       navigateTo(forumController);
-    } else if (id == R.id.btn_startVideoChat) {
-      // Start a new video chat in this group
-      if (chat != null) {
-        tdlib.ui().createVideoChat(this, chat.id, null, 0);
-      }
-    } else if (id == R.id.btn_joinVideoChat) {
-      // Join existing video chat
-      if (chat != null && chat.videoChat != null && chat.videoChat.groupCallId != 0) {
-        tdlib.ui().joinVideoChat(this, chat.videoChat.groupCallId);
-      }
     } else if (id == R.id.btn_manageGroup) {
       manageGroup();
     } else if (id == R.id.btn_deleteThread) {
@@ -3293,11 +3282,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (messageSenderButton != null) {
       messageSenderButton.setInSlowMode(tdlib.inSlowMode(getChatId()));
     }
-    if (recordButton != null) {
-      boolean voiceRestricted = tdlib.getVoiceVideoRestrictionText(chat, false) != null;
-      boolean videoRestricted = tdlib.getVoiceVideoRestrictionText(chat, true) != null;
-      recordButton.setRestricted(voiceRestricted, videoRestricted);
-    }
     if (isUpdate) {
       updateInputHint();
     }
@@ -3446,14 +3430,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onRecordAudioVideoError (boolean preferVideoMode) {
     if (!sendShown.getValue()) {
       showBottomHint(preferVideoMode ? R.string.HoldToVideo : R.string.HoldToAudio);
-    }
-  }
-
-  @Override
-  public void onVoiceVideoRestricted (View view, boolean isVideoMode) {
-    CharSequence restrictionText = tdlib.getVoiceVideoRestrictionText(chat, isVideoMode);
-    if (restrictionText != null) {
-      showBottomHint(restrictionText, true);
     }
   }
 
@@ -4690,20 +4666,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (tdlib.isForum(chat.id) && (forumTopic != null || getMessageTopicId() != null)) {
       ids.append(R.id.btn_viewForum);
       strings.append(R.string.ViewForum);
-    }
-
-    // Add "Start Video Chat" or "Join Video Chat" option for group chats
-    if (ChatId.isBasicGroup(chat.id) || ChatId.isSupergroup(chat.id)) {
-      TdApi.Chat c = chat;
-      if (c.videoChat != null && c.videoChat.groupCallId != 0) {
-        // Active video chat exists - show join option
-        ids.append(R.id.btn_joinVideoChat);
-        strings.append(R.string.JoinVideoChat);
-      } else if (tdlib.canManageVideoChats(chat.id)) {
-        // No active video chat and user can create one
-        ids.append(R.id.btn_startVideoChat);
-        strings.append(R.string.StartVideoChat);
-      }
     }
 
     if (BuildConfig.DEBUG) {

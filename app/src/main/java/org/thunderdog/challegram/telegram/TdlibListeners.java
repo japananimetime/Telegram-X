@@ -642,14 +642,6 @@ public class TdlibListeners {
     );
   }
 
-  public void subscribeToGroupCallUpdates (int groupCallId, @NonNull GroupCallListener listener) {
-    specificGroupCallListeners.add(groupCallId, listener);
-  }
-
-  public void unsubscribeFromGroupCallUpdates (int groupCallId, @NonNull GroupCallListener listener) {
-    specificGroupCallListeners.remove(groupCallId, listener);
-  }
-
   // updateNewMessage
 
   void updateNewMessage (TdApi.UpdateNewMessage update) {

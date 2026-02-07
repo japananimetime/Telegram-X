@@ -40,7 +40,6 @@ Each feature has its own branch based on `main`. Use these for isolated features
 
 | Branch | Description |
 |--------|-------------|
-| `feature/calls` | NTgCalls integration, video chat, group calls |
 | `feature/mini-apps` | Web Apps (Mini Apps) support |
 | `feature/quotes` | Quote messages, reply in other chat |
 | `feature/stories-implementation` | Stories viewing and posting |
@@ -57,7 +56,6 @@ Each feature has its own branch based on `main`. Use these for isolated features
 ```
 origin/main (upstream)
     │
-    ├── feature/calls
     ├── feature/mini-apps
     ├── feature/quotes
     ├── feature/stories-implementation
@@ -165,7 +163,7 @@ Color definitions: `app/src/main/other/themes/colors-and-properties.xml`
 - Use `Lang.getString()`, `Lang.plural()`, `Lang.getRelativeDate()`
 - Translations managed via translations.telegram.org (not local files)
 
-## Issue Tracking (MantisBT)
+## Task Tracking
 
 **Project ID: 1** (Telegram X)
 

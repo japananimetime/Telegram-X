@@ -45,29 +45,6 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
 
   private final Drawable sendIcon, micIcon, videoIcon, searchIcon;
 
-  public interface RestrictionListener {
-    void onVoiceVideoRestricted (View view, boolean isVideoMode);
-  }
-
-  private RestrictionListener restrictionListener;
-  private boolean voiceRestricted, videoRestricted;
-
-  public void setRestrictionListener (RestrictionListener listener) {
-    this.restrictionListener = listener;
-  }
-
-  public void setRestricted (boolean voiceRestricted, boolean videoRestricted) {
-    if (this.voiceRestricted != voiceRestricted || this.videoRestricted != videoRestricted) {
-      this.voiceRestricted = voiceRestricted;
-      this.videoRestricted = videoRestricted;
-      invalidate();
-    }
-  }
-
-  public boolean isCurrentModeRestricted () {
-    return inVideoMode.getValue() ? videoRestricted : voiceRestricted;
-  }
-
   public VoiceVideoButtonView (Context context) {
     super(context);
     sendIcon = Drawables.get(getResources(), R.drawable.deproko_baseline_send_24);
@@ -143,8 +120,6 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
     return paint;
   }
 
-  private static final float RESTRICTED_ALPHA = 0.4f;
-
   @Override
   protected void onDraw (Canvas c) {
     final int viewWidth = getMeasuredWidth();
@@ -168,22 +143,12 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
 
         int y;
 
-        // Apply restricted alpha to mic icon when voice messages are restricted
-        float micAlpha = (1f - videoFactor) * alpha;
-        if (voiceRestricted) {
-          micAlpha *= RESTRICTED_ALPHA;
-        }
         y = (int) (cy + (cy + videoIcon.getMinimumHeight() / 2) * videoFactor);
-        paint.setAlpha((int) ((float) savedAlpha * micAlpha));
+        paint.setAlpha((int) ((float) savedAlpha * ((1f - videoFactor) * alpha)));
         Drawables.drawCentered(c, micIcon, cx, y, paint);
 
-        // Apply restricted alpha to video icon when video messages are restricted
-        float vidAlpha = videoFactor * alpha;
-        if (videoRestricted) {
-          vidAlpha *= RESTRICTED_ALPHA;
-        }
         y = (int) (cy - (cy + videoIcon.getMinimumHeight() / 2) * (1f - videoFactor));
-        paint.setAlpha((int) ((float) savedAlpha * vidAlpha));
+        paint.setAlpha((int) ((float) savedAlpha * videoFactor * alpha));
         Drawables.drawCentered(c, videoIcon, cx, y, paint);
 
         if (scale != 1f) {
@@ -276,11 +241,6 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
 
   private void performTap () {
     ViewUtils.onClick(this);
-    // If current mode is restricted, show restriction tooltip instead of switching
-    if (isCurrentModeRestricted() && restrictionListener != null) {
-      restrictionListener.onVoiceVideoRestricted(this, inVideoMode.getValue());
-      return;
-    }
     Settings.instance().setPreferVideoMode(!inVideoMode.getValue());
   }
 
