@@ -60,7 +60,9 @@ public class TGReaction {
     initialize();
   }
 
-  // Paid reaction (star) constructor
+  /**
+   * Constructor for paid reactions (star reactions)
+   */
   public TGReaction (@NonNull Tdlib tdlib) {
     this.tdlib = tdlib;
     this.type = new TdApi.ReactionTypePaid();
