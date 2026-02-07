@@ -235,8 +235,7 @@ public final class VoIPController extends VoIPInstance {
   }
 
   public static String getVersion () {
-    //return nativeGetVersion();
-    return "1.0.0";
+    return nativeGetVersion();
   }
 
   @Override

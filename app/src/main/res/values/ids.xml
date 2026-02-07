@@ -185,7 +185,6 @@
   <item type="id" name="controller_main" />
   <item type="id" name="controller_call_list" />
   <item type="id" name="controller_call" />
-  <item type="id" name="controller_groupCall" />
   <item type="id" name="controller_people" />
   <item type="id" name="controller_settings" />
   <item type="id" name="controller_archiveSettings" />
@@ -441,7 +440,6 @@
   <item type="id" name="btn_messageLive8Hours" />
   <item type="id" name="btn_mosaic" />
   <item type="id" name="btn_speaker" />
-  <item type="id" name="btn_other_options" />
   <item type="id" name="btn_emoji" />
   <item type="id" name="btn_icon" />
   <item type="id" name="btn_section" />
@@ -457,7 +455,6 @@
   <item type="id" name="btn_logout" />
   <item type="id" name="btn_deleteAccount" />
   <item type="id" name="btn_camera" />
-  <item type="id" name="btn_flip_camera" />
   <item type="id" name="btn_viewScheduled" />
   <item type="id" name="btn_takePhoto" />
   <item type="id" name="btn_takeVideo" />
@@ -565,13 +562,6 @@
   <item type="id" name="liveLocationSelf" />
   <item type="id" name="btn_mute" />
   <item type="id" name="btn_unmute" />
-  <item type="id" name="btn_leaveCall" />
-  <item type="id" name="btn_screenShare" />
-  <item type="id" name="btn_startVideoChat" />
-  <item type="id" name="btn_endVideoChat" />
-  <item type="id" name="btn_joinVideoChat" />
-  <item type="id" name="btn_raiseHand" />
-  <item type="id" name="btn_inviteToCall" />
   <item type="id" name="btn_follow" />
   <item type="id" name="btn_openLinkedChat" />
   <item type="id" name="btn_openDirectMessages" />

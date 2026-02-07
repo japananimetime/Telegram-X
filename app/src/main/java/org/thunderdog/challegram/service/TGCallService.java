@@ -14,7 +14,6 @@
  */
 package org.thunderdog.challegram.service;
 
-import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -28,7 +27,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
-import android.graphics.Point;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -45,22 +43,14 @@ import android.os.Vibrator;
 import android.telephony.TelephonyManager;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
-import android.view.Display;
 import android.view.KeyEvent;
-import android.view.WindowManager;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.content.ContextCompat;
 
 import org.drinkless.tdlib.TdApi;
-import io.github.pytgcalls.FrameCallback;
-import io.github.pytgcalls.RemoteSourceChangeCallback;
-import org.pytgcalls.ntgcallsx.CallInterface;
-import org.pytgcalls.ntgcallsx.NTgCallsInterface;
-import org.pytgcalls.ntgcallsx.TgCallsInterface;
 import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
@@ -81,7 +71,6 @@ import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Intents;
 import org.thunderdog.challegram.tool.UI;
-import org.pytgcalls.ntgcallsx.VoIPFloatingLayout;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.SoundPoolMap;
 import org.thunderdog.challegram.voip.ConnectionStateListener;
@@ -94,7 +83,6 @@ import org.thunderdog.challegram.voip.annotation.CallState;
 import org.thunderdog.challegram.voip.gui.CallSettings;
 import org.thunderdog.challegram.voip.gui.VoIPFeedbackActivity;
 
-import java.io.FileNotFoundException;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -189,37 +177,12 @@ public class TGCallService extends Service implements
   }
 
   private SoundPoolMap soundPoolMap;
-  private @Nullable CallInterface tgcalls;
+  private @Nullable VoIPInstance tgcalls;
   private @Nullable PrivateCallListener callListener;
   private PowerManager.WakeLock cpuWakelock;
   private BluetoothAdapter btAdapter;
 
-  /**
-   * Check if Bluetooth permission is granted.
-   * On Android 12+ (API 31+), BLUETOOTH_CONNECT is required.
-   * On older versions, BLUETOOTH permission is sufficient.
-   */
-  private boolean hasBluetoothPermission () {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      return ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-          == android.content.pm.PackageManager.PERMISSION_GRANTED;
-    }
-    return true; // Legacy BLUETOOTH permission is granted at install time
-  }
-
   private boolean isProximityNear, isHeadsetPlugged;
-
-  public void setFrameCallback(FrameCallback callback) {
-    if (tgcalls != null) {
-      tgcalls.setFrameCallback(callback);
-    }
-  }
-
-  public void setRemoteSourceChangeCallback(RemoteSourceChangeCallback callback) {
-    if (tgcalls != null) {
-      tgcalls.setRemoteSourceChangeCallback(callback);
-    }
-  }
 
   private final BroadcastReceiver receiver = new BroadcastReceiver() {
     @Override
@@ -340,10 +303,7 @@ public class TGCallService extends Service implements
       }
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // Android 12+ requires BLUETOOTH_CONNECT runtime permission
-        if (hasBluetoothPermission() && am.isBluetoothScoAvailableOffCall()) {
-          btAdapter = BluetoothAdapter.getDefaultAdapter();
-        }
+
       } else {
         btAdapter = am.isBluetoothScoAvailableOffCall() ? BluetoothAdapter.getDefaultAdapter() : null;
       }
@@ -374,7 +334,8 @@ public class TGCallService extends Service implements
         am.addOnCommunicationDeviceChangedListener(Executors.newSingleThreadExecutor(), (AudioManager.OnCommunicationDeviceChangedListener) communicationDeviceChangedListener);
         notifyAudioSettingsChanged();
       } else {
-        if (btAdapter != null && btAdapter.isEnabled() && hasBluetoothPermission()) {
+        if (btAdapter != null && btAdapter.isEnabled()) {
+          //noinspection MissingPermission
           int headsetState = btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET);
           updateBluetoothHeadsetState(headsetState == BluetoothProfile.STATE_CONNECTED);
           if (headsetState == BluetoothProfile.STATE_CONNECTED) {
@@ -665,24 +626,12 @@ public class TGCallService extends Service implements
   }
 
   private CallSettings postponedCallSettings;
-  boolean lastCameraStatus;
-  boolean lastCameraFrontFacing;
-  boolean lastScreenSharing;
 
   @Override
   public void onCallSettingsChanged (int callId, CallSettings settings) {
     this.postponedCallSettings = settings;
-    if (tgcalls != null && settings != null) {
-      tgcalls.setMicDisabled(settings.isMicMuted());
-      if (settings.isCameraSharing() != lastCameraStatus || settings.isCameraFrontFacing() != lastCameraFrontFacing) {
-        lastCameraStatus = settings.isCameraSharing();
-        lastCameraFrontFacing = settings.isCameraFrontFacing();
-        tgcalls.setCameraEnabled(lastCameraStatus, lastCameraFrontFacing);
-      }
-      if (lastScreenSharing != settings.isScreenSharing()) {
-        lastScreenSharing = settings.isScreenSharing();
-        tgcalls.setScreenShareEnabled(lastScreenSharing);
-      }
+    if (tgcalls != null) {
+      tgcalls.setMicDisabled(settings != null && settings.isMicMuted());
     }
     setAudioMode(settings != null ? settings.getSpeakerMode() : CallSettings.SPEAKER_MODE_EARPIECE);
   }
@@ -1384,7 +1333,7 @@ public class TGCallService extends Service implements
   }
 
   private boolean isInitiated () {
-    return tgcalls != null && tgcalls.isInitiated();
+    return tgcalls != null;
   }
 
   private void checkInitiated () {
@@ -1426,7 +1375,7 @@ public class TGCallService extends Service implements
         if (newState == CallState.ESTABLISHED) {
           tdlib.dispatchCallStateChanged(call.id, newState);
         } else if (newState == CallState.FAILED) {
-          long connectionId = context != null ? context.getConnectionId() : 0;
+          long connectionId = context.getConnectionId();
           tdlib.context().calls().hangUp(tdlib, call.id, true, connectionId);
         }
       }
@@ -1441,34 +1390,36 @@ public class TGCallService extends Service implements
         tdlib.client().send(new TdApi.SendCallSignalingData(call.id, data), tdlib.silentHandler());
       }
     };
+
+    VoIPInstance tgcallsTemp;
     try {
-      if (tgcalls == null) {
-        if (BuildConfig.USE_NTGCALLS) {
-          tgcalls = new NTgCallsInterface(tdlib, call, state, stateListener);
-        } else {
-          tgcalls = new TgCallsInterface(
-            tdlib,
-            call,
-            state,
-            stateListener,
-            forceTcp,
-            callProxy,
-            lastNetworkType,
-            audioGainControlEnabled,
-            echoCancellationStrength,
-            isMicDisabled
-          );
+      tgcallsTemp = VoIP.instantiateAndConnect(
+        tdlib,
+        call,
+        state,
+        stateListener,
+        forceTcp,
+        callProxy,
+        lastNetworkType,
+        audioGainControlEnabled,
+        echoCancellationStrength,
+        isMicDisabled
+      );
+    } catch (Throwable t) {
+      tgcallsTemp = null;
+    }
+    final VoIPInstance tgcalls = tgcallsTemp;
+
+    if (tgcalls != null) {
+      this.callListener = new PrivateCallListener() {
+        @Override
+        public void onNewCallSignalingDataArrived (int callId, byte[] data) {
+          tgcalls.handleIncomingSignalingData(data);
         }
-        this.callListener = new PrivateCallListener() {
-          @Override
-          public void onNewCallSignalingDataArrived (int callId, byte[] data) {
-            if (tgcalls != null) tgcalls.handleIncomingSignalingData(data);
-          }
-        };
-        tdlib.listeners().subscribeToCallUpdates(call.id, callListener);
-      }
-    } catch (Throwable e) {
-      Log.e(Log.TAG_VOIP, "Error creating call", e);
+      };
+      tdlib.listeners().subscribeToCallUpdates(call.id, callListener);
+      this.tgcalls = tgcalls;
+    } else {
       hangUp();
     }
   }
@@ -1481,10 +1432,6 @@ public class TGCallService extends Service implements
 
   public static TGCallService currentInstance () {
     return reference != null ? reference.get() : null;
-  }
-
-  public boolean isVideoSupported () {
-    return tgcalls != null && tgcalls.isVideoSupported();
   }
 
   private boolean logViewed;
