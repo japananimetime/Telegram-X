@@ -66,7 +66,9 @@ public final class WebAppProxy {
           if (eventData != null) {
             JSONObject data = new JSONObject(eventData);
             String sendData = data.optString("data", "");
-            controller.onWebAppSendData(sendData);
+            if (!sendData.isEmpty()) {
+              controller.onWebAppSendData(sendData);
+            }
           }
           break;
 
