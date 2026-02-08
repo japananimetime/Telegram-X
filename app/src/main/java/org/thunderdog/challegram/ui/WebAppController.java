@@ -18,6 +18,7 @@ import android.annotation.SuppressLint;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
@@ -37,6 +38,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.content.pm.ActivityInfo;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -152,6 +154,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   // Fullscreen state
   private boolean isFullscreen = false;
+  private boolean orientationLocked = false;
+  private int savedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
   // Back button state
   private boolean backButtonVisible = false;
@@ -342,6 +346,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (isFullscreen) {
       restoreFullscreenState();
     }
+    if (orientationLocked) {
+      onWebAppToggleOrientationLock(false);
+    }
     super.destroy();
     if (getArguments() != null && getArguments().launchId != 0) {
       tdlib.send(new TdApi.CloseWebApp(getArguments().launchId), (result, error) -> {
@@ -414,7 +421,16 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onWebAppOpenLink (String url) {
-    tdlib.ui().openUrl(this, url, null);
+    onWebAppOpenLink(url, false);
+  }
+
+  public void onWebAppOpenLink (String url, boolean tryInstantView) {
+    if (tryInstantView) {
+      TdlibUi.UrlOpenParameters params = new TdlibUi.UrlOpenParameters().forceInstantView();
+      tdlib.ui().openUrl(this, url, params);
+    } else {
+      tdlib.ui().openUrl(this, url, null);
+    }
   }
 
   public void onWebAppRequestPhone () {
@@ -473,6 +489,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Main Button ====================
 
   public void onWebAppSetMainButton (boolean visible, String text, int color, int textColor, boolean isActive, boolean isProgressVisible) {
+    onWebAppSetMainButton(visible, text, color, textColor, isActive, isProgressVisible, false);
+  }
+
+  public void onWebAppSetMainButton (boolean visible, String text, int color, int textColor, boolean isActive, boolean isProgressVisible, boolean hasShineEffect) {
     this.mainButtonVisible = visible;
     this.mainButtonText = text;
     this.mainButtonColor = color;
@@ -500,20 +520,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void onMainButtonClicked () {
     if (!mainButtonActive || mainButtonProgressVisible) return;
-
-    if (webView != null) {
-      webView.evaluateJavascript(
-        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton && " +
-        "window.Telegram.WebApp.MainButton.isActive && " +
-        "window.Telegram.WebApp.MainButton.onClick && window.Telegram.WebApp.MainButton.onClick()",
-        null
-      );
-    }
+    sendEventToWebApp("main_button_pressed", "{}");
   }
 
   // ==================== Secondary Button ====================
 
-  public void onWebAppSetSecondaryButton (boolean visible, String text, int color, int textColor, boolean isActive, boolean isProgressVisible, String position) {
+  public void onWebAppSetSecondaryButton (boolean visible, String text, int color, int textColor, boolean isActive, boolean isProgressVisible, boolean hasShineEffect, String position) {
     this.secondaryButtonVisible = visible;
     this.secondaryButtonText = text;
     this.secondaryButtonColor = color;
@@ -544,22 +556,73 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void updateButtonPositions () {
     int buttonHeight = Screen.dp(48f);
-    int totalHeight = 0;
-    if (mainButtonVisible) totalHeight += buttonHeight;
-    if (secondaryButtonVisible) totalHeight += buttonHeight;
 
     if (secondaryButtonVisible && mainButtonVisible) {
-      // Secondary button above main button
       FrameLayout.LayoutParams secondaryParams = (FrameLayout.LayoutParams) secondaryButtonView.getLayoutParams();
-      secondaryParams.bottomMargin = buttonHeight;
+      FrameLayout.LayoutParams mainParams = (FrameLayout.LayoutParams) mainButtonView.getLayoutParams();
+
+      switch (secondaryButtonPosition) {
+        case "top":
+          // Secondary above main — both full width, stacked
+          secondaryParams.bottomMargin = buttonHeight;
+          secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.gravity = Gravity.BOTTOM;
+          secondaryParams.gravity = Gravity.BOTTOM;
+          break;
+        case "bottom":
+          // Secondary below main — secondary at very bottom, main above it
+          secondaryParams.bottomMargin = 0;
+          mainParams.bottomMargin = buttonHeight;
+          secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.gravity = Gravity.BOTTOM;
+          secondaryParams.gravity = Gravity.BOTTOM;
+          break;
+        case "right":
+          // Secondary to the right of main — side by side
+          secondaryParams.bottomMargin = 0;
+          mainParams.bottomMargin = 0;
+          secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.gravity = Gravity.BOTTOM | Gravity.START;
+          secondaryParams.gravity = Gravity.BOTTOM | Gravity.END;
+          break;
+        case "left":
+        default:
+          // Secondary to the left of main — side by side (default)
+          secondaryParams.bottomMargin = 0;
+          mainParams.bottomMargin = 0;
+          secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          mainParams.gravity = Gravity.BOTTOM | Gravity.END;
+          secondaryParams.gravity = Gravity.BOTTOM | Gravity.START;
+          break;
+      }
       secondaryButtonView.setLayoutParams(secondaryParams);
+      mainButtonView.setLayoutParams(mainParams);
     } else if (secondaryButtonVisible) {
       FrameLayout.LayoutParams secondaryParams = (FrameLayout.LayoutParams) secondaryButtonView.getLayoutParams();
       secondaryParams.bottomMargin = 0;
+      secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+      secondaryParams.gravity = Gravity.BOTTOM;
       secondaryButtonView.setLayoutParams(secondaryParams);
+    } else if (mainButtonVisible) {
+      FrameLayout.LayoutParams mainParams = (FrameLayout.LayoutParams) mainButtonView.getLayoutParams();
+      mainParams.bottomMargin = 0;
+      mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+      mainParams.gravity = Gravity.BOTTOM;
+      mainButtonView.setLayoutParams(mainParams);
     }
 
     // Adjust webView bottom padding
+    int totalHeight = 0;
+    if (mainButtonVisible && secondaryButtonVisible) {
+      boolean stacked = "top".equals(secondaryButtonPosition) || "bottom".equals(secondaryButtonPosition);
+      totalHeight = stacked ? buttonHeight * 2 : buttonHeight;
+    } else if (mainButtonVisible || secondaryButtonVisible) {
+      totalHeight = buttonHeight;
+    }
     if (webView != null) {
       webView.setPadding(0, 0, 0, totalHeight);
     }
@@ -567,15 +630,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void onSecondaryButtonClicked () {
     if (!secondaryButtonActive || secondaryButtonProgressVisible) return;
-
-    if (webView != null) {
-      webView.evaluateJavascript(
-        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.SecondaryButton && " +
-        "window.Telegram.WebApp.SecondaryButton.isActive && " +
-        "window.Telegram.WebApp.SecondaryButton.onClick && window.Telegram.WebApp.SecondaryButton.onClick()",
-        null
-      );
-    }
+    sendEventToWebApp("secondary_button_pressed", "{}");
   }
 
   // ==================== Back Button ====================
@@ -593,13 +648,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onWebAppBackButtonPressed () {
-    if (webView != null) {
-      webView.evaluateJavascript(
-        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton && " +
-        "window.Telegram.WebApp.BackButton.onClick && window.Telegram.WebApp.BackButton.onClick()",
-        null
-      );
-    }
+    sendEventToWebApp("back_button_pressed", "{}");
   }
 
   // ==================== Settings Button ====================
@@ -609,13 +658,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   private void onWebAppSettingsButtonPressed () {
-    if (webView != null) {
-      webView.evaluateJavascript(
-        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.SettingsButton && " +
-        "window.Telegram.WebApp.SettingsButton.onClick && window.Telegram.WebApp.SettingsButton.onClick()",
-        null
-      );
-    }
+    sendEventToWebApp("settings_button_pressed", "{}");
   }
 
   // ==================== Popups & Dialogs ====================
@@ -854,6 +897,22 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     }
   }
 
+  // ==================== Orientation Lock ====================
+
+  public void onWebAppToggleOrientationLock (boolean locked) {
+    BaseActivity activity = context();
+    if (activity == null) return;
+
+    if (locked && !orientationLocked) {
+      savedOrientation = activity.getRequestedOrientation();
+      activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LOCKED);
+      orientationLocked = true;
+    } else if (!locked && orientationLocked) {
+      activity.setRequestedOrientation(savedOrientation);
+      orientationLocked = false;
+    }
+  }
+
   // ==================== Invoice Handling ====================
 
   public void onWebAppOpenInvoice (String slug) {
@@ -935,12 +994,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private void sendViewportData () {
     if (webView == null) return;
 
+    int buttonHeight = Screen.dp(48f);
     int height = webView.getHeight();
-    if (mainButtonVisible) {
-      height -= Screen.dp(48f);
-    }
-    if (secondaryButtonVisible) {
-      height -= Screen.dp(48f);
+    if (mainButtonVisible && secondaryButtonVisible) {
+      boolean stacked = "top".equals(secondaryButtonPosition) || "bottom".equals(secondaryButtonPosition);
+      height -= stacked ? buttonHeight * 2 : buttonHeight;
+    } else if (mainButtonVisible || secondaryButtonVisible) {
+      height -= buttonHeight;
     }
     int stableHeight = height;
     boolean expanded = isExpanded;
@@ -1319,6 +1379,25 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private static final int LOCATION_PERMISSION_REQUEST = 1001;
 
+  public void onWebAppCheckLocation () {
+    BaseActivity activity = context();
+    if (activity == null) {
+      sendEventToWebApp("location_checked", "{\"available\":false,\"access_requested\":false,\"access_granted\":false}");
+      return;
+    }
+    boolean granted = ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    sendEventToWebApp("location_checked",
+      String.format("{\"available\":true,\"access_requested\":%b,\"access_granted\":%b}", granted, granted));
+  }
+
+  public void onWebAppOpenLocationSettings () {
+    try {
+      context().startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+    } catch (Exception e) {
+      Log.e("Failed to open location settings: %s", e.getMessage());
+    }
+  }
+
   public void onWebAppRequestLocation () {
     BaseActivity activity = context();
     if (activity == null) {
@@ -1378,9 +1457,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         location.getBearing(), location.getSpeed(), location.getAccuracy(),
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? location.getVerticalAccuracyMeters() : 0f
       );
-      sendEventToWebApp("location_received", data);
+      sendEventToWebApp("location_requested", data);
     } else {
-      sendEventToWebApp("location_received", "{\"available\":false}");
+      sendEventToWebApp("location_requested", "{\"available\":false}");
     }
   }
 
@@ -1407,6 +1486,115 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       }
     }
     Intents.shareText(shareText.isEmpty() ? mediaUrl : shareText);
+  }
+
+  // ==================== Device Storage (Bot API 9.0) ====================
+
+  private SharedPreferences getDeviceStoragePrefs () {
+    Args args = getArguments();
+    long botId = args != null ? args.botUserId : 0;
+    return context().getSharedPreferences("webapp_device_storage_" + botId, Context.MODE_PRIVATE);
+  }
+
+  public void onDeviceStorageSaveKey (String reqId, String key, @Nullable String value) {
+    try {
+      SharedPreferences prefs = getDeviceStoragePrefs();
+      if (value == null) {
+        prefs.edit().remove(key).apply();
+      } else {
+        prefs.edit().putString(key, value).apply();
+      }
+      sendEventToWebApp("device_storage_key_saved", "{\"req_id\":\"" + escapeJsonString(reqId) + "\"}");
+    } catch (Exception e) {
+      sendEventToWebApp("device_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
+  }
+
+  public void onDeviceStorageGetKey (String reqId, String key) {
+    try {
+      SharedPreferences prefs = getDeviceStoragePrefs();
+      String value = prefs.getString(key, null);
+      if (value != null) {
+        sendEventToWebApp("device_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\"}");
+      } else {
+        sendEventToWebApp("device_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null}");
+      }
+    } catch (Exception e) {
+      sendEventToWebApp("device_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
+  }
+
+  public void onDeviceStorageClear (String reqId) {
+    try {
+      getDeviceStoragePrefs().edit().clear().apply();
+      sendEventToWebApp("device_storage_cleared", "{\"req_id\":\"" + escapeJsonString(reqId) + "\"}");
+    } catch (Exception e) {
+      sendEventToWebApp("device_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
+  }
+
+  // ==================== Secure Storage (Bot API 9.0) ====================
+
+  private SharedPreferences getSecureStoragePrefs () {
+    Args args = getArguments();
+    long botId = args != null ? args.botUserId : 0;
+    return context().getSharedPreferences("webapp_secure_storage_" + botId, Context.MODE_PRIVATE);
+  }
+
+  public void onSecureStorageSaveKey (String reqId, String key, @Nullable String value) {
+    try {
+      SharedPreferences prefs = getSecureStoragePrefs();
+      if (value == null) {
+        prefs.edit().remove(key).apply();
+      } else {
+        prefs.edit().putString(key, value).apply();
+      }
+      sendEventToWebApp("secure_storage_key_saved", "{\"req_id\":\"" + escapeJsonString(reqId) + "\"}");
+    } catch (Exception e) {
+      sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
+  }
+
+  public void onSecureStorageGetKey (String reqId, String key) {
+    try {
+      SharedPreferences prefs = getSecureStoragePrefs();
+      String value = prefs.getString(key, null);
+      if (value != null) {
+        sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\"}");
+      } else {
+        sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null}");
+      }
+    } catch (Exception e) {
+      sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
+  }
+
+  public void onSecureStorageClear (String reqId) {
+    try {
+      getSecureStoragePrefs().edit().clear().apply();
+      sendEventToWebApp("secure_storage_cleared", "{\"req_id\":\"" + escapeJsonString(reqId) + "\"}");
+    } catch (Exception e) {
+      sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
+  }
+
+  public void onSecureStorageRestoreKey (String reqId, String key) {
+    // Restore key requires biometric authentication — for now, same as get
+    if (!biometryAccessGranted) {
+      sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"AUTH_REQUIRED\"}");
+      return;
+    }
+    try {
+      SharedPreferences prefs = getSecureStoragePrefs();
+      String value = prefs.getString(key, null);
+      if (value != null) {
+        sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\"}");
+      } else {
+        sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null}");
+      }
+    } catch (Exception e) {
+      sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
+    }
   }
 
   // ==================== QR Code Scanner ====================
@@ -1590,7 +1778,20 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   // ==================== Safe Area Events (3.2) ====================
 
+  public void onWebAppRequestSafeArea () {
+    sendSafeAreaEvent();
+  }
+
+  public void onWebAppRequestContentSafeArea () {
+    sendContentSafeAreaEvent();
+  }
+
   private void sendSafeAreaData () {
+    sendSafeAreaEvent();
+    sendContentSafeAreaEvent();
+  }
+
+  private void sendSafeAreaEvent () {
     if (webView == null) return;
     BaseActivity activity = context();
     if (activity == null || activity.getWindow() == null) return;
@@ -1610,9 +1811,28 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
     sendEventToWebApp("safe_area_changed",
       String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", top, bottom, left, right));
+  }
 
-    // Content safe area includes the header
-    int contentTop = top + Size.getHeaderPortraitSize();
+  private void sendContentSafeAreaEvent () {
+    if (webView == null) return;
+    BaseActivity activity = context();
+    if (activity == null || activity.getWindow() == null) return;
+
+    int top = 0, bottom = 0, left = 0, right = 0;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      android.view.DisplayCutout cutout = activity.getWindow().getDecorView().getRootWindowInsets() != null
+        ? activity.getWindow().getDecorView().getRootWindowInsets().getDisplayCutout()
+        : null;
+      if (cutout != null) {
+        top = cutout.getSafeInsetTop();
+        bottom = cutout.getSafeInsetBottom();
+        left = cutout.getSafeInsetLeft();
+        right = cutout.getSafeInsetRight();
+      }
+    }
+
+    // Content safe area includes the header when not fullscreen
+    int contentTop = isFullscreen ? top : top + Size.getHeaderPortraitSize();
     sendEventToWebApp("content_safe_area_changed",
       String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", contentTop, bottom, left, right));
   }
@@ -1672,6 +1892,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   @Override
   public void onThemeColorsChanged (boolean areTemp, @Nullable ColorState state) {
+    sendThemeChangedEvent();
+  }
+
+  public void onWebAppRequestTheme () {
     sendThemeChangedEvent();
   }
 

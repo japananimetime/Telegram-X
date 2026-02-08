@@ -52,9 +52,15 @@ public final class WebAppProxy {
           controller.onWebAppReady();
           break;
 
-        case "web_app_close":
+        case "web_app_close": {
+          boolean returnBack = false;
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            returnBack = data.optBoolean("return_back", false);
+          }
           controller.onWebAppClose();
           break;
+        }
 
         case "web_app_data_send":
           if (eventData != null) {
@@ -69,8 +75,9 @@ public final class WebAppProxy {
           if (eventData != null) {
             JSONObject data = new JSONObject(eventData);
             String url = data.optString("url", "");
+            boolean tryInstantView = data.optBoolean("try_instant_view", false);
             if (!url.isEmpty()) {
-              controller.onWebAppOpenLink(url);
+              controller.onWebAppOpenLink(url, tryInstantView);
             }
           }
           break;
@@ -104,9 +111,10 @@ public final class WebAppProxy {
             String textColorStr = data.optString("text_color", "#FFFFFF");
             boolean isActive = data.optBoolean("is_active", true);
             boolean isProgressVisible = data.optBoolean("is_progress_visible", false);
+            boolean hasShineEffect = data.optBoolean("has_shine_effect", false);
             int color = parseColor(colorStr);
             int textColor = parseColor(textColorStr);
-            controller.onWebAppSetMainButton(visible, text, color, textColor, isActive, isProgressVisible);
+            controller.onWebAppSetMainButton(visible, text, color, textColor, isActive, isProgressVisible, hasShineEffect);
           }
           break;
 
@@ -120,10 +128,11 @@ public final class WebAppProxy {
             String textColorStr = data.optString("text_color", "#FFFFFF");
             boolean isActive = data.optBoolean("is_active", true);
             boolean isProgressVisible = data.optBoolean("is_progress_visible", false);
+            boolean hasShineEffect = data.optBoolean("has_shine_effect", false);
             String position = data.optString("position", "left");
             int color = parseColor(colorStr);
             int textColor = parseColor(textColorStr);
-            controller.onWebAppSetSecondaryButton(visible, text, color, textColor, isActive, isProgressVisible, position);
+            controller.onWebAppSetSecondaryButton(visible, text, color, textColor, isActive, isProgressVisible, hasShineEffect, position);
           }
           break;
 
@@ -221,6 +230,14 @@ public final class WebAppProxy {
           controller.onWebAppExitFullscreen();
           break;
 
+        case "web_app_toggle_orientation_lock":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            boolean locked = data.optBoolean("locked", false);
+            controller.onWebAppToggleOrientationLock(locked);
+          }
+          break;
+
         // ==================== Theme Color Events ====================
         case "web_app_set_header_color":
           if (eventData != null) {
@@ -248,8 +265,7 @@ public final class WebAppProxy {
 
         // ==================== Theme Request ====================
         case "web_app_request_theme":
-          // Theme is provided via URL parameters, no specific action needed
-          // The WebApp JS SDK handles this automatically
+          controller.onWebAppRequestTheme();
           break;
 
         // ==================== Invoice Events ====================
@@ -394,9 +410,26 @@ public final class WebAppProxy {
           controller.onWebAppStopDeviceOrientation();
           break;
 
+        // ==================== Safe Area Events ====================
+        case "web_app_request_safe_area":
+          controller.onWebAppRequestSafeArea();
+          break;
+
+        case "web_app_request_content_safe_area":
+          controller.onWebAppRequestContentSafeArea();
+          break;
+
         // ==================== Location Events ====================
+        case "web_app_check_location":
+          controller.onWebAppCheckLocation();
+          break;
+
         case "web_app_request_location":
           controller.onWebAppRequestLocation();
+          break;
+
+        case "web_app_open_location_settings":
+          controller.onWebAppOpenLocationSettings();
           break;
 
         // ==================== Share Events ====================
@@ -444,6 +477,71 @@ public final class WebAppProxy {
             if (!url.isEmpty() && !fileName.isEmpty()) {
               controller.onWebAppRequestFileDownload(url, fileName);
             }
+          }
+          break;
+
+        // ==================== Device Storage Events ====================
+        case "web_app_device_storage_save_key":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            String key = data.optString("key", "");
+            String value = data.isNull("value") ? null : data.optString("value", null);
+            controller.onDeviceStorageSaveKey(reqId, key, value);
+          }
+          break;
+
+        case "web_app_device_storage_get_key":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            String key = data.optString("key", "");
+            controller.onDeviceStorageGetKey(reqId, key);
+          }
+          break;
+
+        case "web_app_device_storage_clear":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            controller.onDeviceStorageClear(reqId);
+          }
+          break;
+
+        // ==================== Secure Storage Events ====================
+        case "web_app_secure_storage_save_key":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            String key = data.optString("key", "");
+            String value = data.isNull("value") ? null : data.optString("value", null);
+            controller.onSecureStorageSaveKey(reqId, key, value);
+          }
+          break;
+
+        case "web_app_secure_storage_get_key":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            String key = data.optString("key", "");
+            controller.onSecureStorageGetKey(reqId, key);
+          }
+          break;
+
+        case "web_app_secure_storage_clear":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            controller.onSecureStorageClear(reqId);
+          }
+          break;
+
+        case "web_app_secure_storage_restore_key":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String reqId = data.optString("req_id", "");
+            String key = data.optString("key", "");
+            controller.onSecureStorageRestoreKey(reqId, key);
           }
           break;
 
