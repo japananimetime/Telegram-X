@@ -142,6 +142,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private MainButtonView mainButtonView;
   private MainButtonView secondaryButtonView;
   private View placeholderView;
+  private View.OnLayoutChangeListener layoutChangeListener;
 
   // Main button state
   private boolean mainButtonVisible = false;
@@ -284,11 +285,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       mainButtonAnimator = new BoolAnimator(ANIMATOR_MAIN_BUTTON, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
 
       // Set up layout change listener for viewport reporting
-      webView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      layoutChangeListener = (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
         if (bottom - top != oldBottom - oldTop) {
           sendViewportData();
         }
-      });
+      };
+      webView.addOnLayoutChangeListener(layoutChangeListener);
 
       // Register for theme changes
       ThemeManager.instance().addThemeListener(this);
@@ -395,6 +397,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (mainButtonAnimator != null) {
       mainButtonAnimator.cancel();
     }
+    if (webView != null && layoutChangeListener != null) {
+      webView.removeOnLayoutChangeListener(layoutChangeListener);
+    }
     if (isFullscreen) {
       restoreFullscreenState();
     }
@@ -474,7 +479,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         if (error != null) {
           Log.e("Failed to send web app data: %s", error.message);
         }
-        UI.post(this::navigateBack);
+        UI.post(() -> {
+          if (!isDestroyed()) navigateBack();
+        });
       });
     }
   }
@@ -553,6 +560,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         if (id == R.id.btn_done) {
           tdlib.send(new TdApi.AllowBotToSendMessages(args.botUserId), (result, error) -> {
             UI.post(() -> {
+              if (isDestroyed()) return;
               if (error != null) {
                 sendEventToWebApp("write_access_requested", "{\"status\":\"cancelled\"}");
               } else {
@@ -1035,7 +1043,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     TdApi.InputInvoiceName inputInvoice = new TdApi.InputInvoiceName(slug);
     tdlib.send(new TdApi.GetPaymentForm(inputInvoice, getThemeParameters()), (result, error) -> {
       UI.post(() -> {
-        if (error != null) {
+        if (isDestroyed()) return;
+        if (error != null || !(result instanceof TdApi.PaymentForm)) {
           sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"failed\"}");
           return;
         }
@@ -1059,6 +1068,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
           if (optionId == R.id.btn_done) {
             tdlib.send(new TdApi.SendPaymentForm(inputInvoice, paymentForm.id, "", "", null, 0), (result, error) -> {
               UI.post(() -> {
+                if (isDestroyed()) return;
                 if (error != null) {
                   sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"failed\"}");
                 } else {
@@ -1076,6 +1086,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       PaymentFormController formController = new PaymentFormController(context(), tdlib);
       formController.setArguments(new PaymentFormController.Args(paymentForm, inputInvoice, 0));
       formController.setPaymentResultListener(success -> {
+        if (isDestroyed()) return;
         String status = success ? "paid" : "cancelled";
         sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"" + status + "\"}");
       });
@@ -1237,11 +1248,14 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
     tdlib.send(new TdApi.SendWebAppCustomRequest(args.botUserId, method, parameters), (result, error) -> {
       UI.post(() -> {
+        if (isDestroyed()) return;
         if (error != null) {
           sendCustomMethodError(requestId, error.message);
-        } else {
+        } else if (result instanceof TdApi.CustomRequestResult) {
           TdApi.CustomRequestResult customResult = (TdApi.CustomRequestResult) result;
           sendCustomMethodResult(requestId, customResult.result);
+        } else {
+          sendCustomMethodError(requestId, "Unexpected response");
         }
       });
     });
@@ -1408,6 +1422,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     // Validate with TDLib
     tdlib.send(new TdApi.CheckWebAppFileDownload(args.botUserId, fileName, url), (result, error) -> {
       UI.post(() -> {
+        if (isDestroyed()) return;
         if (error != null) {
           sendEventToWebApp("file_download_requested", "{\"status\":\"cancelled\"}");
           return;
@@ -1476,6 +1491,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     TdApi.EmojiStatus emojiStatus = new TdApi.EmojiStatus(emojiType, expirationDate);
     tdlib.send(new TdApi.SetEmojiStatus(emojiStatus), (result, error) -> {
       UI.post(() -> {
+        if (isDestroyed()) return;
         if (error != null) {
           sendEventToWebApp("emoji_status_failed", "{\"error\":\"" + escapeJsonString(error.message) + "\"}");
         } else {
@@ -2066,12 +2082,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (args == null || args.botUserId == 0 || contentView == null) return;
 
     tdlib.send(new TdApi.GetWebAppPlaceholder(args.botUserId), (result, error) -> {
-      if (error != null || result == null) return;
+      if (error != null || !(result instanceof TdApi.Outline)) return;
       TdApi.Outline outline = (TdApi.Outline) result;
       if (outline.paths == null || outline.paths.length == 0) return;
 
       UI.post(() -> {
-        if (contentView == null || webView == null) return;
+        if (isDestroyed() || contentView == null || webView == null) return;
         int w = webView.getWidth();
         int h = webView.getHeight();
         if (w <= 0 || h <= 0) {
@@ -2207,14 +2223,18 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Helper Methods ====================
 
   private void sendEventToWebApp (String eventName, String eventData) {
-    if (webView == null) return;
+    if (webView == null || isDestroyed()) return;
     String js = String.format(
       "if (window.Telegram && window.Telegram.WebView && window.Telegram.WebView.receiveEvent) {" +
       "  Telegram.WebView.receiveEvent('%s', %s);" +
       "}",
       eventName, eventData
     );
-    webView.evaluateJavascript(js, null);
+    webView.post(() -> {
+      if (webView != null && !isDestroyed()) {
+        webView.evaluateJavascript(js, null);
+      }
+    });
   }
 
   private String escapeJsonString (String str) {
