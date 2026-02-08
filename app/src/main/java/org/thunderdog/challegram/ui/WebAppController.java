@@ -52,6 +52,11 @@ import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Locale;
 
 import org.drinkless.tdlib.TdApi;
@@ -61,6 +66,7 @@ import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.core.Background;
 import org.thunderdog.challegram.core.BiometricAuthentication;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.navigation.BackHeaderButton;
@@ -1476,16 +1482,59 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Story Sharing ====================
 
   public void onWebAppShareToStory (String mediaUrl, @Nullable String text, @Nullable JSONObject widgetLink) {
-    // Use Android share intent as fallback since full story editor is complex
-    String shareText = text != null ? text : "";
-    if (widgetLink != null) {
-      String url = widgetLink.optString("url", "");
-      String linkName = widgetLink.optString("name", "");
-      if (!url.isEmpty()) {
-        shareText = shareText.isEmpty() ? url : shareText + "\n" + url;
+    UI.showToast(R.string.LoadingInformation, android.widget.Toast.LENGTH_SHORT);
+    Background.instance().post(() -> {
+      File tempFile = null;
+      boolean isVideo = false;
+      try {
+        URL url = new URL(mediaUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(15000);
+        connection.setInstanceFollowRedirects(true);
+        connection.connect();
+
+        String contentType = connection.getContentType();
+        if (contentType != null) {
+          isVideo = contentType.startsWith("video/");
+        } else {
+          String lower = mediaUrl.toLowerCase(Locale.US);
+          isVideo = lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".webm");
+        }
+
+        String extension = isVideo ? ".mp4" : ".jpg";
+        tempFile = File.createTempFile("story_share_", extension, context().getCacheDir());
+
+        try (InputStream in = connection.getInputStream();
+             FileOutputStream out = new FileOutputStream(tempFile)) {
+          byte[] buffer = new byte[8192];
+          int bytesRead;
+          while ((bytesRead = in.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+          }
+        }
+        connection.disconnect();
+      } catch (Exception e) {
+        Log.e("Failed to download story media", e);
+        if (tempFile != null && tempFile.exists()) {
+          tempFile.delete();
+        }
+        UI.post(() -> UI.showToast("Failed to download media", android.widget.Toast.LENGTH_SHORT));
+        return;
       }
-    }
-    Intents.shareText(shareText.isEmpty() ? mediaUrl : shareText);
+
+      final File downloadedFile = tempFile;
+      final boolean videoMedia = isVideo;
+      UI.post(() -> {
+        if (!isDestroyed()) {
+          StoryPreviewController controller = new StoryPreviewController(context, tdlib);
+          controller.setArguments(new StoryPreviewController.Args(downloadedFile.getAbsolutePath(), videoMedia));
+          navigateTo(controller);
+        } else {
+          downloadedFile.delete();
+        }
+      });
+    });
   }
 
   // ==================== Device Storage (Bot API 9.0) ====================
