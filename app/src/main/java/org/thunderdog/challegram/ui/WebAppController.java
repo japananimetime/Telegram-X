@@ -15,7 +15,12 @@
 package org.thunderdog.challegram.ui;
 
 import android.annotation.SuppressLint;
+import android.app.DownloadManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -24,18 +29,26 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import android.Manifest;
+
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.pm.ShortcutInfoCompat;
+import androidx.core.content.pm.ShortcutManagerCompat;
+import androidx.core.graphics.drawable.IconCompat;
 
 import java.util.Locale;
 
@@ -56,10 +69,15 @@ import org.thunderdog.challegram.navigation.MoreDelegate;
 import org.thunderdog.challegram.navigation.NavigationController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.ColorState;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.theme.ThemeChangeListener;
+import org.thunderdog.challegram.theme.ThemeManager;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Fonts;
+import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.tool.Intents;
+import org.thunderdog.challegram.tool.Keyboard;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
@@ -75,7 +93,7 @@ import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.ColorUtils;
 
-public class WebAppController extends WebkitController<WebAppController.Args> implements Menu, MoreDelegate, FactorAnimator.Target, SensorEventListener {
+public class WebAppController extends WebkitController<WebAppController.Args> implements Menu, MoreDelegate, FactorAnimator.Target, SensorEventListener, ThemeChangeListener {
 
   public static class Args {
     public final long chatId;
@@ -84,6 +102,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     public final String url;
     public final long launchId;
     public final TdApi.WebAppOpenMode openMode;
+    public @Nullable String buttonText;
     public @Nullable MessagesController ownerController;
 
     public Args (long chatId, long botUserId, String botUsername, String url, long launchId, @Nullable TdApi.WebAppOpenMode openMode) {
@@ -93,6 +112,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       this.url = url;
       this.launchId = launchId;
       this.openMode = openMode;
+    }
+
+    public Args setButtonText (String buttonText) {
+      this.buttonText = buttonText;
+      return this;
     }
 
     public Args setOwnerController (MessagesController controller) {
@@ -107,6 +131,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private FrameLayoutFix contentView;
   private DoubleHeaderView headerCell;
   private MainButtonView mainButtonView;
+  private MainButtonView secondaryButtonView;
 
   // Main button state
   private boolean mainButtonVisible = false;
@@ -116,6 +141,18 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private int mainButtonColor = 0;
   private int mainButtonTextColor = 0;
 
+  // Secondary button state
+  private boolean secondaryButtonVisible = false;
+  private boolean secondaryButtonActive = true;
+  private boolean secondaryButtonProgressVisible = false;
+  private String secondaryButtonText = "";
+  private int secondaryButtonColor = 0;
+  private int secondaryButtonTextColor = 0;
+  private String secondaryButtonPosition = "left";
+
+  // Fullscreen state
+  private boolean isFullscreen = false;
+
   // Back button state
   private boolean backButtonVisible = false;
 
@@ -124,6 +161,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   // Expansion state
   private boolean isExpanded = false;
+
+  // Closing confirmation
+  private boolean closingConfirmationEnabled = false;
+
+  // Swipe behavior
+  private boolean verticalSwipeAllowed = true;
 
   // Header/background colors (null means use theme default)
   private Integer customHeaderColor = null;
@@ -205,6 +248,15 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         webView.addJavascriptInterface(webAppProxy, "TelegramWebviewProxy");
       }
 
+      // Create and add secondary button (above main button)
+      secondaryButtonView = new MainButtonView(context());
+      secondaryButtonView.setVisibility(View.GONE);
+      secondaryButtonView.setOnClickListener(v -> onSecondaryButtonClicked());
+      contentView.addView(secondaryButtonView, FrameLayoutFix.newParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f),
+        Gravity.BOTTOM
+      ));
+
       // Create and add main button
       mainButtonView = new MainButtonView(context());
       mainButtonView.setVisibility(View.GONE);
@@ -224,12 +276,26 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         }
       });
 
+      // Register for theme changes
+      ThemeManager.instance().addThemeListener(this);
+
+      // Register for WebApp message sent updates
+      if (args.launchId != 0) {
+        tdlib.addWebAppMessageSentListener(args.launchId, this);
+      }
+
+      // Try to load placeholder while webview loads
+      loadPlaceholder();
+
       webView.loadUrl(args.url);
     }
   }
 
   @Override
   public boolean canSlideBackFrom (NavigationController navigationController, float x, float y) {
+    if (!verticalSwipeAllowed && y >= Size.getHeaderPortraitSize()) {
+      return false;
+    }
     return y < Size.getHeaderPortraitSize() || x <= Screen.dp(15f);
   }
 
@@ -244,12 +310,38 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       onWebAppBackButtonPressed();
       return true;
     }
+    if (closingConfirmationEnabled) {
+      showCloseConfirmation();
+      return true;
+    }
     return super.onBackPressed(fromTop);
+  }
+
+  private void showCloseConfirmation () {
+    showOptions(
+      Lang.getString(R.string.WebAppCloseConfirmation),
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.Close), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.RED, OptionColor.NORMAL},
+      null,
+      (itemView, id) -> {
+        if (id == R.id.btn_done) {
+          closingConfirmationEnabled = false;
+          navigateBack();
+        }
+        return true;
+      }
+    );
   }
 
   @Override
   public void destroy () {
     stopAllSensors();
+    ThemeManager.instance().removeThemeListener(this);
+    tdlib.removeWebAppMessageSentListener(this);
+    if (isFullscreen) {
+      restoreFullscreenState();
+    }
     super.destroy();
     if (getArguments() != null && getArguments().launchId != 0) {
       tdlib.send(new TdApi.CloseWebApp(getArguments().launchId), (result, error) -> {
@@ -294,16 +386,25 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     Log.i("WebApp ready");
     // Send initial viewport data
     sendViewportData();
+    // Send initial safe area data
+    sendSafeAreaData();
   }
 
   public void onWebAppClose () {
-    UI.post(this::navigateBack);
+    UI.post(() -> {
+      if (closingConfirmationEnabled) {
+        showCloseConfirmation();
+      } else {
+        navigateBack();
+      }
+    });
   }
 
   public void onWebAppSendData (String data) {
     Args args = getArguments();
     if (args != null && args.botUserId != 0) {
-      tdlib.send(new TdApi.SendWebAppData(args.botUserId, data), (result, error) -> {
+      String buttonText = args.buttonText != null ? args.buttonText : "";
+      tdlib.send(new TdApi.SendWebAppData(args.botUserId, buttonText, data), (result, error) -> {
         if (error != null) {
           Log.e("Failed to send web app data: %s", error.message);
         }
@@ -405,6 +506,73 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton && " +
         "window.Telegram.WebApp.MainButton.isActive && " +
         "window.Telegram.WebApp.MainButton.onClick && window.Telegram.WebApp.MainButton.onClick()",
+        null
+      );
+    }
+  }
+
+  // ==================== Secondary Button ====================
+
+  public void onWebAppSetSecondaryButton (boolean visible, String text, int color, int textColor, boolean isActive, boolean isProgressVisible, String position) {
+    this.secondaryButtonVisible = visible;
+    this.secondaryButtonText = text;
+    this.secondaryButtonColor = color;
+    this.secondaryButtonTextColor = textColor;
+    this.secondaryButtonActive = isActive;
+    this.secondaryButtonProgressVisible = isProgressVisible;
+    this.secondaryButtonPosition = position != null ? position : "left";
+    UI.post(this::updateSecondaryButton);
+  }
+
+  private void updateSecondaryButton () {
+    if (secondaryButtonView == null) return;
+
+    secondaryButtonView.setText(secondaryButtonText);
+    secondaryButtonView.setButtonColors(secondaryButtonColor, secondaryButtonTextColor);
+    secondaryButtonView.setActive(secondaryButtonActive);
+    secondaryButtonView.setProgressVisible(secondaryButtonProgressVisible);
+
+    if (secondaryButtonVisible) {
+      secondaryButtonView.setVisibility(View.VISIBLE);
+      // Position secondary button above main button when both visible
+      updateButtonPositions();
+    } else {
+      secondaryButtonView.setVisibility(View.GONE);
+      updateButtonPositions();
+    }
+  }
+
+  private void updateButtonPositions () {
+    int buttonHeight = Screen.dp(48f);
+    int totalHeight = 0;
+    if (mainButtonVisible) totalHeight += buttonHeight;
+    if (secondaryButtonVisible) totalHeight += buttonHeight;
+
+    if (secondaryButtonVisible && mainButtonVisible) {
+      // Secondary button above main button
+      FrameLayout.LayoutParams secondaryParams = (FrameLayout.LayoutParams) secondaryButtonView.getLayoutParams();
+      secondaryParams.bottomMargin = buttonHeight;
+      secondaryButtonView.setLayoutParams(secondaryParams);
+    } else if (secondaryButtonVisible) {
+      FrameLayout.LayoutParams secondaryParams = (FrameLayout.LayoutParams) secondaryButtonView.getLayoutParams();
+      secondaryParams.bottomMargin = 0;
+      secondaryButtonView.setLayoutParams(secondaryParams);
+    }
+
+    // Adjust webView bottom padding
+    if (webView != null) {
+      webView.setPadding(0, 0, 0, totalHeight);
+    }
+  }
+
+  private void onSecondaryButtonClicked () {
+    if (!secondaryButtonActive || secondaryButtonProgressVisible) return;
+
+    if (webView != null) {
+      webView.evaluateJavascript(
+        "window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.SecondaryButton && " +
+        "window.Telegram.WebApp.SecondaryButton.isActive && " +
+        "window.Telegram.WebApp.SecondaryButton.onClick && window.Telegram.WebApp.SecondaryButton.onClick()",
         null
       );
     }
@@ -605,6 +773,154 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     }
   }
 
+  // ==================== Closing & Swipe Behavior ====================
+
+  public void onWebAppSetClosingBehavior (boolean needConfirmation) {
+    this.closingConfirmationEnabled = needConfirmation;
+  }
+
+  public void onWebAppSetSwipeBehavior (boolean allowVerticalSwipe) {
+    this.verticalSwipeAllowed = allowVerticalSwipe;
+  }
+
+  // ==================== Hide Keyboard ====================
+
+  public void onWebAppHideKeyboard () {
+    if (webView != null) {
+      Keyboard.hide(webView);
+    }
+  }
+
+  // ==================== Fullscreen ====================
+
+  public void onWebAppRequestFullscreen () {
+    if (isFullscreen) return;
+    isFullscreen = true;
+    UI.post(() -> {
+      BaseActivity activity = context();
+      if (activity != null && activity.getWindow() != null) {
+        activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          android.view.WindowInsetsController insetsController = activity.getWindow().getInsetsController();
+          if (insetsController != null) {
+            insetsController.hide(android.view.WindowInsets.Type.systemBars());
+            insetsController.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+          }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+          activity.getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+            View.SYSTEM_UI_FLAG_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+          );
+        }
+        if (headerView() != null) {
+          headerView().setVisibility(View.GONE);
+        }
+        sendEventToWebApp("fullscreen_changed", "{\"is_fullscreen\":true}");
+      } else {
+        isFullscreen = false;
+        sendEventToWebApp("fullscreen_failed", "{\"error\":\"UNSUPPORTED\"}");
+      }
+    });
+  }
+
+  public void onWebAppExitFullscreen () {
+    if (!isFullscreen) return;
+    isFullscreen = false;
+    UI.post(() -> {
+      restoreFullscreenState();
+      sendEventToWebApp("fullscreen_changed", "{\"is_fullscreen\":false}");
+    });
+  }
+
+  private void restoreFullscreenState () {
+    BaseActivity activity = context();
+    if (activity != null && activity.getWindow() != null) {
+      activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        android.view.WindowInsetsController insetsController = activity.getWindow().getInsetsController();
+        if (insetsController != null) {
+          insetsController.show(android.view.WindowInsets.Type.systemBars());
+        }
+      } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        activity.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+      }
+      if (headerView() != null) {
+        headerView().setVisibility(View.VISIBLE);
+      }
+    }
+  }
+
+  // ==================== Invoice Handling ====================
+
+  public void onWebAppOpenInvoice (String slug) {
+    TdApi.InputInvoiceName inputInvoice = new TdApi.InputInvoiceName(slug);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, getThemeParameters()), (result, error) -> {
+      UI.post(() -> {
+        if (error != null) {
+          sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"failed\"}");
+          return;
+        }
+        TdApi.PaymentForm paymentForm = (TdApi.PaymentForm) result;
+        openPaymentFormForInvoice(slug, paymentForm, inputInvoice);
+      });
+    });
+  }
+
+  private void openPaymentFormForInvoice (String slug, TdApi.PaymentForm paymentForm, TdApi.InputInvoice inputInvoice) {
+    if (paymentForm.type instanceof TdApi.PaymentFormTypeStars) {
+      TdApi.PaymentFormTypeStars starsType = (TdApi.PaymentFormTypeStars) paymentForm.type;
+      String message = Lang.plural(R.string.StarsPayConfirmMessage, (int) starsType.starCount);
+      showOptions(
+        message,
+        new int[] { R.id.btn_done, R.id.btn_cancel },
+        new String[] { Lang.getString(R.string.StarsPayConfirm, starsType.starCount), Lang.getString(R.string.Cancel) },
+        new int[] { OptionColor.BLUE, OptionColor.NORMAL },
+        new int[] { R.drawable.baseline_star_24, R.drawable.baseline_cancel_24 },
+        (view, optionId) -> {
+          if (optionId == R.id.btn_done) {
+            tdlib.send(new TdApi.SendPaymentForm(inputInvoice, paymentForm.id, "", "", null, 0), (result, error) -> {
+              UI.post(() -> {
+                if (error != null) {
+                  sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"failed\"}");
+                } else {
+                  sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"paid\"}");
+                }
+              });
+            });
+          } else {
+            sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"cancelled\"}");
+          }
+          return true;
+        }
+      );
+    } else if (paymentForm.type instanceof TdApi.PaymentFormTypeRegular) {
+      PaymentFormController formController = new PaymentFormController(context(), tdlib);
+      formController.setArguments(new PaymentFormController.Args(paymentForm, inputInvoice, 0));
+      formController.setPaymentResultListener(success -> {
+        String status = success ? "paid" : "cancelled";
+        sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"" + status + "\"}");
+      });
+      navigateTo(formController);
+    } else {
+      sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"failed\"}");
+    }
+  }
+
+  // ==================== Switch Inline Query ====================
+
+  public void onWebAppSwitchInlineQuery (String query, JSONArray chatTypes) {
+    Args args = getArguments();
+    if (args == null || args.botUsername == null) return;
+
+    // Open chat picker with inline query, or switch to current chat
+    tdlib.ui().switchInline(this, args.botUsername, query, false);
+    navigateBack();
+  }
+
   // ==================== Viewport & Expansion ====================
 
   public void onWebAppExpand () {
@@ -621,6 +937,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
     int height = webView.getHeight();
     if (mainButtonVisible) {
+      height -= Screen.dp(48f);
+    }
+    if (secondaryButtonVisible) {
       height -= Screen.dp(48f);
     }
     int stableHeight = height;
@@ -777,10 +1096,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       "    access_requested: %b," +
       "    access_granted: %b," +
       "    device_id: ''," +
-      "    token_saved: false" +
+      "    token_saved: %b" +
       "  });" +
       "}",
-      available, type, biometryAccessRequested, biometryAccessGranted
+      available, type, biometryAccessRequested, biometryAccessGranted, biometricToken != null
     );
     if (webView != null) {
       webView.evaluateJavascript(js, null);
@@ -842,7 +1161,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       new BiometricAuthentication.Callback() {
         @Override
         public void onAuthenticated (androidx.biometric.BiometricPrompt.AuthenticationResult result, boolean strong) {
-          UI.post(() -> sendBiometryAuthResult(true, ""));
+          UI.post(() -> sendBiometryAuthResult(true, biometricToken != null ? biometricToken : ""));
         }
 
         @Override
@@ -870,6 +1189,224 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (webView != null) {
       webView.evaluateJavascript(js, null);
     }
+  }
+
+  // ==================== Home Screen Shortcuts ====================
+
+  public void onWebAppCheckHomeScreen () {
+    boolean supported = ShortcutManagerCompat.isRequestPinShortcutSupported(context());
+    String status = supported ? "allowed" : "missed";
+    sendEventToWebApp("home_screen_checked", "{\"status\":\"" + status + "\"}");
+  }
+
+  public void onWebAppAddToHomeScreen () {
+    Args args = getArguments();
+    if (args == null) {
+      sendEventToWebApp("home_screen_added", "{\"status\":\"failed\"}");
+      return;
+    }
+
+    if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context())) {
+      sendEventToWebApp("home_screen_added", "{\"status\":\"missed\"}");
+      return;
+    }
+
+    String label = args.botUsername != null ? args.botUsername : Lang.getString(R.string.WebApp);
+    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/" + args.botUsername));
+    intent.setPackage(context().getPackageName());
+
+    ShortcutInfoCompat shortcut = new ShortcutInfoCompat.Builder(context(), "webapp_" + args.botUserId)
+      .setShortLabel(label)
+      .setIntent(intent)
+      .setIcon(IconCompat.createWithResource(context(), R.drawable.baseline_star_24))
+      .build();
+
+    boolean result = ShortcutManagerCompat.requestPinShortcut(context(), shortcut, null);
+    String status = result ? "added" : "failed";
+    sendEventToWebApp("home_screen_added", "{\"status\":\"" + status + "\"}");
+  }
+
+  // ==================== File Download ====================
+
+  public void onWebAppRequestFileDownload (String url, String fileName) {
+    Args args = getArguments();
+    if (args == null) {
+      sendEventToWebApp("file_download_requested", "{\"status\":\"cancelled\"}");
+      return;
+    }
+
+    // Validate with TDLib
+    tdlib.send(new TdApi.CheckWebAppFileDownload(args.botUserId, fileName, url), (result, error) -> {
+      UI.post(() -> {
+        if (error != null) {
+          sendEventToWebApp("file_download_requested", "{\"status\":\"cancelled\"}");
+          return;
+        }
+        // Show confirmation dialog
+        showOptions(
+          Lang.getString(R.string.WebAppDownloadFile, fileName),
+          new int[] {R.id.btn_done, R.id.btn_cancel},
+          new String[] {Lang.getString(R.string.Download), Lang.getString(R.string.Cancel)},
+          (itemView, id) -> {
+            if (id == R.id.btn_done) {
+              startFileDownload(url, fileName);
+              sendEventToWebApp("file_download_requested", "{\"status\":\"downloading\"}");
+            } else {
+              sendEventToWebApp("file_download_requested", "{\"status\":\"cancelled\"}");
+            }
+            return true;
+          }
+        );
+      });
+    });
+  }
+
+  private void startFileDownload (String url, String fileName) {
+    try {
+      DownloadManager downloadManager = (DownloadManager) context().getSystemService(Context.DOWNLOAD_SERVICE);
+      if (downloadManager != null) {
+        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+        request.setTitle(fileName);
+        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+        request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName);
+        downloadManager.enqueue(request);
+      }
+    } catch (Exception e) {
+      Log.e("Failed to start download: %s", e.getMessage());
+    }
+  }
+
+  // ==================== Emoji Status ====================
+
+  public void onWebAppRequestEmojiStatusAccess () {
+    TdApi.User me = tdlib.myUser();
+    if (me == null || !me.isPremium) {
+      sendEventToWebApp("emoji_status_access_requested", "{\"status\":\"cancelled\"}");
+      return;
+    }
+
+    showOptions(
+      Lang.getString(R.string.WebAppEmojiStatusAccess),
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
+      (itemView, id) -> {
+        if (id == R.id.btn_done) {
+          sendEventToWebApp("emoji_status_access_requested", "{\"status\":\"allowed\"}");
+        } else {
+          sendEventToWebApp("emoji_status_access_requested", "{\"status\":\"cancelled\"}");
+        }
+        return true;
+      }
+    );
+  }
+
+  public void onWebAppSetEmojiStatus (long customEmojiId, int duration) {
+    int expirationDate = duration > 0 ? (int) (System.currentTimeMillis() / 1000) + duration : 0;
+    TdApi.EmojiStatusTypeCustomEmoji emojiType = new TdApi.EmojiStatusTypeCustomEmoji(customEmojiId);
+    TdApi.EmojiStatus emojiStatus = new TdApi.EmojiStatus(emojiType, expirationDate);
+    tdlib.send(new TdApi.SetEmojiStatus(emojiStatus), (result, error) -> {
+      UI.post(() -> {
+        if (error != null) {
+          sendEventToWebApp("emoji_status_set", "{\"status\":\"failed\"}");
+        } else {
+          sendEventToWebApp("emoji_status_set", "{\"status\":\"set\"}");
+        }
+      });
+    });
+  }
+
+  // ==================== Location Services ====================
+
+  private static final int LOCATION_PERMISSION_REQUEST = 1001;
+
+  public void onWebAppRequestLocation () {
+    BaseActivity activity = context();
+    if (activity == null) {
+      sendLocationResult(false, null);
+      return;
+    }
+
+    // Check permission
+    if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+      // Show confirmation dialog first
+      showOptions(
+        Lang.getString(R.string.WebAppLocationAccess),
+        new int[] {R.id.btn_done, R.id.btn_cancel},
+        new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
+        (itemView, id) -> {
+          if (id == R.id.btn_done) {
+            ActivityCompat.requestPermissions(activity, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST);
+            // Location will be sent after permission result
+          } else {
+            sendLocationResult(false, null);
+          }
+          return true;
+        }
+      );
+      return;
+    }
+
+    getAndSendLocation();
+  }
+
+  @SuppressLint("MissingPermission")
+  private void getAndSendLocation () {
+    try {
+      LocationManager locationManager = (LocationManager) context().getSystemService(Context.LOCATION_SERVICE);
+      if (locationManager != null) {
+        Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        if (location == null) {
+          location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+        }
+        sendLocationResult(location != null, location);
+      } else {
+        sendLocationResult(false, null);
+      }
+    } catch (Exception e) {
+      Log.e("Failed to get location: %s", e.getMessage());
+      sendLocationResult(false, null);
+    }
+  }
+
+  private void sendLocationResult (boolean available, @Nullable Location location) {
+    if (location != null && available) {
+      String data = String.format(Locale.US,
+        "{\"available\":true,\"latitude\":%f,\"longitude\":%f,\"altitude\":%f," +
+        "\"course\":%f,\"speed\":%f,\"horizontal_accuracy\":%f,\"vertical_accuracy\":%f," +
+        "\"course_accuracy\":0,\"speed_accuracy\":0}",
+        location.getLatitude(), location.getLongitude(), location.getAltitude(),
+        location.getBearing(), location.getSpeed(), location.getAccuracy(),
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? location.getVerticalAccuracyMeters() : 0f
+      );
+      sendEventToWebApp("location_received", data);
+    } else {
+      sendEventToWebApp("location_received", "{\"available\":false}");
+    }
+  }
+
+  public void onRequestPermissionsResult (int requestCode, int[] grantResults) {
+    if (requestCode == LOCATION_PERMISSION_REQUEST) {
+      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        getAndSendLocation();
+      } else {
+        sendLocationResult(false, null);
+      }
+    }
+  }
+
+  // ==================== Story Sharing ====================
+
+  public void onWebAppShareToStory (String mediaUrl, @Nullable String text, @Nullable JSONObject widgetLink) {
+    // Use Android share intent as fallback since full story editor is complex
+    String shareText = text != null ? text : "";
+    if (widgetLink != null) {
+      String url = widgetLink.optString("url", "");
+      String linkName = widgetLink.optString("name", "");
+      if (!url.isEmpty()) {
+        shareText = shareText.isEmpty() ? url : shareText + "\n" + url;
+      }
+    }
+    Intents.shareText(shareText.isEmpty() ? mediaUrl : shareText);
   }
 
   // ==================== QR Code Scanner ====================
@@ -1033,6 +1570,163 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   @Override
   public void onAccuracyChanged (Sensor sensor, int accuracy) {
     // Not needed for web apps
+  }
+
+  // ==================== Visibility Events (3.3) ====================
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    sendEventToWebApp("visibility_changed", "{\"is_visible\":true}");
+    sendEventToWebApp("activated", "{}");
+  }
+
+  @Override
+  public void onBlur () {
+    super.onBlur();
+    sendEventToWebApp("visibility_changed", "{\"is_visible\":false}");
+    sendEventToWebApp("deactivated", "{}");
+  }
+
+  // ==================== Safe Area Events (3.2) ====================
+
+  private void sendSafeAreaData () {
+    if (webView == null) return;
+    BaseActivity activity = context();
+    if (activity == null || activity.getWindow() == null) return;
+
+    int top = 0, bottom = 0, left = 0, right = 0;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      android.view.DisplayCutout cutout = activity.getWindow().getDecorView().getRootWindowInsets() != null
+        ? activity.getWindow().getDecorView().getRootWindowInsets().getDisplayCutout()
+        : null;
+      if (cutout != null) {
+        top = cutout.getSafeInsetTop();
+        bottom = cutout.getSafeInsetBottom();
+        left = cutout.getSafeInsetLeft();
+        right = cutout.getSafeInsetRight();
+      }
+    }
+
+    sendEventToWebApp("safe_area_changed",
+      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", top, bottom, left, right));
+
+    // Content safe area includes the header
+    int contentTop = top + Size.getHeaderPortraitSize();
+    sendEventToWebApp("content_safe_area_changed",
+      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", contentTop, bottom, left, right));
+  }
+
+  // ==================== Biometric Token & Settings (3.1) ====================
+
+  private String biometricToken = null;
+
+  public void onWebAppBiometryUpdateToken (String token) {
+    // Store token in memory (secure storage would require Android Keystore integration)
+    this.biometricToken = token;
+    sendEventToWebApp("biometry_token_updated", "{\"status\":\"updated\"}");
+  }
+
+  public void onWebAppBiometryOpenSettings () {
+    try {
+      Intent intent;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        intent = new Intent(android.provider.Settings.ACTION_BIOMETRIC_ENROLL);
+      } else {
+        intent = new Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS);
+      }
+      context().startActivity(intent);
+    } catch (Exception e) {
+      Log.e("Failed to open biometric settings: %s", e.getMessage());
+    }
+  }
+
+  // ==================== Loading Placeholder (3.6) ====================
+
+  public void loadPlaceholder () {
+    Args args = getArguments();
+    if (args == null || args.botUserId == 0) return;
+
+    tdlib.send(new TdApi.GetWebAppPlaceholder(args.botUserId), (result, error) -> {
+      // Placeholder is displayed while webview loads - on web_app_ready we would hide it
+      // Since rendering SVG paths from Outline requires complex path drawing, we skip the visual
+      // and just use the loading spinner that WebkitController already provides
+      if (error == null) {
+        Log.i("WebApp placeholder available for bot %d", args.botUserId);
+      }
+    });
+  }
+
+  // ==================== Prepared Message (3.5) ====================
+
+  public void sendPreparedMessageResult (String status) {
+    sendEventToWebApp("prepared_message_sent", "{\"status\":\"" + status + "\"}");
+  }
+
+  // ==================== ThemeChangeListener ====================
+
+  @Override
+  public boolean needsTempUpdates () {
+    return true;
+  }
+
+  @Override
+  public void onThemeColorsChanged (boolean areTemp, @Nullable ColorState state) {
+    sendThemeChangedEvent();
+  }
+
+  private void sendThemeChangedEvent () {
+    if (webView == null) return;
+    String themeParamsJson = buildThemeParamsJson();
+    sendEventToWebApp("theme_changed", themeParamsJson);
+  }
+
+  private String buildThemeParamsJson () {
+    TdApi.ThemeParameters params = getThemeParameters();
+    return String.format(Locale.US,
+      "{\"bg_color\":\"#%06X\"," +
+      "\"secondary_bg_color\":\"#%06X\"," +
+      "\"header_bg_color\":\"#%06X\"," +
+      "\"bottom_bar_bg_color\":\"#%06X\"," +
+      "\"section_bg_color\":\"#%06X\"," +
+      "\"section_separator_color\":\"#%06X\"," +
+      "\"text_color\":\"#%06X\"," +
+      "\"accent_text_color\":\"#%06X\"," +
+      "\"section_header_text_color\":\"#%06X\"," +
+      "\"subtitle_text_color\":\"#%06X\"," +
+      "\"destructive_text_color\":\"#%06X\"," +
+      "\"hint_color\":\"#%06X\"," +
+      "\"link_color\":\"#%06X\"," +
+      "\"button_color\":\"#%06X\"," +
+      "\"button_text_color\":\"#%06X\"}",
+      params.backgroundColor & 0xFFFFFF,
+      params.secondaryBackgroundColor & 0xFFFFFF,
+      params.headerBackgroundColor & 0xFFFFFF,
+      params.bottomBarBackgroundColor & 0xFFFFFF,
+      params.sectionBackgroundColor & 0xFFFFFF,
+      params.sectionSeparatorColor & 0xFFFFFF,
+      params.textColor & 0xFFFFFF,
+      params.accentTextColor & 0xFFFFFF,
+      params.sectionHeaderTextColor & 0xFFFFFF,
+      params.subtitleTextColor & 0xFFFFFF,
+      params.destructiveTextColor & 0xFFFFFF,
+      params.hintColor & 0xFFFFFF,
+      params.linkColor & 0xFFFFFF,
+      params.buttonColor & 0xFFFFFF,
+      params.buttonTextColor & 0xFFFFFF
+    );
+  }
+
+  // ==================== WebAppMessageSent ====================
+
+  public void onWebAppMessageSent (long launchId) {
+    Args args = getArguments();
+    if (args != null && args.launchId == launchId) {
+      UI.post(() -> {
+        sendEventToWebApp("web_app_data_sent", "{}");
+        navigateBack();
+      });
+    }
   }
 
   // ==================== Helper Methods ====================

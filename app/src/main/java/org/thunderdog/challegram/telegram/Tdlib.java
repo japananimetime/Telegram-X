@@ -76,6 +76,7 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.EditRightsController;
+import org.thunderdog.challegram.ui.WebAppController;
 import org.thunderdog.challegram.unsorted.Passcode;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.ChangeLogList;
@@ -8861,9 +8862,30 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     // TODO
   }
 
+  // WebApp message sent listener support
+  private final java.util.Map<Long, WebAppController> webAppMessageSentListeners = new java.util.HashMap<>();
+
+  public void addWebAppMessageSentListener (long launchId, WebAppController listener) {
+    synchronized (webAppMessageSentListeners) {
+      webAppMessageSentListeners.put(launchId, listener);
+    }
+  }
+
+  public void removeWebAppMessageSentListener (WebAppController listener) {
+    synchronized (webAppMessageSentListeners) {
+      webAppMessageSentListeners.values().remove(listener);
+    }
+  }
+
   @TdlibThread
   private void updateWebAppMessageSent (TdApi.UpdateWebAppMessageSent update) {
-    // TODO
+    WebAppController listener;
+    synchronized (webAppMessageSentListeners) {
+      listener = webAppMessageSentListeners.remove(update.webAppLaunchId);
+    }
+    if (listener != null) {
+      listener.onWebAppMessageSent(update.webAppLaunchId);
+    }
   }
 
   // Updates: NOTIFICATIONS

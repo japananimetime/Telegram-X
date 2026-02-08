@@ -110,6 +110,23 @@ public final class WebAppProxy {
           }
           break;
 
+        // ==================== Secondary Button Events ====================
+        case "web_app_setup_secondary_button":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            boolean visible = data.optBoolean("is_visible", false);
+            String text = data.optString("text", "");
+            String colorStr = data.optString("color", "#007AFF");
+            String textColorStr = data.optString("text_color", "#FFFFFF");
+            boolean isActive = data.optBoolean("is_active", true);
+            boolean isProgressVisible = data.optBoolean("is_progress_visible", false);
+            String position = data.optString("position", "left");
+            int color = parseColor(colorStr);
+            int textColor = parseColor(textColorStr);
+            controller.onWebAppSetSecondaryButton(visible, text, color, textColor, isActive, isProgressVisible, position);
+          }
+          break;
+
         // ==================== Back Button Events ====================
         case "web_app_setup_back_button":
           if (eventData != null) {
@@ -125,6 +142,23 @@ public final class WebAppProxy {
             JSONObject data = new JSONObject(eventData);
             boolean visible = data.optBoolean("is_visible", false);
             controller.onWebAppSetSettingsButton(visible);
+          }
+          break;
+
+        // ==================== Closing & Swipe Behavior ====================
+        case "web_app_setup_closing_behavior":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            boolean needConfirmation = data.optBoolean("need_confirmation", false);
+            controller.onWebAppSetClosingBehavior(needConfirmation);
+          }
+          break;
+
+        case "web_app_setup_swipe_behavior":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            boolean allowVerticalSwipe = data.optBoolean("allow_vertical_swipe", true);
+            controller.onWebAppSetSwipeBehavior(allowVerticalSwipe);
           }
           break;
 
@@ -180,12 +214,11 @@ public final class WebAppProxy {
           break;
 
         case "web_app_request_fullscreen":
-          // TODO: Implement fullscreen (requires more significant UI changes)
-          controller.onWebAppExpand();
+          controller.onWebAppRequestFullscreen();
           break;
 
         case "web_app_exit_fullscreen":
-          // TODO: Implement exit fullscreen
+          controller.onWebAppExitFullscreen();
           break;
 
         // ==================== Theme Color Events ====================
@@ -225,9 +258,18 @@ public final class WebAppProxy {
             JSONObject data = new JSONObject(eventData);
             String slug = data.optString("slug", "");
             if (!slug.isEmpty()) {
-              // Open invoice link
-              controller.onWebAppOpenLink("https://t.me/$" + slug);
+              controller.onWebAppOpenInvoice(slug);
             }
+          }
+          break;
+
+        // ==================== Switch Inline Query ====================
+        case "web_app_switch_inline_query":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String query = data.optString("query", "");
+            JSONArray chatTypes = data.optJSONArray("chat_types");
+            controller.onWebAppSwitchInlineQuery(query, chatTypes);
           }
           break;
 
@@ -281,13 +323,20 @@ public final class WebAppProxy {
           break;
 
         case "web_app_biometry_update_token":
-          // Token storage not implemented - would need secure storage
-          Log.w("WebApp biometry token storage not implemented");
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String token = data.optString("token", "");
+            controller.onWebAppBiometryUpdateToken(token);
+          }
           break;
 
         case "web_app_biometry_open_settings":
-          // Open system biometric settings
-          Log.w("WebApp biometry settings not implemented");
+          controller.onWebAppBiometryOpenSettings();
+          break;
+
+        // ==================== Keyboard Events ====================
+        case "web_app_hide_keyboard":
+          controller.onWebAppHideKeyboard();
           break;
 
         // ==================== Cloud Storage Events ====================
@@ -347,28 +396,66 @@ public final class WebAppProxy {
 
         // ==================== Location Events ====================
         case "web_app_request_location":
-          // TODO: Implement location access
-          Log.w("WebApp location request not yet implemented");
+          controller.onWebAppRequestLocation();
           break;
 
         // ==================== Share Events ====================
         case "web_app_share_to_story":
-          // TODO: Implement story sharing
-          Log.w("WebApp share to story not yet implemented");
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String mediaUrl = data.optString("media_url", "");
+            String storyText = data.optString("text", null);
+            JSONObject widgetLink = data.optJSONObject("widget_link");
+            if (!mediaUrl.isEmpty()) {
+              controller.onWebAppShareToStory(mediaUrl, storyText, widgetLink);
+            }
+          }
           break;
 
         // ==================== Emoji Status Events ====================
         case "web_app_request_emoji_status_access":
+          controller.onWebAppRequestEmojiStatusAccess();
+          break;
+
         case "web_app_set_emoji_status":
-          // TODO: Implement emoji status
-          Log.w("WebApp emoji status events not yet implemented: %s", eventName);
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            long customEmojiId = data.optLong("custom_emoji_id", 0);
+            int duration = data.optInt("duration", 0);
+            controller.onWebAppSetEmojiStatus(customEmojiId, duration);
+          }
           break;
 
         // ==================== Home Screen Events ====================
         case "web_app_check_home_screen":
+          controller.onWebAppCheckHomeScreen();
+          break;
+
         case "web_app_add_to_home_screen":
-          // TODO: Implement home screen shortcuts
-          Log.w("WebApp home screen events not yet implemented: %s", eventName);
+          controller.onWebAppAddToHomeScreen();
+          break;
+
+        // ==================== File Download Events ====================
+        case "web_app_request_file_download":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String url = data.optString("url", "");
+            String fileName = data.optString("file_name", "");
+            if (!url.isEmpty() && !fileName.isEmpty()) {
+              controller.onWebAppRequestFileDownload(url, fileName);
+            }
+          }
+          break;
+
+        // ==================== Prepared Message Events ====================
+        case "web_app_send_prepared_message":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String preparedMessageId = data.optString("id", "");
+            // TDLib does not yet have SendPreparedMessage API
+            Log.w("WebApp send prepared message not yet supported by TDLib: %s", preparedMessageId);
+            controller.sendPreparedMessageResult("unsupported");
+          }
           break;
 
         // ==================== Unknown Events ====================

@@ -722,6 +722,11 @@
   <string name="OpenInExternalApp">Open in…</string>
   <string name="Reload">Reload</string>
   <string name="WebApp">Web App</string>
+  <string name="WebAppCloseConfirmation">Are you sure you want to close this app?</string>
+  <string name="WebAppDownloadFile">Download %1$s?</string>
+  <string name="WebAppEmojiStatusAccess">Allow this bot to set your emoji status?</string>
+  <string name="WebAppLocationAccess">Allow this bot to access your location?</string>
+  <string name="Download">Download</string>
   <string name="Close">Close</string>
   <string name="ShareYourPhoneNumberBot">Share your phone number with this bot?</string>
   <string name="failed">failed</string>
