@@ -185,6 +185,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   private ChatsAdapter adapter;
   private @Nullable StoryBarView storyBarView;
 
+
   /**
    * Called by ChatsViewHolder when it creates a StoryBarView.
    * Sets up the click listener and stores the reference.
