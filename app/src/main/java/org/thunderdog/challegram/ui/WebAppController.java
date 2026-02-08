@@ -44,10 +44,9 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import android.Manifest;
 
 import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
+
 import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
@@ -93,6 +92,7 @@ import org.thunderdog.challegram.ui.camera.CameraController;
 import org.thunderdog.challegram.unsorted.Size;
 import org.thunderdog.challegram.util.OptionDelegate;
 import org.thunderdog.challegram.v.WebAppProxy;
+import org.thunderdog.challegram.widget.PopupLayout;
 import org.thunderdog.challegram.widget.ProgressComponent;
 
 import me.vkryl.android.AnimatorUtils;
@@ -310,12 +310,48 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   @Override
+  protected boolean hasSpecialProcessing () {
+    return true;
+  }
+
+  @Override
+  protected boolean processSpecial (Uri uri) {
+    if (uri == null) return false;
+    String host = uri.getHost();
+    if (host == null) return false;
+    String hostLower = host.toLowerCase(Locale.US);
+    // Intercept Telegram deep links
+    if (hostLower.equals("t.me") || hostLower.equals("telegram.me") || hostLower.endsWith(".t.me")) {
+      onWebAppOpenTgLink(uri.toString());
+      return true;
+    }
+    // Don't intercept the WebApp's own URLs — let them load in the WebView
+    Args args = getArguments();
+    if (args != null && args.url != null) {
+      try {
+        Uri webAppUri = Uri.parse(args.url);
+        String webAppHost = webAppUri.getHost();
+        if (webAppHost != null && hostLower.equals(webAppHost.toLowerCase(Locale.US))) {
+          return false;
+        }
+      } catch (Exception ignored) { }
+    }
+    // Intercept external URLs — open them outside the WebView
+    String scheme = uri.getScheme();
+    if (scheme != null && (scheme.equals("http") || scheme.equals("https"))) {
+      onWebAppOpenLink(uri.toString());
+      return true;
+    }
+    return false;
+  }
+
+  @Override
   protected int getBackButton () {
     return backButtonVisible ? BackHeaderButton.TYPE_BACK : BackHeaderButton.TYPE_CLOSE;
   }
 
   @Override
-  public boolean onBackPressed (boolean fromTop) {
+  public boolean performOnBackPressed (boolean fromTop, boolean commit) {
     if (backButtonVisible) {
       onWebAppBackButtonPressed();
       return true;
@@ -324,7 +360,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       showCloseConfirmation();
       return true;
     }
-    return super.onBackPressed(fromTop);
+    return super.performOnBackPressed(fromTop, commit);
   }
 
   private void showCloseConfirmation () {
@@ -397,6 +433,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   public void onWebAppReady () {
     Log.i("WebApp ready");
+    // Complete loading progress
+    UI.post(() -> {
+      if (headerCell != null) {
+        headerCell.animateProgress(1f);
+      }
+    });
     // Send initial viewport data
     sendViewportData();
     // Send initial safe area data
@@ -663,9 +705,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (this.backButtonVisible != visible) {
       this.backButtonVisible = visible;
       UI.post(() -> {
-        // Update the header button
-        if (headerView() != null) {
-          headerView().updateButton(getMenuId(), getBackButton(), 0);
+        // Update the header back button type
+        if (headerView != null) {
+          headerView.getBackButton().setButtonFactor(getBackButton());
         }
       });
     }
@@ -688,11 +730,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Popups & Dialogs ====================
 
   public void onWebAppShowAlert (String message, @Nullable Runnable callback) {
-    showOptions(
+    final boolean[] buttonPressed = {false};
+    PopupLayout popup = showOptions(
       message,
       new int[] {R.id.btn_done},
       new String[] {Lang.getString(R.string.OK)},
       (itemView, id) -> {
+        buttonPressed[0] = true;
         if (callback != null) {
           callback.run();
         }
@@ -700,14 +744,23 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         return true;
       }
     );
+    if (popup != null) {
+      popup.setDismissListener(p -> {
+        if (!buttonPressed[0]) {
+          sendEventToWebApp("popup_closed", "{\"button_id\":\"\"}");
+        }
+      });
+    }
   }
 
   public void onWebAppShowConfirm (String message, @Nullable java.util.function.Consumer<Boolean> callback) {
-    showOptions(
+    final boolean[] buttonPressed = {false};
+    PopupLayout popup = showOptions(
       message,
       new int[] {R.id.btn_done, R.id.btn_cancel},
       new String[] {Lang.getString(R.string.OK), Lang.getString(R.string.Cancel)},
       (itemView, id) -> {
+        buttonPressed[0] = true;
         boolean confirmed = id == R.id.btn_done;
         if (callback != null) {
           callback.accept(confirmed);
@@ -716,6 +769,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         return true;
       }
     );
+    if (popup != null) {
+      popup.setDismissListener(p -> {
+        if (!buttonPressed[0]) {
+          sendEventToWebApp("popup_closed", "{\"button_id\":\"\"}");
+        }
+      });
+    }
   }
 
   public void onWebAppShowPopup (String title, String message, JSONArray buttons) {
@@ -769,19 +829,28 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       ? title + "\n\n" + message
       : message;
 
-    showOptions(
+    final boolean[] buttonPressed = {false};
+    PopupLayout popup = showOptions(
       popupMessage,
       ids,
       titles,
       colors,
       null,
       (itemView, id) -> {
+        buttonPressed[0] = true;
         int index = id - R.id.btn_done;
         String selectedId = index >= 0 && index < finalButtonIds.length ? finalButtonIds[index] : "";
         sendEventToWebApp("popup_closed", "{\"button_id\":\"" + escapeJsonString(selectedId) + "\"}");
         return true;
       }
     );
+    if (popup != null) {
+      popup.setDismissListener(p -> {
+        if (!buttonPressed[0]) {
+          sendEventToWebApp("popup_closed", "{\"button_id\":\"\"}");
+        }
+      });
+    }
   }
 
   // ==================== Haptic Feedback ====================
@@ -883,8 +952,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE
           );
         }
-        if (headerView() != null) {
-          headerView().setVisibility(View.GONE);
+        if (headerView != null) {
+          headerView.setVisibility(View.GONE);
         }
         sendEventToWebApp("fullscreen_changed", "{\"is_fullscreen\":true}");
       } else {
@@ -915,8 +984,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
         activity.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
       }
-      if (headerView() != null) {
-        headerView().setVisibility(View.VISIBLE);
+      if (headerView != null) {
+        headerView.setVisibility(View.VISIBLE);
       }
     }
   }
@@ -1043,7 +1112,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (parsedColor != 0) {
       this.customHeaderColor = parsedColor;
       UI.post(() -> {
-        HeaderView header = headerView();
+        HeaderView header = headerView;
         if (header != null) {
           header.getFilling().setColor(parsedColor);
           header.invalidate();
@@ -1085,12 +1154,16 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     try {
       if (colorStr.startsWith("#")) {
         return (int) Long.parseLong(colorStr.substring(1), 16) | 0xFF000000;
-      } else if (colorStr.equals("bg_color")) {
-        return Theme.getColor(ColorId.filling);
-      } else if (colorStr.equals("secondary_bg_color")) {
-        return Theme.getColor(ColorId.fillingPositive);
       }
-      return 0;
+      switch (colorStr) {
+        case "bg_color": return Theme.getColor(ColorId.filling);
+        case "secondary_bg_color": return Theme.getColor(ColorId.fillingPositive);
+        case "header_bg_color": return Theme.getColor(ColorId.headerBackground);
+        case "bottom_bar_bg_color": return Theme.getColor(ColorId.headerBackground);
+        case "section_bg_color": return Theme.getColor(ColorId.filling);
+        case "section_separator_color": return Theme.getColor(ColorId.separator);
+        default: return 0;
+      }
     } catch (NumberFormatException e) {
       return 0;
     }
@@ -1118,27 +1191,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   private void sendCustomMethodResult (String requestId, String result) {
-    String js = String.format(
-      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-      "  Telegram.WebApp.onEvent('custom_method_invoked', {req_id: '%s', result: %s});" +
-      "}",
-      escapeJsonString(requestId), result != null ? result : "null"
-    );
-    if (webView != null) {
-      webView.evaluateJavascript(js, null);
-    }
+    sendEventToWebApp("custom_method_invoked",
+      "{\"req_id\":\"" + escapeJsonString(requestId) + "\",\"result\":" + (result != null ? result : "null") + "}");
   }
 
   private void sendCustomMethodError (String requestId, String error) {
-    String js = String.format(
-      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-      "  Telegram.WebApp.onEvent('custom_method_invoked', {req_id: '%s', error: '%s'});" +
-      "}",
-      escapeJsonString(requestId), escapeJsonString(error)
-    );
-    if (webView != null) {
-      webView.evaluateJavascript(js, null);
-    }
+    sendEventToWebApp("custom_method_invoked",
+      "{\"req_id\":\"" + escapeJsonString(requestId) + "\",\"error\":\"" + escapeJsonString(error) + "\"}");
   }
 
   // ==================== Clipboard Access ====================
@@ -1147,24 +1206,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     CharSequence clipText = U.getPasteText(context());
     String data = clipText != null ? clipText.toString() : null;
 
-    String js;
     if (data != null) {
-      js = String.format(
-        "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-        "  Telegram.WebApp.onEvent('clipboard_text_received', {req_id: '%s', data: '%s'});" +
-        "}",
-        escapeJsonString(requestId), escapeJsonString(data)
-      );
+      sendEventToWebApp("clipboard_text_received",
+        "{\"req_id\":\"" + escapeJsonString(requestId) + "\",\"data\":\"" + escapeJsonString(data) + "\"}");
     } else {
-      js = String.format(
-        "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-        "  Telegram.WebApp.onEvent('clipboard_text_received', {req_id: '%s'});" +
-        "}",
-        escapeJsonString(requestId)
-      );
-    }
-    if (webView != null) {
-      webView.evaluateJavascript(js, null);
+      sendEventToWebApp("clipboard_text_received",
+        "{\"req_id\":\"" + escapeJsonString(requestId) + "\"}");
     }
   }
 
@@ -1174,22 +1221,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     boolean available = BiometricAuthentication.isAvailable();
     String type = available ? (BiometricAuthentication.ONLY_FINGERPRINT ? "finger" : "face") : "";
 
-    String js = String.format(
-      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-      "  Telegram.WebApp.onEvent('biometry_info_received', {" +
-      "    available: %b," +
-      "    type: '%s'," +
-      "    access_requested: %b," +
-      "    access_granted: %b," +
-      "    device_id: ''," +
-      "    token_saved: %b" +
-      "  });" +
-      "}",
+    String data = String.format(Locale.US,
+      "{\"available\":%b,\"type\":\"%s\",\"access_requested\":%b,\"access_granted\":%b,\"device_id\":\"\",\"token_saved\":%b}",
       available, type, biometryAccessRequested, biometryAccessGranted, biometricToken != null
     );
-    if (webView != null) {
-      webView.evaluateJavascript(js, null);
-    }
+    sendEventToWebApp("biometry_info_received", data);
   }
 
   private boolean biometryAccessRequested = false;
@@ -1216,15 +1252,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   private void sendBiometryAccessResult (boolean granted) {
-    String js = String.format(
-      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-      "  Telegram.WebApp.onEvent('biometry_auth_requested', {status: '%s'});" +
-      "}",
-      granted ? "authorized" : "failed"
-    );
-    if (webView != null) {
-      webView.evaluateJavascript(js, null);
-    }
+    sendEventToWebApp("biometry_auth_requested",
+      "{\"status\":\"" + (granted ? "authorized" : "failed") + "\"}");
   }
 
   public void onWebAppBiometryAuthenticate (String reason) {
@@ -1259,21 +1288,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   private void sendBiometryAuthResult (boolean success, String token) {
-    String js;
     if (success) {
-      js = String.format(
-        "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-        "  Telegram.WebApp.onEvent('biometry_auth_requested', {status: 'authorized', token: '%s'});" +
-        "}",
-        token != null ? escapeJsonString(token) : ""
-      );
+      sendEventToWebApp("biometry_auth_requested",
+        "{\"status\":\"authorized\",\"token\":\"" + (token != null ? escapeJsonString(token) : "") + "\"}");
     } else {
-      js = "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-           "  Telegram.WebApp.onEvent('biometry_auth_requested', {status: 'failed'});" +
-           "}";
-    }
-    if (webView != null) {
-      webView.evaluateJavascript(js, null);
+      sendEventToWebApp("biometry_auth_requested", "{\"status\":\"failed\"}");
     }
   }
 
@@ -1406,15 +1425,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   // ==================== Location Services ====================
 
-  private static final int LOCATION_PERMISSION_REQUEST = 1001;
-
   public void onWebAppCheckLocation () {
     BaseActivity activity = context();
     if (activity == null) {
       sendEventToWebApp("location_checked", "{\"available\":false,\"access_requested\":false,\"access_granted\":false}");
       return;
     }
-    boolean granted = ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    boolean granted = activity.checkLocationPermissions(false) == PackageManager.PERMISSION_GRANTED;
     sendEventToWebApp("location_checked",
       String.format("{\"available\":true,\"access_requested\":%b,\"access_granted\":%b}", granted, granted));
   }
@@ -1438,22 +1455,15 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     }
 
     // Check permission
-    if (ActivityCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-      // Show confirmation dialog first
-      showOptions(
-        Lang.getString(R.string.WebAppLocationAccess),
-        new int[] {R.id.btn_done, R.id.btn_cancel},
-        new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
-        (itemView, id) -> {
-          if (id == R.id.btn_done) {
-            ActivityCompat.requestPermissions(activity, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST);
-            // Location will be sent after permission result
-          } else {
-            sendLocationResult(false, null);
-          }
-          return true;
+    if (activity.checkLocationPermissions(false) != PackageManager.PERMISSION_GRANTED) {
+      // Use BaseActivity's permission system which handles the full flow
+      activity.requestLocationPermission(false, false, (code, permissions, grantResults, grantCount) -> {
+        if (grantCount > 0) {
+          getAndSendLocation();
+        } else {
+          sendLocationResult(false, null);
         }
-      );
+      });
       return;
     }
 
@@ -1492,16 +1502,6 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       sendEventToWebApp("location_requested", data);
     } else {
       sendEventToWebApp("location_requested", "{\"available\":false}");
-    }
-  }
-
-  public void onRequestPermissionsResult (int requestCode, int[] grantResults) {
-    if (requestCode == LOCATION_PERMISSION_REQUEST) {
-      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-        getAndSendLocation();
-      } else {
-        sendLocationResult(false, null);
-      }
     }
   }
 
@@ -1897,50 +1897,39 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     sendContentSafeAreaEvent();
   }
 
-  private void sendSafeAreaEvent () {
-    if (webView == null) return;
-    BaseActivity activity = context();
-    if (activity == null || activity.getWindow() == null) return;
-
-    int top = 0, bottom = 0, left = 0, right = 0;
+  private int[] getDisplayCutoutInsets () {
+    int[] insets = {0, 0, 0, 0}; // top, bottom, left, right
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      android.view.DisplayCutout cutout = activity.getWindow().getDecorView().getRootWindowInsets() != null
-        ? activity.getWindow().getDecorView().getRootWindowInsets().getDisplayCutout()
-        : null;
-      if (cutout != null) {
-        top = cutout.getSafeInsetTop();
-        bottom = cutout.getSafeInsetBottom();
-        left = cutout.getSafeInsetLeft();
-        right = cutout.getSafeInsetRight();
+      BaseActivity activity = context();
+      if (activity != null && activity.getWindow() != null) {
+        android.view.DisplayCutout cutout = activity.getWindow().getDecorView().getRootWindowInsets() != null
+          ? activity.getWindow().getDecorView().getRootWindowInsets().getDisplayCutout()
+          : null;
+        if (cutout != null) {
+          insets[0] = cutout.getSafeInsetTop();
+          insets[1] = cutout.getSafeInsetBottom();
+          insets[2] = cutout.getSafeInsetLeft();
+          insets[3] = cutout.getSafeInsetRight();
+        }
       }
     }
+    return insets;
+  }
 
+  private void sendSafeAreaEvent () {
+    if (webView == null) return;
+    int[] insets = getDisplayCutoutInsets();
     sendEventToWebApp("safe_area_changed",
-      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", top, bottom, left, right));
+      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", insets[0], insets[1], insets[2], insets[3]));
   }
 
   private void sendContentSafeAreaEvent () {
     if (webView == null) return;
-    BaseActivity activity = context();
-    if (activity == null || activity.getWindow() == null) return;
-
-    int top = 0, bottom = 0, left = 0, right = 0;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      android.view.DisplayCutout cutout = activity.getWindow().getDecorView().getRootWindowInsets() != null
-        ? activity.getWindow().getDecorView().getRootWindowInsets().getDisplayCutout()
-        : null;
-      if (cutout != null) {
-        top = cutout.getSafeInsetTop();
-        bottom = cutout.getSafeInsetBottom();
-        left = cutout.getSafeInsetLeft();
-        right = cutout.getSafeInsetRight();
-      }
-    }
-
+    int[] insets = getDisplayCutoutInsets();
     // Content safe area includes the header when not fullscreen
-    int contentTop = isFullscreen ? top : top + Size.getHeaderPortraitSize();
+    int contentTop = isFullscreen ? insets[0] : insets[0] + Size.getHeaderPortraitSize();
     sendEventToWebApp("content_safe_area_changed",
-      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", contentTop, bottom, left, right));
+      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", contentTop, insets[1], insets[2], insets[3]));
   }
 
   // ==================== Biometric Token & Settings (3.1) ====================

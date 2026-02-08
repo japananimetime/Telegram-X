@@ -8031,7 +8031,7 @@ public class TdlibUi extends Handler {
   }
 
   private void openWebAppLink (TdlibDelegate context, String botUsername, String webAppShortName, String startParameter, TdApi.WebAppOpenMode mode, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
-    tdlib.searchPublicChat(botUsername, (chat, error) -> {
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
       if (error != null) {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
         if (after != null) {
@@ -8039,6 +8039,7 @@ public class TdlibUi extends Handler {
         }
         return;
       }
+      TdApi.Chat chat = (TdApi.Chat) result;
       if (chat.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
         if (after != null) {
@@ -8048,8 +8049,8 @@ public class TdlibUi extends Handler {
       }
       long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
 
-      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(null, "tgx", mode);
-      tdlib.send(new TdApi.GetWebAppLinkUrl(chat.id, botUserId, webAppShortName, startParameter, null, "tgx", mode), (result, linkError) -> {
+      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", mode);
+      tdlib.send(new TdApi.GetWebAppLinkUrl(chat.id, botUserId, webAppShortName, startParameter, false, webAppParams), (linkResult, linkError) -> {
         UI.post(() -> {
           if (linkError != null) {
             showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(linkError), openParameters);
@@ -8057,7 +8058,7 @@ public class TdlibUi extends Handler {
               after.runWithBool(false);
             }
           } else {
-            TdApi.HttpUrl httpUrl = (TdApi.HttpUrl) result;
+            TdApi.HttpUrl httpUrl = (TdApi.HttpUrl) linkResult;
             WebAppController controller = new WebAppController(context.context(), tdlib);
             controller.setArguments(new WebAppController.Args(
               chat.id,
@@ -8077,8 +8078,28 @@ public class TdlibUi extends Handler {
     });
   }
 
+  private static TdApi.ThemeParameters buildWebAppThemeParameters () {
+    TdApi.ThemeParameters params = new TdApi.ThemeParameters();
+    params.backgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.secondaryBackgroundColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.headerBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.bottomBarBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.sectionBackgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.sectionSeparatorColor = Theme.getColor(ColorId.separator) & 0xFFFFFF;
+    params.textColor = Theme.getColor(ColorId.text) & 0xFFFFFF;
+    params.accentTextColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.sectionHeaderTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.subtitleTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.destructiveTextColor = Theme.getColor(ColorId.textNegative) & 0xFFFFFF;
+    params.hintColor = Theme.getColor(ColorId.textPlaceholder) & 0xFFFFFF;
+    params.linkColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.buttonColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.buttonTextColor = Theme.getColor(ColorId.fillingPositiveContent) & 0xFFFFFF;
+    return params;
+  }
+
   private void openMainWebAppLink (TdlibDelegate context, String botUsername, String startParameter, TdApi.WebAppOpenMode mode, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
-    tdlib.searchPublicChat(botUsername, (chat, error) -> {
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
       if (error != null) {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
         if (after != null) {
@@ -8086,6 +8107,7 @@ public class TdlibUi extends Handler {
         }
         return;
       }
+      TdApi.Chat chat = (TdApi.Chat) result;
       if (chat.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
         if (after != null) {
@@ -8095,8 +8117,8 @@ public class TdlibUi extends Handler {
       }
       long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
 
-      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(null, "tgx", mode);
-      tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, startParameter, webAppParams), (result, mainError) -> {
+      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", mode);
+      tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, startParameter, webAppParams), (mainResult, mainError) -> {
         UI.post(() -> {
           if (mainError != null) {
             showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(mainError), openParameters);
@@ -8104,7 +8126,7 @@ public class TdlibUi extends Handler {
               after.runWithBool(false);
             }
           } else {
-            TdApi.MainWebApp mainWebApp = (TdApi.MainWebApp) result;
+            TdApi.MainWebApp mainWebApp = (TdApi.MainWebApp) mainResult;
             WebAppController controller = new WebAppController(context.context(), tdlib);
             controller.setArguments(new WebAppController.Args(
               chat.id,
