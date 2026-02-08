@@ -1276,7 +1276,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   public void onWebAppBiometryGetInfo () {
     boolean available = BiometricAuthentication.isAvailable();
-    String type = available ? (BiometricAuthentication.ONLY_FINGERPRINT ? "finger" : "face") : "";
+    String type = "";
+    if (available) {
+      PackageManager pm = context().getPackageManager();
+      boolean hasFace = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && pm.hasSystemFeature(PackageManager.FEATURE_FACE);
+      type = hasFace ? "face" : "finger";
+    }
 
     String data = String.format(Locale.US,
       "{\"available\":%b,\"type\":\"%s\",\"access_requested\":%b,\"access_granted\":%b,\"device_id\":\"\",\"token_saved\":%b}",
@@ -1927,7 +1932,6 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   public void onFocus () {
     super.onFocus();
     sendEventToWebApp("visibility_changed", "{\"is_visible\":true}");
-    sendEventToWebApp("activated", "{}");
     if (awaitingLocationSettingsReturn) {
       awaitingLocationSettingsReturn = false;
       boolean locationEnabled = false;
@@ -1937,7 +1941,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
           locationEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
         }
       } catch (Exception ignored) { }
-      sendEventToWebApp("location_manager_updated", "{\"location_available\":" + locationEnabled + "}");
+      boolean granted = false;
+      try {
+        granted = context().checkLocationPermissions(false) == PackageManager.PERMISSION_GRANTED;
+      } catch (Exception ignored) { }
+      sendEventToWebApp("location_checked",
+        String.format("{\"available\":%b,\"access_requested\":%b,\"access_granted\":%b}", locationEnabled, granted, granted));
     }
   }
 
@@ -1945,7 +1954,6 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   public void onBlur () {
     super.onBlur();
     sendEventToWebApp("visibility_changed", "{\"is_visible\":false}");
-    sendEventToWebApp("deactivated", "{}");
   }
 
   // ==================== Safe Area Events (3.2) ====================
@@ -2111,12 +2119,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   public void onWebAppShareMessage (String msgId) {
     if (msgId == null || msgId.isEmpty()) {
-      sendEventToWebApp("share_message_failed", "{\"error\":\"MESSAGE_EXPIRED\"}");
+      sendEventToWebApp("prepared_message_failed", "{\"error\":\"MESSAGE_EXPIRED\"}");
       return;
     }
     // Share via inline message — requires launchId for web_app_data_sent flow
     // Since TDLib doesn't have a direct ShareWebAppMessage API, we send the failure event
-    sendEventToWebApp("share_message_failed", "{\"error\":\"UNSUPPORTED\"}");
+    sendEventToWebApp("prepared_message_failed", "{\"error\":\"UNSUPPORTED\"}");
   }
 
   // ==================== Prepared Message (3.5) ====================
@@ -2192,10 +2200,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   public void onWebAppMessageSent (long launchId) {
     Args args = getArguments();
     if (args != null && args.launchId == launchId) {
-      UI.post(() -> {
-        sendEventToWebApp("web_app_data_sent", "{}");
-        navigateBack();
-      });
+      UI.post(this::navigateBack);
     }
   }
 
