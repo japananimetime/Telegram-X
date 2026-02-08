@@ -13,6 +13,8 @@
 package org.thunderdog.challegram.ui;
 
 import android.content.Context;
+
+import androidx.annotation.Nullable;
 import android.util.Log;
 
 import org.thunderdog.challegram.BuildConfig;
@@ -47,6 +49,7 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
     public final boolean isVideo;
     public final double videoDuration;
     public final long targetChatId;  // 0 for personal stories, channel chat ID for channel stories
+    public @Nullable String caption;
 
     public Args (String filePath, boolean isVideo) {
       this(filePath, isVideo, 0, 0);
@@ -61,6 +64,11 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
       this.isVideo = isVideo;
       this.videoDuration = videoDuration;
       this.targetChatId = targetChatId;
+    }
+
+    public Args setCaption (@Nullable String caption) {
+      this.caption = caption;
+      return this;
     }
   }
 
@@ -124,6 +132,10 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
+    Args args = getArguments();
+    if (args != null && args.caption != null) {
+      captionText = args.caption;
+    }
     adapter = new SettingsAdapter(this) {
       @Override
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {

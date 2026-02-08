@@ -58,7 +58,7 @@ public final class WebAppProxy {
             JSONObject data = new JSONObject(eventData);
             returnBack = data.optBoolean("return_back", false);
           }
-          controller.onWebAppClose();
+          controller.onWebAppClose(returnBack);
           break;
         }
 
@@ -76,8 +76,9 @@ public final class WebAppProxy {
             JSONObject data = new JSONObject(eventData);
             String url = data.optString("url", "");
             boolean tryInstantView = data.optBoolean("try_instant_view", false);
+            String tryBrowser = data.optString("try_browser", null);
             if (!url.isEmpty()) {
-              controller.onWebAppOpenLink(url, tryInstantView);
+              controller.onWebAppOpenLink(url, tryInstantView, tryBrowser);
             }
           }
           break;
@@ -86,8 +87,9 @@ public final class WebAppProxy {
           if (eventData != null) {
             JSONObject data = new JSONObject(eventData);
             String pathFull = data.optString("path_full", "");
+            // force_request: if true, request should be sent to server even if link can be handled locally
             if (!pathFull.isEmpty()) {
-              controller.onWebAppOpenLink("https://t.me" + pathFull);
+              controller.onWebAppOpenTgLink("https://t.me" + pathFull);
             }
           }
           break;
@@ -545,6 +547,15 @@ public final class WebAppProxy {
           }
           break;
 
+        // ==================== Share Message Events ====================
+        case "web_app_share_message":
+          if (eventData != null) {
+            JSONObject data = new JSONObject(eventData);
+            String msgId = data.optString("msg_id", "");
+            controller.onWebAppShareMessage(msgId);
+          }
+          break;
+
         // ==================== Prepared Message Events ====================
         case "web_app_send_prepared_message":
           if (eventData != null) {
@@ -552,7 +563,7 @@ public final class WebAppProxy {
             String preparedMessageId = data.optString("id", "");
             // TDLib does not yet have SendPreparedMessage API
             Log.w("WebApp send prepared message not yet supported by TDLib: %s", preparedMessageId);
-            controller.sendPreparedMessageResult("unsupported");
+            controller.sendPreparedMessageResult(null, "UNSUPPORTED");
           }
           break;
 

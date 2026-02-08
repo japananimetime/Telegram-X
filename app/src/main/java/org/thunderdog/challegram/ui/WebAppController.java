@@ -403,7 +403,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     sendSafeAreaData();
   }
 
-  public void onWebAppClose () {
+  public void onWebAppClose (boolean returnBack) {
     UI.post(() -> {
       if (closingConfirmationEnabled) {
         showCloseConfirmation();
@@ -427,16 +427,34 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onWebAppOpenLink (String url) {
-    onWebAppOpenLink(url, false);
+    onWebAppOpenLink(url, false, null);
   }
 
   public void onWebAppOpenLink (String url, boolean tryInstantView) {
+    onWebAppOpenLink(url, tryInstantView, null);
+  }
+
+  public void onWebAppOpenLink (String url, boolean tryInstantView, @Nullable String tryBrowser) {
+    TdlibUi.UrlOpenParameters params = null;
     if (tryInstantView) {
-      TdlibUi.UrlOpenParameters params = new TdlibUi.UrlOpenParameters().forceInstantView();
-      tdlib.ui().openUrl(this, url, params);
-    } else {
-      tdlib.ui().openUrl(this, url, null);
+      params = new TdlibUi.UrlOpenParameters().forceInstantView();
     }
+    if (tryBrowser != null && !tryBrowser.isEmpty()) {
+      // Request to open in a specific browser — use system intent with browser package
+      Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+      try {
+        context().startActivity(browserIntent);
+      } catch (Exception e) {
+        // Fallback to default handling
+        tdlib.ui().openUrl(this, url, params);
+      }
+      return;
+    }
+    tdlib.ui().openUrl(this, url, params);
+  }
+
+  public void onWebAppOpenTgLink (String url) {
+    tdlib.ui().openUrl(this, url, null);
   }
 
   public void onWebAppRequestPhone () {
@@ -1001,6 +1019,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (webView == null) return;
 
     int buttonHeight = Screen.dp(48f);
+    int width = webView.getWidth();
     int height = webView.getHeight();
     if (mainButtonVisible && secondaryButtonVisible) {
       boolean stacked = "top".equals(secondaryButtonPosition) || "bottom".equals(secondaryButtonPosition);
@@ -1008,21 +1027,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     } else if (mainButtonVisible || secondaryButtonVisible) {
       height -= buttonHeight;
     }
-    int stableHeight = height;
     boolean expanded = isExpanded;
 
-    String js = String.format(
-      "if (window.Telegram && window.Telegram.WebApp) {" +
-      "  Telegram.WebApp.viewportHeight = %d;" +
-      "  Telegram.WebApp.viewportStableHeight = %d;" +
-      "  Telegram.WebApp.isExpanded = %b;" +
-      "  if (Telegram.WebApp.onEvent) {" +
-      "    Telegram.WebApp.onEvent('viewportChanged', {isStateStable: true});" +
-      "  }" +
-      "}",
-      height, stableHeight, expanded
+    String eventData = String.format(Locale.US,
+      "{\"height\":%d,\"width\":%d,\"is_state_stable\":true,\"is_expanded\":%b}",
+      height, width, expanded
     );
-    webView.evaluateJavascript(js, null);
+    sendEventToWebApp("viewport_changed", eventData);
   }
 
   // ==================== Dynamic Theme Colors ====================
@@ -1032,9 +1043,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (parsedColor != 0) {
       this.customHeaderColor = parsedColor;
       UI.post(() -> {
-        if (headerCell != null) {
-          // Note: Full header color change requires more complex implementation
-          // For now we can adjust the header view background if exposed
+        HeaderView header = headerView();
+        if (header != null) {
+          header.getFilling().setColor(parsedColor);
+          header.invalidate();
         }
       });
     }
@@ -1056,7 +1068,15 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     int parsedColor = parseColor(color);
     if (parsedColor != 0) {
       this.customBottomBarColor = parsedColor;
-      // Note: Bottom bar is the main button background, already handled by mainButtonColor
+      UI.post(() -> {
+        // Apply to button container area below the webview
+        if (mainButtonView != null && !mainButtonVisible) {
+          mainButtonView.setButtonColors(parsedColor, mainButtonTextColor);
+        }
+        if (secondaryButtonView != null && !secondaryButtonVisible) {
+          secondaryButtonView.setButtonColors(parsedColor, secondaryButtonTextColor);
+        }
+      });
     }
   }
 
@@ -1268,12 +1288,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   public void onWebAppAddToHomeScreen () {
     Args args = getArguments();
     if (args == null) {
-      sendEventToWebApp("home_screen_added", "{\"status\":\"failed\"}");
+      sendEventToWebApp("home_screen_failed", "{\"error\":\"UNKNOWN\"}");
       return;
     }
 
     if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context())) {
-      sendEventToWebApp("home_screen_added", "{\"status\":\"missed\"}");
+      sendEventToWebApp("home_screen_failed", "{\"error\":\"UNSUPPORTED\"}");
       return;
     }
 
@@ -1288,8 +1308,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       .build();
 
     boolean result = ShortcutManagerCompat.requestPinShortcut(context(), shortcut, null);
-    String status = result ? "added" : "failed";
-    sendEventToWebApp("home_screen_added", "{\"status\":\"" + status + "\"}");
+    if (result) {
+      sendEventToWebApp("home_screen_added", "{}");
+    } else {
+      sendEventToWebApp("home_screen_failed", "{\"error\":\"UNKNOWN\"}");
+    }
   }
 
   // ==================== File Download ====================
@@ -1373,9 +1396,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     tdlib.send(new TdApi.SetEmojiStatus(emojiStatus), (result, error) -> {
       UI.post(() -> {
         if (error != null) {
-          sendEventToWebApp("emoji_status_set", "{\"status\":\"failed\"}");
+          sendEventToWebApp("emoji_status_failed", "{\"error\":\"" + escapeJsonString(error.message) + "\"}");
         } else {
-          sendEventToWebApp("emoji_status_set", "{\"status\":\"set\"}");
+          sendEventToWebApp("emoji_status_set", "{}");
         }
       });
     });
@@ -1396,8 +1419,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       String.format("{\"available\":true,\"access_requested\":%b,\"access_granted\":%b}", granted, granted));
   }
 
+  private boolean awaitingLocationSettingsReturn = false;
+
   public void onWebAppOpenLocationSettings () {
     try {
+      awaitingLocationSettingsReturn = true;
       context().startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
     } catch (Exception e) {
       Log.e("Failed to open location settings: %s", e.getMessage());
@@ -1482,6 +1508,20 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Story Sharing ====================
 
   public void onWebAppShareToStory (String mediaUrl, @Nullable String text, @Nullable JSONObject widgetLink) {
+    // Build caption from text and widget_link
+    StringBuilder captionBuilder = new StringBuilder();
+    if (text != null && !text.isEmpty()) {
+      captionBuilder.append(text);
+    }
+    if (widgetLink != null) {
+      String linkUrl = widgetLink.optString("url", "");
+      if (!linkUrl.isEmpty()) {
+        if (captionBuilder.length() > 0) captionBuilder.append("\n");
+        captionBuilder.append(linkUrl);
+      }
+    }
+    final String caption = captionBuilder.length() > 0 ? captionBuilder.toString() : null;
+
     UI.showToast(R.string.LoadingInformation, android.widget.Toast.LENGTH_SHORT);
     Background.instance().post(() -> {
       File tempFile = null;
@@ -1528,7 +1568,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       UI.post(() -> {
         if (!isDestroyed()) {
           StoryPreviewController controller = new StoryPreviewController(context, tdlib);
-          controller.setArguments(new StoryPreviewController.Args(downloadedFile.getAbsolutePath(), videoMedia));
+          StoryPreviewController.Args storyArgs = new StoryPreviewController.Args(downloadedFile.getAbsolutePath(), videoMedia);
+          if (caption != null) {
+            storyArgs.setCaption(caption);
+          }
+          controller.setArguments(storyArgs);
           navigateTo(controller);
         } else {
           downloadedFile.delete();
@@ -1670,8 +1714,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onWebAppCloseQrScanner () {
-    qrScannerOpen = false;
-    // Camera will close automatically when result received or user backs out
+    if (qrScannerOpen) {
+      qrScannerOpen = false;
+      sendEventToWebApp("scan_qr_popup_closed", "{}");
+    }
   }
 
   // ==================== Device Sensors ====================
@@ -1816,6 +1862,17 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     super.onFocus();
     sendEventToWebApp("visibility_changed", "{\"is_visible\":true}");
     sendEventToWebApp("activated", "{}");
+    if (awaitingLocationSettingsReturn) {
+      awaitingLocationSettingsReturn = false;
+      boolean locationEnabled = false;
+      try {
+        LocationManager lm = (LocationManager) context().getSystemService(Context.LOCATION_SERVICE);
+        if (lm != null) {
+          locationEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        }
+      } catch (Exception ignored) { }
+      sendEventToWebApp("location_manager_updated", "{\"location_available\":" + locationEnabled + "}");
+    }
   }
 
   @Override
@@ -1926,10 +1983,26 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     });
   }
 
+  // ==================== Share Message ====================
+
+  public void onWebAppShareMessage (String msgId) {
+    if (msgId == null || msgId.isEmpty()) {
+      sendEventToWebApp("share_message_failed", "{\"error\":\"MESSAGE_EXPIRED\"}");
+      return;
+    }
+    // Share via inline message — requires launchId for web_app_data_sent flow
+    // Since TDLib doesn't have a direct ShareWebAppMessage API, we send the failure event
+    sendEventToWebApp("share_message_failed", "{\"error\":\"UNSUPPORTED\"}");
+  }
+
   // ==================== Prepared Message (3.5) ====================
 
-  public void sendPreparedMessageResult (String status) {
-    sendEventToWebApp("prepared_message_sent", "{\"status\":\"" + status + "\"}");
+  public void sendPreparedMessageResult (String status, @Nullable String error) {
+    if (error != null) {
+      sendEventToWebApp("prepared_message_failed", "{\"error\":\"" + escapeJsonString(error) + "\"}");
+    } else {
+      sendEventToWebApp("prepared_message_sent", "{}");
+    }
   }
 
   // ==================== ThemeChangeListener ====================
@@ -2007,8 +2080,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private void sendEventToWebApp (String eventName, String eventData) {
     if (webView == null) return;
     String js = String.format(
-      "if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {" +
-      "  Telegram.WebApp.onEvent('%s', %s);" +
+      "if (window.Telegram && window.Telegram.WebView && window.Telegram.WebView.receiveEvent) {" +
+      "  Telegram.WebView.receiveEvent('%s', %s);" +
       "}",
       eventName, eventData
     );
