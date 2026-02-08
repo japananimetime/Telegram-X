@@ -90,7 +90,8 @@ data class ApplicationConfig(
   val outputFileNamePrefix: String,
   val creationDateMillis: Long,
 
-  val keystore: Keystore?
+  val keystore: Keystore?,
+  val useNTgCalls: Boolean
 )
 
 class AbiVariant (val flavor: String, vararg val filters: String = arrayOf(), val displayName: String = filters[0]) {
