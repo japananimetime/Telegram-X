@@ -455,7 +455,13 @@ public final class WebAppProxy {
         case "web_app_set_emoji_status":
           if (eventData != null) {
             JSONObject data = new JSONObject(eventData);
-            long customEmojiId = data.optLong("custom_emoji_id", 0);
+            // Spec says custom_emoji_id is a string; parse robustly
+            long customEmojiId = 0;
+            try {
+              customEmojiId = Long.parseLong(data.optString("custom_emoji_id", "0"));
+            } catch (NumberFormatException ignored) {
+              customEmojiId = data.optLong("custom_emoji_id", 0);
+            }
             int duration = data.optInt("duration", 0);
             controller.onWebAppSetEmojiStatus(customEmojiId, duration);
           }
@@ -472,10 +478,11 @@ public final class WebAppProxy {
 
         // ==================== File Download Events ====================
         case "web_app_request_file_download":
+        case "web_app_download_file":
           if (eventData != null) {
             JSONObject data = new JSONObject(eventData);
             String url = data.optString("url", "");
-            String fileName = data.optString("file_name", "");
+            String fileName = data.has("filename") ? data.optString("filename", "") : data.optString("file_name", "");
             if (!url.isEmpty() && !fileName.isEmpty()) {
               controller.onWebAppRequestFileDownload(url, fileName);
             }

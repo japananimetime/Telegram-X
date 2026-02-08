@@ -392,6 +392,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     stopAllSensors();
     ThemeManager.instance().removeThemeListener(this);
     tdlib.removeWebAppMessageSentListener(this);
+    if (mainButtonAnimator != null) {
+      mainButtonAnimator.cancel();
+    }
     if (isFullscreen) {
       restoreFullscreenState();
     }
@@ -947,7 +950,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Fullscreen ====================
 
   public void onWebAppRequestFullscreen () {
-    if (isFullscreen) return;
+    if (isFullscreen) {
+      sendEventToWebApp("fullscreen_failed", "{\"error\":\"ALREADY_FULLSCREEN\"}");
+      return;
+    }
     isFullscreen = true;
     UI.post(() -> {
       BaseActivity activity = context();
@@ -1303,8 +1309,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   private void sendBiometryAccessResult (boolean granted) {
-    sendEventToWebApp("biometry_auth_requested",
-      "{\"status\":\"" + (granted ? "authorized" : "failed") + "\"}");
+    // Re-send biometry_info_received with updated access flags per spec
+    onWebAppBiometryGetInfo();
   }
 
   public void onWebAppBiometryAuthenticate (String reason) {
@@ -1351,7 +1357,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   public void onWebAppCheckHomeScreen () {
     boolean supported = ShortcutManagerCompat.isRequestPinShortcutSupported(context());
-    String status = supported ? "allowed" : "missed";
+    String status = supported ? "unknown" : "unsupported";
     sendEventToWebApp("home_screen_checked", "{\"status\":\"" + status + "\"}");
   }
 
@@ -1542,13 +1548,21 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void sendLocationResult (boolean available, @Nullable Location location) {
     if (location != null && available) {
+      float verticalAccuracy = 0f;
+      float courseAccuracy = 0f;
+      float speedAccuracy = 0f;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        verticalAccuracy = location.getVerticalAccuracyMeters();
+        courseAccuracy = location.getBearingAccuracyDegrees();
+        speedAccuracy = location.getSpeedAccuracyMetersPerSecond();
+      }
       String data = String.format(Locale.US,
         "{\"available\":true,\"latitude\":%f,\"longitude\":%f,\"altitude\":%f," +
         "\"course\":%f,\"speed\":%f,\"horizontal_accuracy\":%f,\"vertical_accuracy\":%f," +
-        "\"course_accuracy\":0,\"speed_accuracy\":0}",
+        "\"course_accuracy\":%f,\"speed_accuracy\":%f}",
         location.getLatitude(), location.getLongitude(), location.getAltitude(),
         location.getBearing(), location.getSpeed(), location.getAccuracy(),
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? location.getVerticalAccuracyMeters() : 0f
+        verticalAccuracy, courseAccuracy, speedAccuracy
       );
       sendEventToWebApp("location_requested", data);
     } else {
@@ -1890,8 +1904,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values);
       SensorManager.getOrientation(rotationMatrix, orientation);
 
-      // Convert to degrees
+      // Convert to degrees — alpha must be normalized to 0-360 per spec
       float alpha = (float) Math.toDegrees(orientation[0]); // Azimuth (compass)
+      if (alpha < 0) alpha += 360f;
       float beta = (float) Math.toDegrees(orientation[1]);  // Pitch
       float gamma = (float) Math.toDegrees(orientation[2]); // Roll
 
@@ -2009,12 +2024,14 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       SharedPreferences.Editor editor = getBiometricTokenPrefs().edit();
       if (token != null && !token.isEmpty()) {
         editor.putString(getBiometricTokenKey(), token);
+        editor.apply();
+        sendEventToWebApp("biometry_token_updated", "{\"status\":\"updated\"}");
       } else {
         editor.remove(getBiometricTokenKey());
         this.biometricToken = null;
+        editor.apply();
+        sendEventToWebApp("biometry_token_updated", "{\"status\":\"removed\"}");
       }
-      editor.apply();
-      sendEventToWebApp("biometry_token_updated", "{\"status\":\"updated\"}");
     } catch (Exception e) {
       sendEventToWebApp("biometry_token_updated", "{\"status\":\"failed\"}");
     }
