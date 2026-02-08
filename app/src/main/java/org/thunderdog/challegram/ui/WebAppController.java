@@ -74,6 +74,7 @@ import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.navigation.Menu;
 import org.thunderdog.challegram.navigation.MoreDelegate;
 import org.thunderdog.challegram.navigation.NavigationController;
+import org.thunderdog.challegram.telegram.ChatFilter;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.ColorState;
@@ -140,11 +141,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private DoubleHeaderView headerCell;
   private MainButtonView mainButtonView;
   private MainButtonView secondaryButtonView;
+  private View placeholderView;
 
   // Main button state
   private boolean mainButtonVisible = false;
   private boolean mainButtonActive = true;
   private boolean mainButtonProgressVisible = false;
+  private boolean mainButtonShineEffect = false;
   private String mainButtonText = "";
   private int mainButtonColor = 0;
   private int mainButtonTextColor = 0;
@@ -153,6 +156,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private boolean secondaryButtonVisible = false;
   private boolean secondaryButtonActive = true;
   private boolean secondaryButtonProgressVisible = false;
+  private boolean secondaryButtonShineEffect = false;
   private String secondaryButtonText = "";
   private int secondaryButtonColor = 0;
   private int secondaryButtonTextColor = 0;
@@ -294,6 +298,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         tdlib.addWebAppMessageSentListener(args.launchId, this);
       }
 
+      // Load persisted biometric token for this bot
+      loadBiometricToken();
+
       // Try to load placeholder while webview loads
       loadPlaceholder();
 
@@ -433,11 +440,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   public void onWebAppReady () {
     Log.i("WebApp ready");
-    // Complete loading progress
+    // Complete loading progress and hide placeholder
     UI.post(() -> {
       if (headerCell != null) {
         headerCell.animateProgress(1f);
       }
+      hidePlaceholder();
     });
     // Send initial viewport data
     sendViewportData();
@@ -496,7 +504,12 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onWebAppOpenTgLink (String url) {
-    tdlib.ui().openUrl(this, url, null);
+    onWebAppOpenTgLink(url, false);
+  }
+
+  public void onWebAppOpenTgLink (String url, boolean forceRequest) {
+    TdlibUi.UrlOpenParameters params = forceRequest ? new TdlibUi.UrlOpenParameters().disableInstantView() : null;
+    tdlib.ui().openUrl(this, url, params);
   }
 
   public void onWebAppRequestPhone () {
@@ -565,6 +578,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     this.mainButtonTextColor = textColor;
     this.mainButtonActive = isActive;
     this.mainButtonProgressVisible = isProgressVisible;
+    this.mainButtonShineEffect = hasShineEffect;
     UI.post(this::updateMainButton);
   }
 
@@ -575,6 +589,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     mainButtonView.setButtonColors(mainButtonColor, mainButtonTextColor);
     mainButtonView.setActive(mainButtonActive);
     mainButtonView.setProgressVisible(mainButtonProgressVisible);
+    mainButtonView.setShineEffect(mainButtonShineEffect);
 
     if (mainButtonVisible) {
       mainButtonView.setVisibility(View.VISIBLE);
@@ -598,6 +613,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     this.secondaryButtonTextColor = textColor;
     this.secondaryButtonActive = isActive;
     this.secondaryButtonProgressVisible = isProgressVisible;
+    this.secondaryButtonShineEffect = hasShineEffect;
     this.secondaryButtonPosition = position != null ? position : "left";
     UI.post(this::updateSecondaryButton);
   }
@@ -609,6 +625,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     secondaryButtonView.setButtonColors(secondaryButtonColor, secondaryButtonTextColor);
     secondaryButtonView.setActive(secondaryButtonActive);
     secondaryButtonView.setProgressVisible(secondaryButtonProgressVisible);
+    secondaryButtonView.setShineEffect(secondaryButtonShineEffect);
 
     if (secondaryButtonVisible) {
       secondaryButtonView.setVisibility(View.VISIBLE);
@@ -1068,9 +1085,43 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     Args args = getArguments();
     if (args == null || args.botUsername == null) return;
 
-    // Open chat picker with inline query, or switch to current chat
-    tdlib.ui().switchInline(this, args.botUsername, query, false);
+    ChatFilter filter = null;
+    if (chatTypes != null && chatTypes.length() > 0) {
+      final boolean allowUsers = jsonArrayContains(chatTypes, "users");
+      final boolean allowBots = jsonArrayContains(chatTypes, "bots");
+      final boolean allowGroups = jsonArrayContains(chatTypes, "groups");
+      final boolean allowChannels = jsonArrayContains(chatTypes, "channels");
+      filter = chat -> {
+        if (chat == null) return false;
+        switch (chat.type.getConstructor()) {
+          case TdApi.ChatTypePrivate.CONSTRUCTOR: {
+            long userId = ((TdApi.ChatTypePrivate) chat.type).userId;
+            TdApi.User user = tdlib.cache().user(userId);
+            if (user != null && user.type.getConstructor() == TdApi.UserTypeBot.CONSTRUCTOR) {
+              return allowBots;
+            }
+            return allowUsers;
+          }
+          case TdApi.ChatTypeSecret.CONSTRUCTOR:
+            return allowUsers;
+          case TdApi.ChatTypeBasicGroup.CONSTRUCTOR:
+            return allowGroups;
+          case TdApi.ChatTypeSupergroup.CONSTRUCTOR:
+            return ((TdApi.ChatTypeSupergroup) chat.type).isChannel ? allowChannels : allowGroups;
+          default:
+            return false;
+        }
+      };
+    }
+    tdlib.ui().switchInline(this, args.botUsername, query, false, filter);
     navigateBack();
+  }
+
+  private static boolean jsonArrayContains (JSONArray array, String value) {
+    for (int i = 0; i < array.length(); i++) {
+      if (value.equals(array.optString(i))) return true;
+    }
+    return false;
   }
 
   // ==================== Viewport & Expansion ====================
@@ -1653,9 +1704,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       SharedPreferences prefs = getSecureStoragePrefs();
       String value = prefs.getString(key, null);
       if (value != null) {
-        sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\"}");
+        sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\",\"can_restore\":" + biometryAccessGranted + "}");
       } else {
-        sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null}");
+        sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null,\"can_restore\":" + biometryAccessGranted + "}");
       }
     } catch (Exception e) {
       sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
@@ -1672,7 +1723,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onSecureStorageRestoreKey (String reqId, String key) {
-    // Restore key requires biometric authentication — for now, same as get
+    // Restore key requires biometric authentication
     if (!biometryAccessGranted) {
       sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"AUTH_REQUIRED\"}");
       return;
@@ -1681,9 +1732,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       SharedPreferences prefs = getSecureStoragePrefs();
       String value = prefs.getString(key, null);
       if (value != null) {
-        sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\"}");
+        sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\",\"can_restore\":true}");
       } else {
-        sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null}");
+        sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":null,\"can_restore\":true}");
       }
     } catch (Exception e) {
       sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"" + escapeJsonString(e.getMessage()) + "\"}");
@@ -1936,10 +1987,37 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private String biometricToken = null;
 
+  private SharedPreferences getBiometricTokenPrefs () {
+    return context().getSharedPreferences("webapp_biometric_tokens", Context.MODE_PRIVATE);
+  }
+
+  private String getBiometricTokenKey () {
+    Args args = getArguments();
+    long botId = args != null ? args.botUserId : 0;
+    return "bio_token_" + tdlib.id() + "_" + botId;
+  }
+
+  private void loadBiometricToken () {
+    try {
+      biometricToken = getBiometricTokenPrefs().getString(getBiometricTokenKey(), null);
+    } catch (Exception ignored) { }
+  }
+
   public void onWebAppBiometryUpdateToken (String token) {
-    // Store token in memory (secure storage would require Android Keystore integration)
     this.biometricToken = token;
-    sendEventToWebApp("biometry_token_updated", "{\"status\":\"updated\"}");
+    try {
+      SharedPreferences.Editor editor = getBiometricTokenPrefs().edit();
+      if (token != null && !token.isEmpty()) {
+        editor.putString(getBiometricTokenKey(), token);
+      } else {
+        editor.remove(getBiometricTokenKey());
+        this.biometricToken = null;
+      }
+      editor.apply();
+      sendEventToWebApp("biometry_token_updated", "{\"status\":\"updated\"}");
+    } catch (Exception e) {
+      sendEventToWebApp("biometry_token_updated", "{\"status\":\"failed\"}");
+    }
   }
 
   public void onWebAppBiometryOpenSettings () {
@@ -1960,16 +2038,56 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   public void loadPlaceholder () {
     Args args = getArguments();
-    if (args == null || args.botUserId == 0) return;
+    if (args == null || args.botUserId == 0 || contentView == null) return;
 
     tdlib.send(new TdApi.GetWebAppPlaceholder(args.botUserId), (result, error) -> {
-      // Placeholder is displayed while webview loads - on web_app_ready we would hide it
-      // Since rendering SVG paths from Outline requires complex path drawing, we skip the visual
-      // and just use the loading spinner that WebkitController already provides
-      if (error == null) {
-        Log.i("WebApp placeholder available for bot %d", args.botUserId);
-      }
+      if (error != null || result == null) return;
+      TdApi.Outline outline = (TdApi.Outline) result;
+      if (outline.paths == null || outline.paths.length == 0) return;
+
+      UI.post(() -> {
+        if (contentView == null || webView == null) return;
+        int w = webView.getWidth();
+        int h = webView.getHeight();
+        if (w <= 0 || h <= 0) {
+          w = Screen.currentWidth();
+          h = Screen.currentHeight();
+        }
+        // Build path from outline — use 512 as source dimensions (standard placeholder size)
+        android.graphics.Path path = tgx.td.Td.buildOutline(outline.paths, 512, 512, (float) w, (float) h, null);
+        if (path == null) return;
+
+        final android.graphics.Path finalPath = path;
+        View pView = new View(context()) {
+          private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+          {
+            paint.setColor(Theme.getColor(ColorId.filling));
+            paint.setStyle(Paint.Style.FILL);
+          }
+          @Override
+          protected void onDraw (Canvas canvas) {
+            canvas.drawColor(Theme.getColor(ColorId.fillingPositive));
+            canvas.drawPath(finalPath, paint);
+          }
+        };
+        placeholderView = pView;
+        contentView.addView(pView, FrameLayoutFix.newParams(
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+      });
     });
+  }
+
+  private void hidePlaceholder () {
+    if (placeholderView != null) {
+      placeholderView.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+        if (contentView != null && placeholderView != null) {
+          contentView.removeView(placeholderView);
+          placeholderView = null;
+        }
+      }).start();
+    }
   }
 
   // ==================== Share Message ====================
@@ -2013,7 +2131,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private void sendThemeChangedEvent () {
     if (webView == null) return;
     String themeParamsJson = buildThemeParamsJson();
-    sendEventToWebApp("theme_changed", themeParamsJson);
+    sendEventToWebApp("theme_changed", "{\"theme_params\":" + themeParamsJson + "}");
   }
 
   private String buildThemeParamsJson () {
@@ -2111,6 +2229,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private class MainButtonView extends FrameLayout {
     private final Paint backgroundPaint;
     private final Paint textPaint;
+    private final Paint shinePaint;
     private final ProgressComponent progress;
 
     private String text = "";
@@ -2118,6 +2237,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     private int textColor = 0xFFFFFFFF;
     private boolean active = true;
     private boolean progressVisible = false;
+    private boolean shineEffect = false;
+    private float shineOffset = -1f;
+    private final android.animation.ValueAnimator shineAnimator;
 
     public MainButtonView (Context context) {
       super(context);
@@ -2132,9 +2254,20 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       textPaint.setColor(textColor);
       textPaint.setTextAlign(Paint.Align.CENTER);
 
+      shinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
       progress = new ProgressComponent(UI.getContext(context), Screen.dp(8f));
       progress.setUseLargerPaint(Screen.dp(2f));
       progress.forceColor(textColor);
+
+      shineAnimator = android.animation.ValueAnimator.ofFloat(-1f, 2f);
+      shineAnimator.setDuration(2000);
+      shineAnimator.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+      shineAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
+      shineAnimator.addUpdateListener(animation -> {
+        shineOffset = (float) animation.getAnimatedValue();
+        invalidate();
+      });
     }
 
     public void setText (String text) {
@@ -2168,6 +2301,18 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       }
     }
 
+    public void setShineEffect (boolean enabled) {
+      if (this.shineEffect != enabled) {
+        this.shineEffect = enabled;
+        if (enabled && getVisibility() == View.VISIBLE) {
+          shineAnimator.start();
+        } else {
+          shineAnimator.cancel();
+        }
+        invalidate();
+      }
+    }
+
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
       super.onMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -2189,6 +2334,22 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       // Draw background
       canvas.drawRect(0, 0, getWidth(), getHeight(), backgroundPaint);
 
+      // Draw shine/shimmer overlay
+      if (shineEffect && getWidth() > 0) {
+        int w = getWidth();
+        float shineWidth = w * 0.4f;
+        float shineX = shineOffset * w;
+        int shineColor = ColorUtils.alphaColor(0.2f, textColor);
+        android.graphics.LinearGradient gradient = new android.graphics.LinearGradient(
+          shineX - shineWidth, 0, shineX + shineWidth, 0,
+          new int[]{0x00FFFFFF, shineColor, 0x00FFFFFF},
+          new float[]{0f, 0.5f, 1f},
+          android.graphics.Shader.TileMode.CLAMP
+        );
+        shinePaint.setShader(gradient);
+        canvas.drawRect(0, 0, w, getHeight(), shinePaint);
+      }
+
       if (progressVisible) {
         // Draw progress spinner
         progress.draw(canvas);
@@ -2205,12 +2366,16 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       if (progressVisible) {
         progress.attachToView(this);
       }
+      if (shineEffect) {
+        shineAnimator.start();
+      }
     }
 
     @Override
     protected void onDetachedFromWindow () {
       super.onDetachedFromWindow();
       progress.detachFromView(this);
+      shineAnimator.cancel();
     }
   }
 

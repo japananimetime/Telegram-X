@@ -6054,8 +6054,12 @@ public class TdlibUi extends Handler {
   }
 
   public void switchInline (ViewController<?> context, String username, String query, boolean keepStack) {
+    switchInline(context, username, query, keepStack, null);
+  }
+
+  public void switchInline (ViewController<?> context, String username, String query, boolean keepStack, @Nullable ChatFilter chatFilter) {
     ChatsController c = new ChatsController(context.context(), context.tdlib());
-    c.setArguments(new ChatsController.Arguments(new ChatsController.PickerDelegate() {
+    ChatsController.PickerDelegate pickerDelegate = new ChatsController.PickerDelegate() {
       @Override
       public boolean onChatPicked (TdApi.Chat chat, Runnable onDone) {
         if (!tdlib.canSendBasicMessage(chat)) {
@@ -6076,7 +6080,12 @@ public class TdlibUi extends Handler {
           params.keepStack();
         }
       }
-    }));
+    };
+    if (chatFilter != null) {
+      c.setArguments(new ChatsController.Arguments(chatFilter, pickerDelegate));
+    } else {
+      c.setArguments(new ChatsController.Arguments(pickerDelegate));
+    }
     context.navigateTo(c);
   }
 

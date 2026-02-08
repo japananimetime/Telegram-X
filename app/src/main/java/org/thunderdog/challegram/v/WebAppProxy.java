@@ -87,9 +87,9 @@ public final class WebAppProxy {
           if (eventData != null) {
             JSONObject data = new JSONObject(eventData);
             String pathFull = data.optString("path_full", "");
-            // force_request: if true, request should be sent to server even if link can be handled locally
+            boolean forceRequest = data.optBoolean("force_request", false);
             if (!pathFull.isEmpty()) {
-              controller.onWebAppOpenTgLink("https://t.me" + pathFull);
+              controller.onWebAppOpenTgLink("https://t.me" + pathFull, forceRequest);
             }
           }
           break;
