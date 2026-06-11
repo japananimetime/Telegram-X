@@ -196,7 +196,11 @@ public class TdlibNotificationExtras {
   public void read (Tdlib tdlib) {
     boolean needToast = tdlib.notifications().isUnknownGroup(notificationGroupId);
     if (areMentions) {
-      tdlib.client().send(new TdApi.ReadAllChatMentions(chatId), tdlib.silentHandler());
+      if (topicId != null && topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
+        tdlib.client().send(new TdApi.ReadAllForumTopicMentions(chatId, ((TdApi.MessageTopicForum) topicId).forumTopicId), tdlib.silentHandler());
+      } else {
+        tdlib.client().send(new TdApi.ReadAllChatMentions(chatId), tdlib.silentHandler());
+      }
     } else {
       tdlib.readMessages(chatId, messageIds, new TdApi.MessageSourceNotification());
     }
