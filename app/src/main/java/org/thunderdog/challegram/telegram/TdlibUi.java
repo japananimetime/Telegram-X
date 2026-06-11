@@ -133,6 +133,7 @@ import org.thunderdog.challegram.ui.SettingsThemeController;
 import org.thunderdog.challegram.ui.SettingsWebsitesController;
 import org.thunderdog.challegram.ui.ShareController;
 import org.thunderdog.challegram.ui.SimpleViewPagerController;
+import org.thunderdog.challegram.ui.WebAppController;
 import org.thunderdog.challegram.ui.camera.CameraController;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
@@ -2128,6 +2129,21 @@ public class TdlibUi extends Handler {
 
     // Check if this is a forum chat that should be viewed as topics
     if (tdlib.isForum(chat.id) && messageThread == null && messageTopicId == null) {
+      // Only route to the forum topics UI for a plain chat open. When the caller supplied
+      // any payload (highlight, pending action, share item, scheduled-only mode, video chat
+      // invitation, draft, search filter, referrer), fall through to the regular
+      // MessagesController path so that payload is not silently dropped.
+      boolean plainOpen = (params == null || !params.highlightSet) &&
+        after == null &&
+        shareItem == null &&
+        filter == null &&
+        referrer == null &&
+        voiceChatInvitation == null &&
+        forceDraft == null &&
+        !onlyScheduled &&
+        (options & (CHAT_OPTION_NO_OPEN | CHAT_OPTION_OPEN_DIRECT_MESSAGES_CHAT)) == 0;
+      // Check user's saved preference for forum view (chat, tabs or topics list)
+      int viewPreference = tdlib.settings().getForumViewPreference(chat.id);
       // Check if forum has tabs layout enabled
       long supergroupId = ChatId.toSupergroupId(chat.id);
       TdApi.Supergroup supergroup = supergroupId != 0 ? tdlib.cache().supergroup(supergroupId) : null;
@@ -2135,13 +2151,11 @@ public class TdlibUi extends Handler {
 
       // Show topics view if viewAsTopics is true (default for forums)
       // Forums with tabs should always open in tabs view by default
-      // Users can use "View as chat" option to switch to unified view (sets viewAsTopics to false)
-      if (chat.viewAsTopics || hasForumTabs) {
+      // Users can use "View as chat" option to switch to unified view
+      // (sets viewAsTopics to false or saves FORUM_VIEW_CHAT preference)
+      if (plainOpen && viewPreference != TdlibSettingsManager.FORUM_VIEW_CHAT && (chat.viewAsTopics || hasForumTabs)) {
         ViewController<?> forumController;
-        // Check user's saved preference for forum view (tabs vs topics list)
-        int viewPreference = tdlib.settings().getForumViewPreference(chat.id);
         boolean preferTabs = hasForumTabs && viewPreference != TdlibSettingsManager.FORUM_VIEW_TOPICS;
-        boolean preferTopics = !hasForumTabs || viewPreference == TdlibSettingsManager.FORUM_VIEW_TOPICS;
 
         if (preferTabs) {
           ForumTopicTabsController tabsController = new ForumTopicTabsController(context.context(), context.tdlib());
@@ -2167,7 +2181,8 @@ public class TdlibUi extends Handler {
         }
         return;
       }
-      // If not hasForumTabs and not viewAsTopics, fall through to open as unified chat
+      // Otherwise (view-as-chat preference, payload present, or neither hasForumTabs
+      // nor viewAsTopics), fall through to open as unified chat
     }
 
     if ((options & CHAT_OPTION_OPEN_DIRECT_MESSAGES_CHAT) != 0) {
@@ -2189,8 +2204,8 @@ public class TdlibUi extends Handler {
       highlightMode = params.highlightMode;
       highlightMessageId = params.highlightMessageId;
     } else {
-      highlightMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread);
-      highlightMessageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, highlightMode);
+      highlightMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread, messageTopicId);
+      highlightMessageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, messageTopicId, highlightMode);
     }
 
     final boolean isSelfChat = tdlib.isSelfChat(chat.id);
@@ -3803,12 +3818,22 @@ public class TdlibUi extends Handler {
       case TdApi.InternalLinkTypeDefaultMessageAutoDeleteTimerSettings.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypeAttachmentMenuBot.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePremiumFeatures.CONSTRUCTOR:
       case TdApi.InternalLinkTypeRestorePurchases.CONSTRUCTOR: {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        break;
+      }
+
+      case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeWebApp webAppLink = (TdApi.InternalLinkTypeWebApp) linkType;
+        openWebAppLink(context, webAppLink.botUsername, webAppLink.webAppShortName, webAppLink.startParameter, webAppLink.mode, openParameters, after);
+        break;
+      }
+
+      case TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeMainWebApp mainWebAppLink = (TdApi.InternalLinkTypeMainWebApp) linkType;
+        openMainWebAppLink(context, mainWebAppLink.botUsername, mainWebAppLink.startParameter, mainWebAppLink.mode, openParameters, after);
         break;
       }
 
@@ -6043,8 +6068,12 @@ public class TdlibUi extends Handler {
   }
 
   public void switchInline (ViewController<?> context, String username, String query, boolean keepStack) {
+    switchInline(context, username, query, keepStack, null);
+  }
+
+  public void switchInline (ViewController<?> context, String username, String query, boolean keepStack, @Nullable ChatFilter chatFilter) {
     ChatsController c = new ChatsController(context.context(), context.tdlib());
-    c.setArguments(new ChatsController.Arguments(new ChatsController.PickerDelegate() {
+    ChatsController.PickerDelegate pickerDelegate = new ChatsController.PickerDelegate() {
       @Override
       public boolean onChatPicked (TdApi.Chat chat, Runnable onDone) {
         if (!tdlib.canSendBasicMessage(chat)) {
@@ -6065,7 +6094,12 @@ public class TdlibUi extends Handler {
           params.keepStack();
         }
       }
-    }));
+    };
+    if (chatFilter != null) {
+      c.setArguments(new ChatsController.Arguments(chatFilter, pickerDelegate));
+    } else {
+      c.setArguments(new ChatsController.Arguments(pickerDelegate));
+    }
     context.navigateTo(c);
   }
 
@@ -8015,6 +8049,122 @@ public class TdlibUi extends Handler {
             after.runWithBool(true);
           }
         }
+      });
+    });
+  }
+
+  private void openWebAppLink (TdlibDelegate context, String botUsername, String webAppShortName, String startParameter, TdApi.WebAppOpenMode mode, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      TdApi.Chat chat = (TdApi.Chat) result;
+      if (chat.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+
+      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", mode);
+      tdlib.send(new TdApi.GetWebAppLinkUrl(chat.id, botUserId, webAppShortName, startParameter, false, webAppParams), (linkResult, linkError) -> {
+        UI.post(() -> {
+          if (linkError != null) {
+            showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(linkError), openParameters);
+            if (after != null) {
+              after.runWithBool(false);
+            }
+          } else {
+            TdApi.HttpUrl httpUrl = (TdApi.HttpUrl) linkResult;
+            WebAppController controller = new WebAppController(context.context(), tdlib);
+            controller.setArguments(new WebAppController.Args(
+              chat.id,
+              botUserId,
+              botUsername,
+              httpUrl.url,
+              0,
+              mode
+            ));
+            context.context().navigation().navigateTo(controller);
+            if (after != null) {
+              after.runWithBool(true);
+            }
+          }
+        });
+      });
+    });
+  }
+
+  private static TdApi.ThemeParameters buildWebAppThemeParameters () {
+    TdApi.ThemeParameters params = new TdApi.ThemeParameters();
+    params.backgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.secondaryBackgroundColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.headerBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.bottomBarBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.sectionBackgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.sectionSeparatorColor = Theme.getColor(ColorId.separator) & 0xFFFFFF;
+    params.textColor = Theme.getColor(ColorId.text) & 0xFFFFFF;
+    params.accentTextColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.sectionHeaderTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.subtitleTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.destructiveTextColor = Theme.getColor(ColorId.textNegative) & 0xFFFFFF;
+    params.hintColor = Theme.getColor(ColorId.textPlaceholder) & 0xFFFFFF;
+    params.linkColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.buttonColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.buttonTextColor = Theme.getColor(ColorId.fillingPositiveContent) & 0xFFFFFF;
+    return params;
+  }
+
+  private void openMainWebAppLink (TdlibDelegate context, String botUsername, String startParameter, TdApi.WebAppOpenMode mode, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      TdApi.Chat chat = (TdApi.Chat) result;
+      if (chat.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+
+      TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", mode);
+      tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, startParameter, webAppParams), (mainResult, mainError) -> {
+        UI.post(() -> {
+          if (mainError != null) {
+            showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(mainError), openParameters);
+            if (after != null) {
+              after.runWithBool(false);
+            }
+          } else {
+            TdApi.MainWebApp mainWebApp = (TdApi.MainWebApp) mainResult;
+            WebAppController controller = new WebAppController(context.context(), tdlib);
+            controller.setArguments(new WebAppController.Args(
+              chat.id,
+              botUserId,
+              botUsername,
+              mainWebApp.url,
+              0,
+              mainWebApp.mode
+            ));
+            context.context().navigation().navigateTo(controller);
+            if (after != null) {
+              after.runWithBool(true);
+            }
+          }
+        });
       });
     });
   }

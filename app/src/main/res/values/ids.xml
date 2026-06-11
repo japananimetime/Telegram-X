@@ -23,6 +23,7 @@
   <item type="id" name="menu_profile_bot" />
   <item type="id" name="menu_profile_secret" />
   <item type="id" name="menu_game" />
+  <item type="id" name="menu_webApp" />
   <item type="id" name="menu_player" />
   <item type="id" name="menu_photo" />
   <item type="id" name="menu_contacts" />
@@ -208,6 +209,7 @@
   <item type="id" name="controller_media_simple" />
   <item type="id" name="controller_encryptionKey" />
   <item type="id" name="controller_webkit" />
+  <item type="id" name="controller_webApp" />
   <item type="id" name="controller_blocked" />
   <item type="id" name="controller_passcode" />
   <item type="id" name="controller_passcodeSetup" />
@@ -296,6 +298,7 @@
   <item type="id" name="msg_emoji" />
   <item type="id" name="msg_attach" />
   <item type="id" name="msg_command" />
+  <item type="id" name="msg_bot_menu" />
   <item type="id" name="msg_send" />
   <item type="id" name="msg_bottom" />
   <item type="id" name="msg_list" />
@@ -896,6 +899,7 @@
   <item type="id" name="btn_copyUsername" />
   <item type="id" name="btn_editUsername" />
   <item type="id" name="btn_openLink" />
+  <item type="id" name="btn_reload" />
   <item type="id" name="btn_copyLink" />
   <item type="id" name="btn_archive" />
   <item type="id" name="btn_archiveAsFolder" />
@@ -986,7 +990,9 @@
   <item type="id" name="btn_1month" />
   <item type="id" name="btn_3months" />
   <item type="id" name="btn_6month" />
-  <item type="id" name="btn_1year" />
+  <item type="id" name="btn_12months" />
+  <item type="id" name="btn_18months" />
+  <item type="id" name="btn_24months" />
   <item type="id" name="btn_setPassword" />
   <item type="id" name="btn_changePassword" />
   <item type="id" name="btn_disablePassword" />
@@ -1238,6 +1244,7 @@
   <item type="id" name="btn_messagePin" />
   <item type="id" name="btn_messageUnpin" />
   <item type="id" name="btn_messageShare" />
+  <item type="id" name="btn_messageReplyInOtherChat" />
   <item type="id" name="btn_messageSelect" />
   <item type="id" name="btn_messageViewList" />
   <item type="id" name="btn_messageFavoriteContent" />

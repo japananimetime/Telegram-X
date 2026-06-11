@@ -206,18 +206,17 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
 
       int visualChangeCount = group.updateGroup(update, addedNotifications, removedNotifications);
 
-      // Filter out notifications from muted forum topics and make silent if all are muted
-      if (addedNotifications != null && !addedNotifications.isEmpty()) {
-        Iterator<TdlibNotification> iter = addedNotifications.iterator();
-        while (iter.hasNext()) {
-          TdlibNotification notification = iter.next();
-          if (notification.isFromMutedForumTopic(tdlib)) {
-            TDLib.Tag.notifications("Filtering notification from muted forum topic, chatId=%d", update.chatId);
-            iter.remove();
-            visualChangeCount--;
+      // Suppress the alert (but keep lists consistent) if every added notification comes from a muted forum topic
+      if (!isSilent && addedNotifications != null && !addedNotifications.isEmpty()) {
+        boolean allFromMutedTopics = true;
+        for (TdlibNotification notification : addedNotifications) {
+          if (!notification.isFromMutedForumTopic(tdlib)) {
+            allFromMutedTopics = false;
+            break;
           }
         }
-        if (addedNotifications.isEmpty()) {
+        if (allFromMutedTopics) {
+          TDLib.Tag.notifications("Making notification silent: all added notifications are from muted forum topics, chatId=%d", update.chatId);
           isSilent = true;
         }
       }
@@ -281,22 +280,23 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
       if (group.isEmpty())
         return;
 
-      // Filter out notifications from muted forum topics for new groups
-      List<TdlibNotification> groupNotifications = new ArrayList<>(group.notifications());
-      Iterator<TdlibNotification> iter = groupNotifications.iterator();
-      while (iter.hasNext()) {
-        TdlibNotification notification = iter.next();
-        if (notification.isFromMutedForumTopic(tdlib)) {
-          TDLib.Tag.notifications("Filtering notification from muted forum topic (new group), chatId=%d", update.chatId);
-          iter.remove();
+      // Suppress the alert (but keep lists consistent) if every notification comes from a muted forum topic
+      if (!isSilent) {
+        boolean allFromMutedTopics = true;
+        for (TdlibNotification notification : group.notifications()) {
+          if (!notification.isFromMutedForumTopic(tdlib)) {
+            allFromMutedTopics = false;
+            break;
+          }
         }
-      }
-      if (groupNotifications.isEmpty()) {
-        isSilent = true;
+        if (allFromMutedTopics) {
+          TDLib.Tag.notifications("Making notification silent: all notifications are from muted forum topics (new group), chatId=%d", update.chatId);
+          isSilent = true;
+        }
       }
 
       groups.put(update.notificationGroupId, group);
-      notifications.addAll(groupNotifications);
+      notifications.addAll(group.notifications());
       Collections.sort(notifications);
     }
     boolean needNotification = !isSilent && context.allowNotificationSound(update.chatId);
@@ -369,6 +369,23 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
     int topicHash = Long.hashCode(topicId) & 0x7FFFFFFF; // Ensure positive
     int topicOffset = (topicHash % 100000) + 100000; // Range: 100000-199999
     return baseNotificationId + (TdlibNotificationGroup.MAX_CATEGORY + 1) + groupId * 200000 + topicOffset;
+  }
+
+  // Per-topic notification IDs that are currently displayed in the tray, keyed by notification group id.
+  // Needed to cancel stale per-topic notifications when a group is hidden or re-displayed without the multi-topic split.
+  private final Map<Integer, Set<Integer>> displayedTopicNotificationIds = new HashMap<>();
+
+  @Nullable
+  public Set<Integer> getDisplayedTopicNotificationIds (int groupId) {
+    return displayedTopicNotificationIds.get(groupId);
+  }
+
+  public void setDisplayedTopicNotificationIds (int groupId, @Nullable Set<Integer> notificationIds) {
+    if (notificationIds == null || notificationIds.isEmpty()) {
+      displayedTopicNotificationIds.remove(groupId);
+    } else {
+      displayedTopicNotificationIds.put(groupId, notificationIds);
+    }
   }
 
   public boolean isEmpty () {

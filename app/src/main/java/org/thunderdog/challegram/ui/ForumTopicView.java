@@ -17,7 +17,6 @@ package org.thunderdog.challegram.ui;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -62,11 +61,11 @@ import me.vkryl.core.StringUtils;
 import tgx.td.Td;
 
 public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watcher, TdlibStatusManager.HelperTarget, Text.TextMediaListener {
-  private static TextPaint titlePaint;
   private static TextPaint senderPaint;
-  private static TextPaint previewPaint;
   private static TextPaint timePaint;
   private static Paint iconPaint;
+  private static TextPaint letterPaint;
+  private static Paint.FontMetrics letterFontMetrics;
 
   private Tdlib tdlib;
   private TdApi.ForumTopic topic;
@@ -79,6 +78,7 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
   private TdApi.FormattedText previewFormattedText;
   private Text displayPreview;
   private String timeText;
+  private float timeTextWidth;
   private Counter unreadCounter;
   private Counter reactionsCounter;
   private boolean isMuted;
@@ -120,24 +120,12 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
   }
 
   private static void initPaints () {
-    if (titlePaint == null) {
-      titlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-      titlePaint.setTextSize(Screen.dp(16f));
-      titlePaint.setTypeface(Fonts.getRobotoMedium());
-      titlePaint.setColor(Theme.textAccentColor());
-      ThemeManager.addThemeListener(titlePaint, ColorId.text);
-
+    if (senderPaint == null) {
       senderPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
       senderPaint.setTextSize(Screen.dp(15f));
       senderPaint.setTypeface(Fonts.getRobotoRegular());
       senderPaint.setColor(Theme.textAccentColor());
       ThemeManager.addThemeListener(senderPaint, ColorId.text);
-
-      previewPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-      previewPaint.setTextSize(Screen.dp(15f));
-      previewPaint.setTypeface(Fonts.getRobotoRegular());
-      previewPaint.setColor(Theme.textDecentColor());
-      ThemeManager.addThemeListener(previewPaint, ColorId.textLight);
 
       timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
       timePaint.setTextSize(Screen.dp(12f));
@@ -146,6 +134,13 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
       ThemeManager.addThemeListener(timePaint, ColorId.textLight);
 
       iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+      letterPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+      letterPaint.setColor(0xFFFFFFFF);
+      letterPaint.setTextSize(Screen.dp(20f));
+      letterPaint.setTypeface(Fonts.getRobotoMedium());
+      letterPaint.setTextAlign(Paint.Align.CENTER);
+      letterFontMetrics = letterPaint.getFontMetrics();
     }
   }
 
@@ -170,7 +165,9 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
   public void destroy () {
     iconReceiver.performDestroy();
     textMediaReceiver.performDestroy();
-    if (customEmojiId != 0 && customEmoji == null && tdlib != null) {
+    // forgetWatcher only removes the reference, so it's safe to call
+    // even if the request has already been satisfied
+    if (customEmojiId != 0 && tdlib != null) {
       tdlib.emoji().forgetWatcher(customEmojiId, this);
     }
     if (statusHelper != null) {
@@ -278,6 +275,9 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
       this.isMessageUnread = false;
     }
 
+    // Cache measured time width to avoid measuring on every draw
+    this.timeTextWidth = !StringUtils.isEmpty(timeText) ? timePaint.measureText(timeText) : 0f;
+
     // Check muted state (respects useDefaultMuteFor and parent chat settings)
     this.isMuted = tdlib.forumTopicNeedsMuteIcon(topic.info.chatId, topic);
 
@@ -341,7 +341,7 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     // Calculate reserved right width to prevent text overlap with time/status/counters
     int reservedRightWidth = Screen.dp(12f); // Base padding
     if (!StringUtils.isEmpty(timeText)) {
-      reservedRightWidth += (int) timePaint.measureText(timeText);
+      reservedRightWidth += (int) timeTextWidth;
     }
     if (isOutgoing) {
       reservedRightWidth += Screen.dp(22f); // Status icon width
@@ -427,9 +427,10 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
   }
 
   private void loadTopicIcon () {
-    TdApi.ForumTopicIcon icon = topic.info.icon;
-    if (icon == null) {
-      return;
+    // Forget any still-pending request from a previous binding,
+    // so a late callback can't apply a stale icon
+    if (customEmojiId != 0 && tdlib != null) {
+      tdlib.emoji().forgetWatcher(customEmojiId, this);
     }
 
     // Clear previous files
@@ -437,6 +438,14 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     gifFile = null;
     thumbnail = null;
     iconReceiver.clear();
+
+    TdApi.ForumTopicIcon icon = topic.info.icon;
+    if (icon == null) {
+      // Clear remaining icon state so a recycled view doesn't keep the previous topic's icon
+      this.customEmojiId = 0;
+      this.customEmoji = null;
+      return;
+    }
 
     if (icon.customEmojiId != 0) {
       // Custom emoji icon - request loading
@@ -502,6 +511,10 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
 
   @Override
   public void onCustomEmojiLoaded (TdlibEmojiManager context, TdlibEmojiManager.Entry entry) {
+    if (entry.customEmojiId != this.customEmojiId) {
+      // Stale callback: the view has been rebound to a different topic since the request
+      return;
+    }
     this.customEmoji = entry;
     if (!entry.isNotFound()) {
       buildCustomEmojiIcon(entry);
@@ -509,6 +522,10 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     // Request files on UI thread
     if (tdlib != null) {
       tdlib.ui().post(() -> {
+        if (entry.customEmojiId != this.customEmojiId) {
+          // Re-check: the view may have been rebound before this runnable executed
+          return;
+        }
         requestIconFiles();
         invalidate();
       });
@@ -557,7 +574,7 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     float timeWidth = 0;
     float statusIconWidth = 0;
     if (!StringUtils.isEmpty(timeText)) {
-      timeWidth = timePaint.measureText(timeText);
+      timeWidth = timeTextWidth;
       canvas.drawText(timeText, textRight - timeWidth, Screen.dp(28f), timePaint);
 
       // Draw status icon for outgoing messages (to the left of time)
@@ -726,13 +743,7 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
       return;
     }
 
-    TextPaint letterPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-    letterPaint.setColor(0xFFFFFFFF);
-    letterPaint.setTextSize(Screen.dp(20f));
-    letterPaint.setTypeface(Fonts.getRobotoMedium());
-    letterPaint.setTextAlign(Paint.Align.CENTER);
-    Paint.FontMetrics fm = letterPaint.getFontMetrics();
-    float textY = centerY - (fm.ascent + fm.descent) / 2;
+    float textY = centerY - (letterFontMetrics.ascent + letterFontMetrics.descent) / 2;
     canvas.drawText(displayChar, centerX, textY, letterPaint);
   }
 
@@ -760,58 +771,6 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
       return colors[colorValue];
     }
     return colors[0];
-  }
-
-  private void drawHighlightedText (Canvas canvas, String text, float x, float y, TextPaint paint, String query) {
-    if (StringUtils.isEmpty(query)) {
-      canvas.drawText(text, x, y, paint);
-      return;
-    }
-
-    String lowerText = text.toLowerCase();
-    String lowerQuery = query.toLowerCase();
-    int matchStart = lowerText.indexOf(lowerQuery);
-
-    if (matchStart < 0) {
-      // No match found - draw normal text
-      canvas.drawText(text, x, y, paint);
-      return;
-    }
-
-    int matchEnd = matchStart + query.length();
-
-    // Draw text before highlight
-    if (matchStart > 0) {
-      String beforeMatch = text.substring(0, matchStart);
-      canvas.drawText(beforeMatch, x, y, paint);
-      x += paint.measureText(beforeMatch);
-    }
-
-    // Draw highlighted part with background
-    String matchedText = text.substring(matchStart, matchEnd);
-    float matchWidth = paint.measureText(matchedText);
-
-    // Draw highlight background
-    Paint.FontMetrics fm = paint.getFontMetrics();
-    RectF highlightRect = new RectF(
-      x - Screen.dp(1f),
-      y + fm.ascent - Screen.dp(1f),
-      x + matchWidth + Screen.dp(1f),
-      y + fm.descent + Screen.dp(1f)
-    );
-    Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    highlightPaint.setColor(Theme.getColor(ColorId.textSearchQueryHighlight));
-    canvas.drawRoundRect(highlightRect, Screen.dp(2f), Screen.dp(2f), highlightPaint);
-
-    // Draw highlighted text
-    canvas.drawText(matchedText, x, y, paint);
-    x += matchWidth;
-
-    // Draw text after highlight
-    if (matchEnd < text.length()) {
-      String afterMatch = text.substring(matchEnd);
-      canvas.drawText(afterMatch, x, y, paint);
-    }
   }
 
   // Text.TextMediaListener implementation

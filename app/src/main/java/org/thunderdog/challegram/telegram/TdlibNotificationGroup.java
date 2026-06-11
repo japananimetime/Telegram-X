@@ -101,9 +101,26 @@ public class TdlibNotificationGroup implements Iterable<TdlibNotification> {
     return chatId;
   }
 
+  /**
+   * Returns the forum topic this group belongs to,
+   * if all visible notifications in the group share the same forum topic.
+   * Used to target notification actions (e.g. inline reply) at the right topic.
+   */
   @Nullable
   public TdApi.MessageTopic getMessageTopicId () {
-    return null;
+    long commonTopicId = 0;
+    for (TdlibNotification notification : this) {
+      long topicId = notification.findForumTopicId();
+      if (topicId == 0) {
+        return null;
+      }
+      if (commonTopicId == 0) {
+        commonTopicId = topicId;
+      } else if (commonTopicId != topicId) {
+        return null;
+      }
+    }
+    return commonTopicId != 0 ? new TdApi.MessageTopicForum((int) commonTopicId) : null;
   }
 
   public boolean isSelfChat () {

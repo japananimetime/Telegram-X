@@ -40,6 +40,7 @@ public class TGStickerObj {
   private TdApi.ReactionType reactionType;
   private boolean needThemedColorFilter;
   private boolean isDefaultPremiumStar;
+  private boolean isPaidReactionStar;
 
   private int flags;
   private float displayScale = 1f;
@@ -69,8 +70,8 @@ public class TGStickerObj {
 
   public static TGStickerObj makePaidReactionStar (Tdlib tdlib) {
     TGStickerObj o = new TGStickerObj(tdlib, null, null, new TdApi.StickerTypeCustomEmoji());
+    o.isPaidReactionStar = true;
     o.reactionType = new TdApi.ReactionTypePaid();
-    o.isDefaultPremiumStar = true; // Reuse the same star icon
     return o;
   }
 
@@ -281,11 +282,15 @@ public class TGStickerObj {
   }
 
   public boolean needThemedColorFilter () {
-    return needThemedColorFilter || isDefaultPremiumStar();
+    return needThemedColorFilter || isDefaultPremiumStar() || isPaidReactionStar();
   }
 
   public boolean isDefaultPremiumStar () {
     return isDefaultPremiumStar;
+  }
+
+  public boolean isPaidReactionStar () {
+    return isPaidReactionStar;
   }
 
   public long getCustomEmojiId () {
@@ -317,7 +322,7 @@ public class TGStickerObj {
   }
 
   public boolean isMasks () {
-    return !isDefaultPremiumStar && stickerType.getConstructor() == TdApi.StickerTypeMask.CONSTRUCTOR;
+    return !isDefaultPremiumStar && !isPaidReactionStar && stickerType.getConstructor() == TdApi.StickerTypeMask.CONSTRUCTOR;
   }
 
   public int getId () {
@@ -325,17 +330,17 @@ public class TGStickerObj {
   }
 
   public int getWidth () {
-    return isDefaultPremiumStar ? 512 : sticker != null ? sticker.width : 0;
+    return (isDefaultPremiumStar || isPaidReactionStar) ? 512 : sticker != null ? sticker.width : 0;
   }
 
   public int getHeight () {
-    return isDefaultPremiumStar ? 512 : sticker != null ? sticker.height : 0;
+    return (isDefaultPremiumStar || isPaidReactionStar) ? 512 : sticker != null ? sticker.height : 0;
   }
 
   // If sticker set is not loaded yet
 
   public boolean isEmpty () {
-    return sticker == null && !isDefaultPremiumStar;
+    return sticker == null && !isDefaultPremiumStar && !isPaidReactionStar;
   }
 
   private long stickerSetId;

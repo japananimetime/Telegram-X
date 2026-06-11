@@ -34,12 +34,14 @@ import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.navigation.ViewPagerController;
 import org.thunderdog.challegram.navigation.ViewPagerTopView;
 import tgx.td.ChatId;
+import org.thunderdog.challegram.telegram.ChatListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.telegram.TdlibSettingsManager;
 import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.widget.ListInfoView;
 import org.thunderdog.challegram.widget.ProgressComponentView;
 import org.thunderdog.challegram.widget.ViewPager;
 
@@ -51,7 +53,7 @@ import me.vkryl.core.collection.IntList;
 
 import org.thunderdog.challegram.util.StringList;
 
-public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabsController.Arguments> implements TdlibCache.SupergroupDataChangeListener, Menu, MoreDelegate {
+public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabsController.Arguments> implements TdlibCache.SupergroupDataChangeListener, ChatListener, Menu, MoreDelegate {
 
   public static class Arguments {
     public final TdApi.Chat chat;
@@ -65,7 +67,14 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
   private long chatId;
   private final List<TdApi.ForumTopic> topics = new ArrayList<>();
   private boolean isLoading;
+  private boolean pendingReload; // A reload was requested while a load was already in flight
   private boolean hasMore;
+  // Pagination cursor, taken from the last GetForumTopics response
+  private int nextOffsetDate;
+  private long nextOffsetMessageId;
+  private int nextOffsetForumTopicId;
+  private boolean isSubscribedToUpdates;
+  private LoadingController loadingController;
 
   public ForumTopicTabsController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -120,12 +129,21 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
   }
 
   private void loadTopics () {
-    if (isLoading) return;
+    if (isLoading) {
+      pendingReload = true;
+      return;
+    }
     isLoading = true;
+
+    if (!isSubscribedToUpdates) {
+      tdlib.listeners().subscribeToChatUpdates(chatId, this);
+      tdlib.cache().subscribeToSupergroupUpdates(ChatId.toSupergroupId(chatId), this);
+      isSubscribedToUpdates = true;
+    }
 
     // First, try to show cached topics immediately for instant display
     java.util.List<TdApi.ForumTopic> cachedTopics = tdlib.getCachedForumTopics(chatId);
-    if (cachedTopics != null && !cachedTopics.isEmpty()) {
+    if (cachedTopics != null && !cachedTopics.isEmpty() && topics.isEmpty()) {
       topics.clear();
       topics.addAll(cachedTopics);
       // Rebuild the pager with cached topics immediately
@@ -137,11 +155,15 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
       if (result.getConstructor() == TdApi.ForumTopics.CONSTRUCTOR) {
         TdApi.ForumTopics forumTopics = (TdApi.ForumTopics) result;
         tdlib.ui().post(() -> {
+          if (isDestroyed()) return;
           topics.clear();
           for (TdApi.ForumTopic topic : forumTopics.topics) {
             topics.add(topic);
           }
-          hasMore = forumTopics.nextOffsetForumTopicId != 0;
+          nextOffsetDate = forumTopics.nextOffsetDate;
+          nextOffsetMessageId = forumTopics.nextOffsetMessageId;
+          nextOffsetForumTopicId = forumTopics.nextOffsetForumTopicId;
+          hasMore = forumTopics.topics.length > 0 && nextOffsetForumTopicId != 0;
           // Update cache
           tdlib.updateForumTopicsCache(chatId, topics);
           isLoading = false;
@@ -150,11 +172,36 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
           if (!topics.isEmpty()) {
             notifyPagerItemPositionsChanged();
           }
+          continuePendingReload();
         });
       } else {
-        tdlib.ui().post(() -> isLoading = false);
+        tdlib.ui().post(() -> {
+          if (isDestroyed()) return;
+          isLoading = false;
+          UI.showError(result);
+          if (topics.isEmpty() && loadingController != null) {
+            loadingController.showError();
+          }
+          continuePendingReload();
+        });
       }
     });
+  }
+
+  private void continuePendingReload () {
+    if (pendingReload) {
+      pendingReload = false;
+      loadTopics();
+    }
+  }
+
+  private static int indexOfTopic (List<TdApi.ForumTopic> list, long forumTopicId) {
+    for (int i = 0; i < list.size(); i++) {
+      if (list.get(i).info.forumTopicId == forumTopicId) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   @Override
@@ -216,7 +263,12 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
 
   private ViewController<?> createEmptyController (Context context) {
     // Return a loading controller with centered progress spinner while topics load
-    return new LoadingController(context, tdlib);
+    loadingController = new LoadingController(context, tdlib, () -> {
+      if (!isDestroyed()) {
+        loadTopics();
+      }
+    });
+    return loadingController;
   }
 
   @Override
@@ -234,27 +286,80 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
   }
 
   private void loadMoreTopics () {
-    if (isLoading || !hasMore) return;
+    if (isLoading || !hasMore || topics.isEmpty()) return;
     isLoading = true;
 
-    int lastTopicId = topics.isEmpty() ? 0 : topics.get(topics.size() - 1).info.forumTopicId;
-
-    tdlib.client().send(new TdApi.GetForumTopics(chatId, "", 0, 0L, lastTopicId, 50), result -> {
+    tdlib.client().send(new TdApi.GetForumTopics(chatId, "", nextOffsetDate, nextOffsetMessageId, nextOffsetForumTopicId, 50), result -> {
       if (result.getConstructor() == TdApi.ForumTopics.CONSTRUCTOR) {
         TdApi.ForumTopics forumTopics = (TdApi.ForumTopics) result;
         tdlib.ui().post(() -> {
+          if (isDestroyed()) return;
+          // Dedup by topic id: duplicate pager item ids corrupt the pager's id->position map
+          int added = 0;
           for (TdApi.ForumTopic topic : forumTopics.topics) {
-            topics.add(topic);
+            if (indexOfTopic(topics, topic.info.forumTopicId) == -1) {
+              topics.add(topic);
+              added++;
+            }
           }
-          hasMore = forumTopics.nextOffsetForumTopicId != 0;
+          nextOffsetDate = forumTopics.nextOffsetDate;
+          nextOffsetMessageId = forumTopics.nextOffsetMessageId;
+          nextOffsetForumTopicId = forumTopics.nextOffsetForumTopicId;
+          hasMore = forumTopics.topics.length > 0 && nextOffsetForumTopicId != 0;
+          tdlib.updateForumTopicsCache(chatId, topics);
           isLoading = false;
 
           // Update the pager
-          notifyPagerItemPositionsChanged();
+          if (added > 0) {
+            notifyPagerItemPositionsChanged();
+          }
+          continuePendingReload();
         });
       } else {
-        tdlib.ui().post(() -> isLoading = false);
+        tdlib.ui().post(() -> {
+          if (isDestroyed()) return;
+          isLoading = false;
+          continuePendingReload();
+        });
       }
+    });
+  }
+
+  // ChatListener (ForumTopicInfoListener) implementation
+  @Override
+  public void onForumTopicInfoChanged (TdApi.ForumTopicInfo info) {
+    if (info.chatId != chatId) return;
+    tdlib.ui().post(() -> {
+      if (isDestroyed()) return;
+      int index = indexOfTopic(topics, info.forumTopicId);
+      if (index != -1) {
+        topics.get(index).info = info;
+        notifyPagerItemPositionsChanged();
+      } else if (!topics.isEmpty()) {
+        // Unknown topic - probably created remotely; refresh the set
+        loadTopics();
+      }
+    });
+  }
+
+  @Override
+  public void onForumTopicUpdated (long chatId, long forumTopicId, boolean isPinned, long lastReadInboxMessageId, long lastReadOutboxMessageId, int unreadMentionCount, int unreadReactionCount, TdApi.ChatNotificationSettings notificationSettings, TdApi.DraftMessage draftMessage) {
+    if (chatId != this.chatId) return;
+    tdlib.ui().post(() -> {
+      if (isDestroyed()) return;
+      int index = indexOfTopic(topics, forumTopicId);
+      if (index == -1) return;
+      // Tabs only render names; keep the local state fresh for the menu actions
+      TdApi.ForumTopic topic = topics.get(index);
+      topic.isPinned = isPinned;
+      topic.lastReadInboxMessageId = lastReadInboxMessageId;
+      topic.lastReadOutboxMessageId = lastReadOutboxMessageId;
+      topic.unreadMentionCount = unreadMentionCount;
+      topic.unreadReactionCount = unreadReactionCount;
+      if (notificationSettings != null) {
+        topic.notificationSettings = notificationSettings;
+      }
+      topic.draftMessage = draftMessage;
     });
   }
 
@@ -432,8 +537,15 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
       });
       navigateTo(listController);
     } else if (id == R.id.btn_viewAsChat) {
+      // Remember the choice, so the chat keeps opening in unified view
+      // even when the forum has tabs enabled
+      tdlib.settings().setForumViewPreference(chatId, TdlibSettingsManager.FORUM_VIEW_CHAT);
       // Set viewAsTopics to false and open as unified chat
       tdlib.client().send(new TdApi.ToggleChatViewAsTopics(chatId, false), result -> {
+        if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+          UI.post(() -> UI.showError(result));
+          return;
+        }
         if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
           tdlib.ui().post(() -> {
             // Create the messages controller and replace current controller
@@ -469,8 +581,9 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
   private void toggleTopicPinned (TdApi.ForumTopic topic, boolean pinned) {
     tdlib.client().send(new TdApi.ToggleForumTopicIsPinned(topic.info.chatId, topic.info.forumTopicId, pinned), result -> {
       if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
-        // Update local state
-        topic.isPinned = pinned;
+        // Update local state on the UI thread; the authoritative state
+        // arrives via updateForumTopic
+        UI.post(() -> topic.isPinned = pinned);
       } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
         UI.post(() -> UI.showError(result));
       }
@@ -480,8 +593,9 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
   private void toggleTopicClosed (TdApi.ForumTopic topic, boolean closed) {
     tdlib.client().send(new TdApi.ToggleForumTopicIsClosed(topic.info.chatId, topic.info.forumTopicId, closed), result -> {
       if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
-        // Update local state
-        topic.info.isClosed = closed;
+        // Update local state on the UI thread; the authoritative state
+        // arrives via updateForumTopicInfo
+        UI.post(() -> topic.info.isClosed = closed);
       } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
         UI.post(() -> UI.showError(result));
       }
@@ -664,6 +778,12 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
   @Override
   public void destroy () {
     super.destroy();
+    if (isSubscribedToUpdates) {
+      tdlib.listeners().unsubscribeFromChatUpdates(chatId, this);
+      tdlib.cache().unsubscribeFromSupergroupUpdates(ChatId.toSupergroupId(chatId), this);
+      isSubscribedToUpdates = false;
+    }
+    loadingController = null;
   }
 
   // Permission checks for topic actions
@@ -701,8 +821,14 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
 
   // Loading placeholder controller shown while topics are being loaded
   private static class LoadingController extends ViewController<Void> {
-    public LoadingController (Context context, Tdlib tdlib) {
+    private final Runnable onRetry;
+    private ProgressComponentView progressView;
+    private ListInfoView infoView;
+    private boolean inErrorState;
+
+    public LoadingController (Context context, Tdlib tdlib, Runnable onRetry) {
       super(context, tdlib);
+      this.onRetry = onRetry;
     }
 
     @Override
@@ -719,7 +845,7 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
         ViewGroup.LayoutParams.MATCH_PARENT
       ));
 
-      ProgressComponentView progressView = new ProgressComponentView(context);
+      progressView = new ProgressComponentView(context);
       progressView.initLarge(1f);
       FrameLayoutFix.LayoutParams lp = new FrameLayoutFix.LayoutParams(
         Screen.dp(48f),
@@ -727,9 +853,48 @@ public class ForumTopicTabsController extends ViewPagerController<ForumTopicTabs
         Gravity.CENTER
       );
       progressView.setLayoutParams(lp);
-
       container.addView(progressView);
+
+      infoView = new ListInfoView(context);
+      infoView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      infoView.setVisibility(View.GONE);
+      container.addView(infoView);
+
+      container.setOnClickListener(v -> {
+        if (inErrorState && onRetry != null) {
+          showProgress();
+          onRetry.run();
+        }
+      });
+
+      if (inErrorState) {
+        applyErrorState();
+      }
       return container;
+    }
+
+    /**
+     * Replaces the endless spinner with an error message and tap-to-retry.
+     */
+    public void showError () {
+      inErrorState = true;
+      if (progressView != null) {
+        applyErrorState();
+      }
+    }
+
+    private void applyErrorState () {
+      progressView.setVisibility(View.GONE);
+      infoView.setVisibility(View.VISIBLE);
+      infoView.showInfo(Lang.getString(R.string.LoadingTopicsError));
+    }
+
+    private void showProgress () {
+      inErrorState = false;
+      if (progressView != null) {
+        progressView.setVisibility(View.VISIBLE);
+        infoView.setVisibility(View.GONE);
+      }
     }
   }
 }

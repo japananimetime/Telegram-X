@@ -3681,7 +3681,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     public CameraController.ReadyListener readyListener;
     public CameraController.QrCodeListener qrCodeListener;
     public @StringRes int qrModeSubtitle;
+    public @Nullable String qrModeSubtitleText;
     public boolean qrModeDebug;
+    public boolean allowAnyQrCode;
     public @AvatarPickerMode int avatarPickerMode;
 
     public MediaViewDelegate delegate;
@@ -3720,6 +3722,16 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
     public CameraOpenOptions qrModeSubtitle (@StringRes int qrModeSubtitle) {
       this.qrModeSubtitle = qrModeSubtitle;
+      return this;
+    }
+
+    public CameraOpenOptions qrModeSubtitleText (@Nullable String qrModeSubtitleText) {
+      this.qrModeSubtitleText = qrModeSubtitleText;
+      return this;
+    }
+
+    public CameraOpenOptions allowAnyQrCode (boolean allowAnyQrCode) {
+      this.allowAnyQrCode = allowAnyQrCode;
       return this;
     }
 

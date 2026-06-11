@@ -1369,7 +1369,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         topEndReached = true;
       } else if (!items.isEmpty()) {
         final int accountId = tdlib.id();
-        Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.getMessageTopicId());
+        Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), getEffectiveTopicId());
         if (messageId != null && messageId.topEndMessageId != 0) {
           TGMessage topMessage = items.get(items.size() - 1);
           topEndReached = topMessage.isDescendantOrSelf(messageId.topEndMessageId);
@@ -1849,6 +1849,22 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return loader.isChannel();
   }
 
+  /**
+   * Effective topic id used for keying saved scroll positions:
+   * the message thread's topic when available, falling back to the explicitly passed
+   * topic id (forum topics opened without a message thread).
+   */
+  @Nullable
+  private static TdApi.MessageTopic effectiveTopicId (@Nullable ThreadInfo threadInfo, @Nullable TdApi.MessageTopic topicId) {
+    TdApi.MessageTopic messageThreadTopicId = threadInfo != null ? threadInfo.getMessageTopicId() : null;
+    return messageThreadTopicId != null ? messageThreadTopicId : topicId;
+  }
+
+  @Nullable
+  private TdApi.MessageTopic getEffectiveTopicId () {
+    return effectiveTopicId(loader.getMessageThread(), loader.getTopicId());
+  }
+
   // Updates
 
   private void updateNewMessage (TGMessage message) {
@@ -1858,9 +1874,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         return;
     }
     // Check both messageThread topic (for comment threads) and forum topicId (for forum tabs)
-    TdApi.MessageTopic messageThreadTopicId = loader.getMessageTopicId();
-    TdApi.MessageTopic forumTopicId = loader.getTopicId();
-    TdApi.MessageTopic effectiveTopicId = messageThreadTopicId != null ? messageThreadTopicId : forumTopicId;
+    TdApi.MessageTopic effectiveTopicId = getEffectiveTopicId();
     if (!Td.matchesTopic(message.getMessageTopicId(), effectiveTopicId)) {
       return;
     }
@@ -2602,7 +2616,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     if (scrollChatId != 0) {
       final int accountId = tdlib.id();
       final long chatId = loader.getChatId();
-      final TdApi.MessageTopic topicId = loader.getMessageTopicId();
+      final TdApi.MessageTopic topicId = getEffectiveTopicId();
       Settings.SavedMessageId savedMessageId = new Settings.SavedMessageId(
         new MessageId(scrollMessageChatId, scrollMessageId, scrollMessageOtherIds),
         scrollOffsetInPixels,
@@ -3024,7 +3038,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
     if (highlightMode == HIGHLIGHT_MODE_POSITION_RESTORE) {
       final int accountId = tdlib.id();
-      Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.getMessageTopicId());
+      Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), getEffectiveTopicId());
       int offset = messageId != null ? messageId.offsetPixels - scrollMessage.getExtraPadding() : 0;
       this.returnToMessageIds = messageId != null ? messageId.returnToMessageIds : null;
       scrollToPositionWithOffset(index, offset, false);
@@ -3285,12 +3299,16 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public static int getAnchorHighlightMode (int accountId, TdApi.Chat chat, @Nullable ThreadInfo threadInfo) {
+    return getAnchorHighlightMode(accountId, chat, threadInfo, null);
+  }
+
+  public static int getAnchorHighlightMode (int accountId, TdApi.Chat chat, @Nullable ThreadInfo threadInfo, @Nullable TdApi.MessageTopic topicId) {
     if (chat == null) {
       return HIGHLIGHT_MODE_NONE;
     }
     boolean canGoUnread = canGoUnread(chat, threadInfo);
     Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, chat.id,
-      threadInfo != null ? threadInfo.getMessageTopicId() : null
+      effectiveTopicId(threadInfo, topicId)
     );
     boolean preferUnreadFirst = messageId == null || messageId.readFully;
     if (preferUnreadFirst) {
@@ -3311,10 +3329,14 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public static MessageId getAnchorMessageId (int accountId, TdApi.Chat chat, @Nullable ThreadInfo threadInfo, int anchorMode) {
+    return getAnchorMessageId(accountId, chat, threadInfo, null, anchorMode);
+  }
+
+  public static MessageId getAnchorMessageId (int accountId, TdApi.Chat chat, @Nullable ThreadInfo threadInfo, @Nullable TdApi.MessageTopic topicId, int anchorMode) {
     switch (anchorMode) {
       case HIGHLIGHT_MODE_POSITION_RESTORE: {
         Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(
-          accountId, chat.id, threadInfo != null ? threadInfo.getMessageTopicId() : null
+          accountId, chat.id, effectiveTopicId(threadInfo, topicId)
         );
         return messageId != null && messageId.id.getMessageId() != 0 ? messageId.id : null;
       }

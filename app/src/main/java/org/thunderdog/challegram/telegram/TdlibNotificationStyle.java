@@ -69,8 +69,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
@@ -239,16 +241,41 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     long chatId = group.getChatId();
     if (tdlib.isForum(chatId) && group.hasMultipleForumTopics()) {
       List<TdlibNotificationGroup.TopicView> topicViews = group.splitByForumTopics();
+      Set<Integer> prevTopicNotificationIds = helper.getDisplayedTopicNotificationIds(group.getId());
+      Set<Integer> newTopicNotificationIds = new HashSet<>(topicViews.size());
       int result = DISPLAY_STATE_HIDDEN;
       for (TdlibNotificationGroup.TopicView topicView : topicViews) {
+        int topicNotificationId = helper.getNotificationIdForTopicView(topicView.getId(), topicView.getTopicId());
         int topicResult = displayTopicNotification(manager, context, helper, badgeCount, allowPreview, topicView, settings, isRebuild);
         if (topicResult == DISPLAY_STATE_OK) {
           result = DISPLAY_STATE_OK;
+          newTopicNotificationIds.add(topicNotificationId);
+        } else if (topicResult == DISPLAY_STATE_FAIL && prevTopicNotificationIds != null && prevTopicNotificationIds.contains(topicNotificationId)) {
+          // Failed to update an already displayed notification: keep it in the tray & keep tracking it
+          newTopicNotificationIds.add(topicNotificationId);
         }
       }
+      // Cancel per-topic notifications that are no longer displayed
+      if (prevTopicNotificationIds != null) {
+        for (int prevTopicNotificationId : prevTopicNotificationIds) {
+          if (!newTopicNotificationIds.contains(prevTopicNotificationId)) {
+            manager.cancel(prevTopicNotificationId);
+          }
+        }
+      }
+      helper.setDisplayedTopicNotificationIds(group.getId(), newTopicNotificationIds);
       // Cancel the original group notification since we're showing per-topic ones
       manager.cancel(helper.getNotificationIdForGroup(group.getId()));
       return result;
+    }
+    // Cancel per-topic notifications that might have been displayed for this group before,
+    // since the group is now hidden or displayed as a single notification
+    Set<Integer> prevTopicNotificationIds = helper.getDisplayedTopicNotificationIds(group.getId());
+    if (prevTopicNotificationIds != null) {
+      for (int prevTopicNotificationId : prevTopicNotificationIds) {
+        manager.cancel(prevTopicNotificationId);
+      }
+      helper.setDisplayedTopicNotificationIds(group.getId(), null);
     }
     return displayChildNotification(manager, context, helper, badgeCount, allowPreview, group, settings, helper.getNotificationIdForGroup(group.getId()), false, isRebuild);
   }
@@ -285,7 +312,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
 
     // Get topic name
     TdApi.ForumTopicInfo topicInfo = tdlib.forumTopicInfo(chatId, topicId);
-    String topicName = topicInfo != null ? topicInfo.name : "Topic";
+    String topicName = topicInfo != null && !StringUtils.isEmpty(topicInfo.name) ? topicInfo.name : null;
     final String chatTitle = tdlib.chatTitle(chat);
 
     final int category = topicView.getCategory();
@@ -316,8 +343,8 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     final boolean onlySilent = topicView.isOnlyInitiallySilent();
     final boolean isChannel = tdlib.isChannelChat(chat);
 
-    // Build title with topic name: "Chat Name › Topic Name"
-    CharSequence visualChatTitle = chatTitle + " › " + topicName;
+    // Build title with topic name: "Chat Name › Topic Name", or just the chat title if the topic name is unknown
+    CharSequence visualChatTitle = topicName != null ? chatTitle + " › " + topicName : chatTitle;
     if (topicView.getTotalCount() > 1) {
       visualChatTitle = Lang.getCharSequence(R.string.format_notificationTitleShort, visualChatTitle, Lang.plural(topicView.isMention() ? R.string.mentionCount : R.string.messagesCount, topicView.getTotalCount()));
     }
@@ -374,7 +401,8 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
       .setStyle(messagingStyle)
       .setContentIntent(contentIntent);
 
-    builder.setGroup(makeGroupKey(tdlib, category) + "_forum_" + chatId);
+    // Use the same group key as regular child notifications, so per-topic notifications stack under the category summary
+    builder.setGroup(makeGroupKey(tdlib, category));
     builder.setGroupSummary(false);
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
