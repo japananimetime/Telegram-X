@@ -291,13 +291,18 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     return pendingInfo == null || Arrays.equals(Settings.instance().getLongArray(key(DISMISS_REQUESTS_PREFIX, tdlib.id()) + chatId), pendingInfo.userIds);
   }
 
-  // Forum view preference: true = tabs, false = topics list
-  // This is used when forum has hasForumTabs enabled to remember user's choice
+  // Forum view preference: tabs, topics list, or unified chat
+  // This is used to remember the user's choice between the available forum views
   public static final int FORUM_VIEW_TABS = 1;
   public static final int FORUM_VIEW_TOPICS = 2;
+  public static final int FORUM_VIEW_CHAT = 3;
 
   public void setForumViewPreference (long chatId, int viewPreference) {
     Settings.instance().putInt(key(FORUM_VIEW_PREFERENCE_PREFIX, tdlib.id()) + chatId, viewPreference);
+  }
+
+  public void clearForumViewPreference (long chatId) {
+    Settings.instance().remove(key(FORUM_VIEW_PREFERENCE_PREFIX, tdlib.id()) + chatId);
   }
 
   public int getForumViewPreference (long chatId) {

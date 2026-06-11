@@ -2384,6 +2384,7 @@
   <string name="Topics">Topics</string>
   <string name="NoTopics">No topics yet</string>
   <string name="LoadingTopics">Loading topics…</string>
+  <string name="LoadingTopicsError">Failed to load topics. Tap to retry.</string>
   <string name="PinTopic">Pin Topic</string>
   <string name="UnpinTopic">Unpin Topic</string>
   <string name="CloseTopic">Close Topic</string>
