@@ -1002,7 +1002,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
     mentionButton.setOnLongClickListener(v -> {
       long chatId = getChatId();
       if (chatId != 0 && !isDestroyed()) {
-        tdlib.client().send(new TdApi.ReadAllChatMentions(chatId), tdlib.okHandler());
+        TdApi.MessageTopic topicId = getMessageTopicId();
+        if (topicId != null && topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
+          // Topic-scoped: read mentions only within this forum topic
+          tdlib.client().send(new TdApi.ReadAllForumTopicMentions(chatId, ((TdApi.MessageTopicForum) topicId).forumTopicId), tdlib.okHandler());
+        } else {
+          tdlib.client().send(new TdApi.ReadAllChatMentions(chatId), tdlib.okHandler());
+        }
         return true;
       }
       return false;
@@ -1083,7 +1089,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
     reactionsButton.setOnLongClickListener(v -> {
       long chatId = getChatId();
       if (chatId != 0 && !isDestroyed()) {
-        tdlib.client().send(new TdApi.ReadAllChatReactions(chatId), tdlib.okHandler());
+        TdApi.MessageTopic topicId = getMessageTopicId();
+        if (topicId != null && topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
+          // Topic-scoped: read reactions only within this forum topic
+          tdlib.client().send(new TdApi.ReadAllForumTopicReactions(chatId, ((TdApi.MessageTopicForum) topicId).forumTopicId), tdlib.okHandler());
+        } else {
+          tdlib.client().send(new TdApi.ReadAllChatReactions(chatId), tdlib.okHandler());
+        }
         return true;
       }
       return false;
@@ -1881,7 +1893,21 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Nullable
   public TdApi.DraftMessage getDraftMessage () {
-    return messageThread != null ? messageThread.getDraft() : chat != null ? chat.draftMessage : null;
+    if (forumTopic != null) {
+      // Per-topic draft takes precedence when this controller is scoped to a forum topic
+      return forumTopic.draftMessage;
+    }
+    if (messageThread != null) {
+      return messageThread.getDraft();
+    }
+    TdApi.MessageTopic topicId = getMessageTopicId();
+    if (topicId != null && topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
+      // Topic-scoped, but TdApi.ForumTopic is not loaded yet:
+      // the chat-level draft does not apply here. The topic draft is applied
+      // once the GetForumTopic backfill completes (see updateView).
+      return null;
+    }
+    return chat != null ? chat.draftMessage : null;
   }
 
   public long getChatUserId () {
@@ -2286,6 +2312,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else if (id == R.id.btn_openDirectMessages) {
       openLinkedChat(true);
     } else if (id == R.id.btn_viewAsTopics) {
+      // Drop a saved "view as chat" preference, so the forum view sticks again
+      tdlib.settings().clearForumViewPreference(chat.id);
       // Set viewAsTopics to true and open forum topics view
       tdlib.client().send(new TdApi.ToggleChatViewAsTopics(chat.id, true), result -> {
         if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
@@ -2315,6 +2343,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
         }
       });
     } else if (id == R.id.btn_viewForum) {
+      // Drop a saved "view as chat" preference, so the forum view sticks again
+      tdlib.settings().clearForumViewPreference(chat.id);
       // Navigate to forum topics view (when viewing a specific topic, e.g., from message link)
       long supergroupId = ChatId.toSupergroupId(chat.id);
       TdApi.Supergroup supergroup = supergroupId != 0 ? tdlib.cache().supergroup(supergroupId) : null;
@@ -2537,8 +2567,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       this.chat = chat;
       this.messageThread = messageThread;
       this.messageTopicId = messageTopicId;
-      this.highlightMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread);
-      this.highlightMessageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, highlightMode);
+      this.highlightMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread, messageTopicId);
+      this.highlightMessageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, messageTopicId, highlightMode);
       this.searchFilter = filter;
 
       this.inPreviewMode = false;
@@ -2909,16 +2939,32 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (forumTopic == null && messageTopicId != null &&
         messageTopicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
       long forumTopicId = ((TdApi.MessageTopicForum) messageTopicId).forumTopicId;
+      final long requestedChatId = chat.id;
       tdlib.client().send(new TdApi.GetForumTopic(chat.id, (int) forumTopicId), result -> {
         if (result.getConstructor() == TdApi.ForumTopic.CONSTRUCTOR) {
           runOnUiThreadOptional(() -> {
+            if (getChatId() != requestedChatId) {
+              return;
+            }
             forumTopic = (TdApi.ForumTopic) result;
             // Update header with loaded topic
             TdApi.Chat hChat = messageThread != null ? tdlib.chatSync(messageThread.getContextChatId()) : null;
             headerCell.setChat(tdlib, hChat != null ? hChat : chat, messageThread, forumTopic);
             // Update unread counts
             updateCounters(true);
+            // Restore the per-topic draft, unless the user has already typed something
+            TdApi.DraftMessage topicDraft = forumTopic.draftMessage;
+            if (topicDraft != null && inputView != null && inputView.isEmpty() && !isEditingMessage() && tdlib.canSendBasicMessage(chat)) {
+              TdApi.InputMessageReplyTo replyTo = topicDraft.replyTo;
+              if (replyTo != null && replyTo.getConstructor() != TdApi.InputMessageReplyToStory.CONSTRUCTOR) {
+                forceDraftReply(replyTo);
+              }
+              inputView.setDraft(topicDraft.inputMessageText);
+            }
           });
+        } else {
+          // Topic may be unavailable (deleted topic, no access): keep chat-level UI
+          Log.i("GetForumTopic failed for chatId=%d, forumTopicId=%d: %s", requestedChatId, forumTopicId, TD.toErrorString(result));
         }
       });
     }
@@ -3125,15 +3171,15 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private void scrollToUnreadOrStartMessage () {
-    int anchorMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread);
+    int anchorMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread, messageTopicId);
     if (!manager.hasReturnMessage()) {
       if (!inPreviewMode && !isInForceTouchMode() && anchorMode == MessagesManager.HIGHLIGHT_MODE_UNREAD) {
-        MessageId messageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, anchorMode);
+        MessageId messageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, messageTopicId, anchorMode);
         manager.highlightMessage(messageId, MessagesManager.HIGHLIGHT_MODE_UNREAD_NEXT, null, true);
         return;
       }
       if (chat != null && MessagesManager.canGoUnread(chat, messageThread)) {
-        MessageId messageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, MessagesManager.HIGHLIGHT_MODE_UNREAD);
+        MessageId messageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, messageTopicId, MessagesManager.HIGHLIGHT_MODE_UNREAD);
         int firstUnreadIndex = manager.indexOfFirstUnreadMessage();
         TGMessage bottom = manager.findBottomMessage();
         MessageId bottomMessageId = bottom != null ? bottom.toMessageId() : null;
@@ -8091,7 +8137,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           ).setOwnerController(this));
           navigateTo(controller);
           if (oneTime) {
-            closeCommandKeyboard();
+            closeCommandsKeyboard(false);
           }
         }
       });
@@ -11472,16 +11518,27 @@ public class MessagesController extends ViewController<MessagesController.Argume
         // Update message views to show read receipts (double ticks)
         manager.updateChatReadOutbox(lastReadOutboxMessageId);
       }
-      // Calculate new unread count
+      // Update unread count
       if (lastReadInboxMessageId > oldLastReadInboxMessageId) {
         // Messages were read
         if (forumTopic.lastMessage != null && lastReadInboxMessageId >= forumTopic.lastMessage.id) {
           // All messages read
           forumTopic.unreadCount = 0;
-        } else if (forumTopic.unreadCount > 0) {
-          // Estimate: decrease unread count (may not be exact)
-          // A more accurate approach would be to count visible messages between old and new read position
-          forumTopic.unreadCount = Math.max(0, forumTopic.unreadCount - 1);
+        } else {
+          // A single update may cover multiple read messages,
+          // so refetch the topic to get the authoritative unread count
+          final int topicId = forumTopic.info.forumTopicId;
+          tdlib.client().send(new TdApi.GetForumTopic(chatId, topicId), result -> {
+            if (result.getConstructor() == TdApi.ForumTopic.CONSTRUCTOR) {
+              final int freshUnreadCount = ((TdApi.ForumTopic) result).unreadCount;
+              runOnUiThreadOptional(() -> {
+                if (forumTopic != null && getChatId() == chatId && forumTopic.info.forumTopicId == topicId) {
+                  forumTopic.unreadCount = freshUnreadCount;
+                  updateCounters(true);
+                }
+              });
+            }
+          });
         }
       }
       updateCounters(true);
@@ -11528,7 +11585,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onChatDraftMessageChanged (final long chatId, final @Nullable TdApi.DraftMessage draftMessage) {
     runOnUiThreadOptional(() -> {
-      if (getChatId() == chatId && inputView != null && !inputView.textChangedSinceChatOpened() && !isSecretChat() && messageThread == null) {
+      // Forum-topic-scoped controllers use the per-topic draft (see getDraftMessage),
+      // so the chat-level draft must not be applied to them
+      boolean topicScoped = forumTopic != null ||
+        (messageTopicId != null && messageTopicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR);
+      if (getChatId() == chatId && inputView != null && !inputView.textChangedSinceChatOpened() && !isSecretChat() && messageThread == null && !topicScoped) {
         // Applying server chat draft changes only if text wasn't changed while chat was open
         updateDraftMessage(chatId, draftMessage);
       }
