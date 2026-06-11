@@ -147,20 +147,30 @@ public class TopicIconModifier implements DrawModifier, TdlibEmojiManager.Watche
    * Must be called when the view is bound.
    */
   public void attachToView (View view) {
+    if (attachedView == view) {
+      return;
+    }
+    // ComplexReceiver binds its View at construction time and can't be re-pointed,
+    // so recreate the receiver when moving to a different view to ensure
+    // invalidate() reaches the view that is actually drawing this modifier
+    if (iconReceiver != null) {
+      iconReceiver.performDestroy();
+      iconReceiver = null;
+    }
     this.attachedView = view;
-    if (customEmojiId != 0 && iconReceiver == null) {
+    if (customEmojiId != 0 && view != null) {
       this.iconReceiver = new ComplexReceiver(view);
       requestIconFiles();
     }
   }
 
   /**
-   * Detach from the view and clean up receivers.
+   * Detach from the view and clean up receivers. Safe to call multiple times.
    */
   public void detach () {
     this.attachedView = null;
     if (iconReceiver != null) {
-      iconReceiver.clear();
+      iconReceiver.performDestroy();
       iconReceiver = null;
     }
   }
@@ -201,20 +211,16 @@ public class TopicIconModifier implements DrawModifier, TdlibEmojiManager.Watche
         return;
       } else if (imageFile != null && imageRcv != null) {
         imageRcv.setBounds(left, top, right, bottom);
-        if (!imageRcv.needPlaceholder()) {
-          imageRcv.draw(c);
-          return;
+        if (imageRcv.needPlaceholder()) {
+          // Draw thumbnail as placeholder
+          DoubleImageReceiver preview = iconReceiver.getPreviewReceiver(0);
+          if (preview != null) {
+            preview.setBounds(left, top, right, bottom);
+            preview.draw(c);
+          }
         }
-        // Draw thumbnail as placeholder
-        DoubleImageReceiver preview = iconReceiver.getPreviewReceiver(0);
-        if (preview != null) {
-          preview.setBounds(left, top, right, bottom);
-          preview.draw(c);
-        }
-        if (!imageRcv.needPlaceholder()) {
-          imageRcv.draw(c);
-          return;
-        }
+        imageRcv.draw(c);
+        return;
       }
     }
 
