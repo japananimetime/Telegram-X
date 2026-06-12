@@ -1980,6 +1980,15 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       return;
     }
 
+    // Play the send-effect once on arrival (recency-gated so scrolling old history
+    // doesn't replay effects). Tap-to-replay is handled separately.
+    if (msg.effectId != 0 && !messageEffectPlayed) {
+      messageEffectPlayed = true;
+      if (tdlib.currentTimeMillis() / 1000L - msg.date < 60) {
+        playMessageEffect(view);
+      }
+    }
+
     // "Unread messages" / "Discussion started" badge
     if ((flags & FLAG_SHOW_BADGE) != 0) {
       int top = 0;
@@ -4354,7 +4363,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   // Getters
 
   public boolean onMessageClick (MessageView v, MessagesController c) {
-    // TODO
+    // Tap-to-replay the send effect. Non-consuming: normal tap behavior (opening
+    // media, following links) still runs.
+    if (msg.effectId != 0) {
+      playMessageEffect(v);
+    }
     return /* isEventLog() */ false;
   }
 
@@ -9515,6 +9528,47 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
   }
 
+
+  // Message send-effect (TdApi.Message.effectId) playback
+  private boolean messageEffectPlayed;
+
+  private static TdApi.Sticker effectAnimationSticker (TdApi.MessageEffect effect) {
+    if (effect == null || effect.type == null) {
+      return null;
+    }
+    switch (effect.type.getConstructor()) {
+      case TdApi.MessageEffectTypePremiumSticker.CONSTRUCTOR:
+        return ((TdApi.MessageEffectTypePremiumSticker) effect.type).sticker;
+      case TdApi.MessageEffectTypeEmojiReaction.CONSTRUCTOR:
+        return ((TdApi.MessageEffectTypeEmojiReaction) effect.type).effectAnimation;
+      default:
+        return null;
+    }
+  }
+
+  public void playMessageEffect (View view) {
+    if (msg.effectId == 0 || view == null) {
+      return;
+    }
+    final int[] cords = new int[2];
+    view.getLocationOnScreen(cords);
+    final int anchorX = cords[0] + view.getMeasuredWidth() / 2;
+    final int anchorY = cords[1] + view.getMeasuredHeight() / 2;
+    tdlib.getMessageEffect(msg.effectId, effect -> {
+      final TdApi.Sticker sticker = effectAnimationSticker(effect);
+      if (sticker == null) {
+        return;
+      }
+      executeOnUiThreadOptional(() -> {
+        TGStickerObj overlaySticker = new TGStickerObj(tdlib, sticker, null, sticker.fullType);
+        context().reactionsOverlayManager().addOverlay(
+          new ReactionsOverlayView.ReactionInfo(context().reactionsOverlayManager())
+            .setSticker(overlaySticker, true)
+            .setPosition(new Point(anchorX, anchorY), Screen.dp(160))
+        );
+      });
+    });
+  }
 
   private boolean readyHighlightUnreadReactions = false;
   private void highlightUnreadReactionsIfNeeded () {
