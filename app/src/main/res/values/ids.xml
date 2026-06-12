@@ -481,6 +481,14 @@
   <item type="id" name="btn_giftResaleChangePrice" />
   <item type="id" name="btn_giftResaleUnlist" />
   <item type="id" name="btn_giftResaleBuy" />
+  <item type="id" name="btn_giftResaleSortPrice" />
+  <item type="id" name="btn_giftResaleSortNumber" />
+  <item type="id" name="btn_giftResaleSortDate" />
+  <item type="id" name="btn_giftResaleFilterModel" />
+  <item type="id" name="btn_giftResaleFilterSymbol" />
+  <item type="id" name="btn_giftResaleFilterBackdrop" />
+  <item type="id" name="btn_giftResaleFilterItem" />
+  <item type="id" name="btn_giftResaleClearFilter" />
   <item type="id" name="btn_giftMakeOffer" />
   <item type="id" name="btn_giftOfferRespond" />
   <item type="id" name="btn_giftOfferAccept" />

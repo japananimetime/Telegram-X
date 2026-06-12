@@ -32,7 +32,7 @@ Full Stars/TON gift economy shipped on `feature/rich-messages`: render (1) → r
 - **Auction bids** are bid-for-self only (no recipient/text picker); fixed 1-day offer duration; `paidMessageStarCount=0`.
 - **Collections**: reorder ✅ DONE — `ReorderGiftCollections` (Move left/right in the manage menu) and `ReorderGiftCollectionGifts` (Move left/right in the per-gift sheet, gated on `endReached` so the full order is known); both optimistic with revert-on-error. Multi-select seeding of a new collection is still unwired.
 - **Crafting**: no per-attribute persistence percentages (API doesn't label backdrop vs symbol probabilities) — generic hint shown.
-- **Resale attribute filter UI** not built (empty filter passed to `SearchGiftsForResale`).
+- **Resale attribute filter UI** ✅ DONE — overflow menu on `GiftResaleController` with sort orders (price / number / listing date) and model/symbol/backdrop filters, populated from the facet counts in the first unfiltered `SearchGiftsForResale` response; picking a facet sets the matching `UpgradedGiftAttributeId` and reloads.
 
 ## Dependency order
 Rendering foundation (Gift/UpgradedGift sub-objects) → message contents → received gifts (produces `receivedGiftId`, the handle every mutating op needs) → upgrade/transfer → resale → auctions/crafting/collections. Payment glue is render-only.

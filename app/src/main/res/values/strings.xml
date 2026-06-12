@@ -5819,6 +5819,14 @@
   <string name="GiftResaleBrowse">Buy from Resale Market</string>
   <string name="GiftResaleBuy">Buy Gift</string>
   <string name="GiftResaleBuyConfirm">Buy %1$s for %2$s?</string>
+  <string name="GiftResaleSortFilter">Sort &amp; Filter</string>
+  <string name="GiftResaleSortPrice">Sort by price</string>
+  <string name="GiftResaleSortNumber">Sort by number</string>
+  <string name="GiftResaleSortDate">Sort by listing date</string>
+  <string name="GiftResaleFilterModel">Filter by model</string>
+  <string name="GiftResaleFilterSymbol">Filter by symbol</string>
+  <string name="GiftResaleFilterBackdrop">Filter by backdrop</string>
+  <string name="GiftResaleClearFilter">Clear filters</string>
   <string name="GiftResaleBought">Gift purchased.</string>
   <string name="UpgradedGiftSell">Sell Gift</string>
   <string name="UpgradedGiftListed">Listed for resale</string>
