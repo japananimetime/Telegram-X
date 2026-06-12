@@ -2495,6 +2495,20 @@ public class TdlibUi extends Handler {
     storyController.open();
   }
 
+  // Resolves a story link (t.me/<username>/s/<id>) to its poster chat and opens the story viewer
+  public void openStoryLink (final TdlibDelegate context, final String posterUsername, final int storyId, final @Nullable UrlOpenParameters openParameters) {
+    if (StringUtils.isEmpty(posterUsername)) {
+      return;
+    }
+    tdlib.send(new TdApi.SearchPublicChat(posterUsername), (chat, error) -> post(() -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+      } else {
+        openStory(context, chat.id, storyId);
+      }
+    }));
+  }
+
   public void openPublicChat (final TdlibDelegate context, final @NonNull String username, final @Nullable UrlOpenParameters openParameters) {
     openChat(context, 0, new TdApi.SearchPublicChat(username), new ChatOpenParameters().urlOpenParameters(openParameters).keepStack().openProfileInCaseOfPrivateChat());
   }
@@ -3786,7 +3800,13 @@ public class TdlibUi extends Handler {
         openExternalUrl(context, instantView.url, instantViewOpenParameters, after);
         break;
       }
-      case TdApi.InternalLinkTypeStory.CONSTRUCTOR:
+      case TdApi.InternalLinkTypeStory.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeStory storyLink = (TdApi.InternalLinkTypeStory) linkType;
+        openStoryLink(context, storyLink.storyPosterUsername, storyLink.storyId, openParameters);
+        break;
+      }
+
+      // TODO: live stories and story albums need their own viewers (not implemented yet)
       case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR:
       case TdApi.InternalLinkTypeStoryAlbum.CONSTRUCTOR:
 

@@ -499,6 +499,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       }
       hidePlaceholder();
     });
+    // Honor the requested open mode: enter fullscreen when the launch asked for it
+    Args args = getArguments();
+    if (args != null && args.openMode != null
+      && args.openMode.getConstructor() == TdApi.WebAppOpenModeFullScreen.CONSTRUCTOR
+      && !isFullscreen) {
+      onWebAppRequestFullscreen();
+    }
     // Send initial viewport data
     sendViewportData();
     // Send initial safe area data
@@ -1203,6 +1210,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     sendViewportData();
   }
 
+  // The Mini Apps SDK styles in CSS pixels (--tg-viewport-height etc.), so all
+  // geometry emitted to the web view must be in CSS px (device px / density).
+  private static float toCssPx (int devicePx) {
+    float density = Screen.density();
+    return density > 0f ? devicePx / density : devicePx;
+  }
+
   private void sendViewportData () {
     if (webView == null) return;
 
@@ -1218,8 +1232,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     boolean expanded = isExpanded;
 
     String eventData = String.format(Locale.US,
-      "{\"height\":%d,\"width\":%d,\"is_state_stable\":true,\"is_expanded\":%b}",
-      height, width, expanded
+      "{\"height\":%.1f,\"width\":%.1f,\"is_state_stable\":true,\"is_expanded\":%b}",
+      toCssPx(height), toCssPx(width), expanded
     );
     sendEventToWebApp("viewport_changed", eventData);
   }
@@ -2071,7 +2085,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     if (webView == null) return;
     int[] insets = getDisplayCutoutInsets();
     sendEventToWebApp("safe_area_changed",
-      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", insets[0], insets[1], insets[2], insets[3]));
+      String.format(Locale.US, "{\"top\":%.1f,\"bottom\":%.1f,\"left\":%.1f,\"right\":%.1f}",
+        toCssPx(insets[0]), toCssPx(insets[1]), toCssPx(insets[2]), toCssPx(insets[3])));
   }
 
   private void sendContentSafeAreaEvent () {
@@ -2080,7 +2095,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     // Content safe area includes the header when not fullscreen
     int contentTop = isFullscreen ? insets[0] : insets[0] + Size.getHeaderPortraitSize();
     sendEventToWebApp("content_safe_area_changed",
-      String.format(Locale.US, "{\"top\":%d,\"bottom\":%d,\"left\":%d,\"right\":%d}", contentTop, insets[1], insets[2], insets[3]));
+      String.format(Locale.US, "{\"top\":%.1f,\"bottom\":%.1f,\"left\":%.1f,\"right\":%.1f}",
+        toCssPx(contentTop), toCssPx(insets[1]), toCssPx(insets[2]), toCssPx(insets[3])));
   }
 
   // ==================== Biometric Token & Settings (3.1) ====================

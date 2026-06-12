@@ -9,21 +9,22 @@ Compiled from four parallel audits (API coverage, forums, mini apps, features). 
 ## P0 — Regressions & crashes from our own upgrade (fix first)
 
 - [x] **9 new message types → red error bubble + possible chat-list crash.** `MessageStakeDice`, `MessageChatOwnerChanged/Left`, `MessageManagedBotCreated`, `MessageChatHasProtectedContentToggled/DisableRequested`, `MessagePollOptionAdded/Deleted`, `MessageUpgradedGiftPurchaseOfferRejected` were missing from `TGMessage.valueOf` and threw in `ContentPreview` (reachable from chat-list rendering). **Fixed** in commit `7926f673d` — routed to the unsupported placeholder. (S)
-- [ ] **Mini app phone-number privacy leak.** `phone_requested` injects the raw phone number into webview JS instead of sharing the contact via `SharePhoneNumber(botUserId)`. `WebAppController.java:539`. (S) — security
-- [ ] **Mini app clipboard read is unconditional.** `web_app_read_text_from_clipboard` hands clipboard to any mini app; should be gated on `trustedMiniAppBotUserIds` (stored but no getter/consumer). `WebAppController.java:1276`, `Tdlib.java:502`. (S) — security
-- [ ] **Mini app "secure" storage is plaintext SharedPreferences, keyed by botUserId only (not account).** Cross-account leakage; restore gated only by an in-memory boolean. `WebAppController.java:1672-1777`. (M) — security
-- [ ] **`requireSameOrigin` not enforced — zero origin validation on `postEvent`.** TDLib now returns `WebAppUrl{url, requireSameOrigin}`; 5 plumbing TODO sites. Needs `Args.requireSameOrigin` + top-level origin check in `WebAppProxy`, ideally `WebViewCompat.addWebMessageListener` for frame safety. `WebAppProxy`, `TGInlineKeyboard.java:1163`, `TdlibUi.java:8111/8181`, `MessagesController.java:7778/8160`. (S+M) — security
+- [x] **Mini app phone-number privacy leak.** Now shares the contact via `SharePhoneNumber` and emits only the status. **Fixed** `fdb4677de`. (S) — security
+- [x] **Mini app clipboard read is unconditional.** Gated on `Tdlib.isTrustedMiniAppBot`. **Fixed** `fdb4677de`. (S) — security
+- [x] **Mini app "secure" storage plaintext + cross-account.** AES-256-GCM Keystore encryption (`WebAppSecureStorage`) + account-namespaced prefs. **Fixed** `fdb4677de`. (M) — security
+- [x] **`requireSameOrigin` not enforced.** Plumbed into `Args` from all 5 launch sites; `WebAppProxy` drops cross-origin `postEvent`. **Fixed** `fdb4677de`. (S+M) — security
+  - Note: top-level origin check only; iframe-level isolation (androidx `WebViewCompat.addWebMessageListener`) still open as a hardening follow-up.
 
 ## P1 — High-visibility correctness / parity
 
-- [ ] **`updateForumTopic` drops the new `unreadPollVoteCount` field.** Cache keeps a stale value forever; listener chain and UI appliers don't carry it either. `Tdlib.java:8583-8589`, `ForumTopicInfoListener.java:14`, `TdlibListeners.java:1317`. (S)
-- [ ] **Mini app viewport/safe-area emitted in device px, not CSS px.** Breaks the CSS layout of essentially every real mini app on hi-dpi devices. `WebAppController.java:1155-1174`. (S)
-- [ ] **Mini app `WebAppOpenMode` ignored** (compact half-sheet / fullscreen render as plain full-size). `WebAppController.java:107-135`. (M)
+- [x] **`updateForumTopic` drops the new `unreadPollVoteCount` field.** Cache copy now carries it. **Fixed** (listener-param plumbing deferred until a poll-vote badge consumes it). (S)
+- [x] **Mini app viewport/safe-area emitted in device px, not CSS px.** Now converted via `toCssPx` in viewport + both safe-area senders. **Fixed**. (S)
+- [x] **Mini app `WebAppOpenMode` fullscreen ignored.** Fullscreen-on-open honored in `onWebAppReady`. **Fixed** (compact half-sheet still open). (M)
 - [ ] **Mini app secondary button left/right overlap** (both MATCH_PARENT). `WebAppController.java:676`. (S)
 - [ ] **`web_app_send_prepared_message` / `web_app_share_message` hard-fail on a stale premise.** TDLib now has `GetPreparedInlineMessage`; implement fetch → filtered chat picker → `SendInlineQueryResultMessage`. `WebAppProxy.java:569`. (M)
 - [ ] **Inline keyboard `ButtonStyle` (Default/Primary/Danger/Success) + `iconCustomEmojiId` not rendered.** Styled bot buttons show as plain. `TGInlineKeyboard.java`. (M)
-- [ ] **No mention ("@") badge in forum topic rows** (tracked through the pipeline, never drawn); `unreadPollVoteCount` also unsurfaced. `ForumTopicView.java:82-83`. (S)
-- [ ] **Story deep links dead.** `InternalLinkTypeStory/LiveStory/StoryAlbum` → "unsupported" tooltip despite a working story viewer. `TdlibUi.java:3789-3791`. (M)
+- [x] **No mention ("@") badge in forum topic rows.** Added `mentionCounter` with the `@` icon. **Fixed**. (S)
+- [x] **Story deep links dead.** `InternalLinkTypeStory` now resolves the poster and opens the viewer. **Fixed** (LiveStory/StoryAlbum still need their own viewers). (M)
 - [ ] **Open story viewer never live-refreshes.** `StoryListener` (updateStory/Deleted/StealthMode/PostSucceeded/Failed) has zero implementors. (M)
 - [ ] **Shared story in chat (`MessageStory`) renders as a service text line**, not a tappable preview card. (M)
 - [ ] **Forum topic sort ignores draft-date influence in `order`** (TDLib contract: sort by `order` desc). `ForumTopicsController.java:1870`. (S)
