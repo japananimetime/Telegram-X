@@ -1776,6 +1776,12 @@ public class TdlibListeners {
     );
   }
 
+  void updateAvailableMessageEffects (TdApi.UpdateAvailableMessageEffects update) {
+    runUpdate(optionListeners, listener ->
+      listener.onAvailableMessageEffectsChanged(update.reactionEffectIds, update.stickerEffectIds)
+    );
+  }
+
   void updateSpeedLimitNotification (TdApi.UpdateSpeedLimitNotification update) {
     runUpdate(optionListeners, listener ->
       listener.onSpeedLimitNotification(update.isUpload)

@@ -474,6 +474,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private TdApi.StarAmount ownedStarCount;
   private long ownedTonCount;
 
+  private long[] availableReactionEffectIds = new long[0];
+  private long[] availableStickerEffectIds = new long[0];
+
   private int storyStealthModeActiveUntilDate, storyStealthModeCooldownUntilDate;
 
   private @Nullable TdApi.SavedMessagesTags savedMessagesTags;
@@ -10076,7 +10079,34 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateAvailableMessageEffects (TdApi.UpdateAvailableMessageEffects update) {
-    // TODO(message-effects)
+    synchronized (dataLock) {
+      this.availableReactionEffectIds = update.reactionEffectIds != null ? update.reactionEffectIds : new long[0];
+      this.availableStickerEffectIds = update.stickerEffectIds != null ? update.stickerEffectIds : new long[0];
+    }
+    listeners.updateAvailableMessageEffects(update);
+  }
+
+  /** Reaction-based message-effect ids advertised by TDLib (UpdateAvailableMessageEffects). */
+  public long[] availableReactionEffectIds () {
+    synchronized (dataLock) {
+      return availableReactionEffectIds;
+    }
+  }
+
+  /** Sticker-based message-effect ids advertised by TDLib (UpdateAvailableMessageEffects). */
+  public long[] availableStickerEffectIds () {
+    synchronized (dataLock) {
+      return availableStickerEffectIds;
+    }
+  }
+
+  /** Resolves a message effect (icon/animation/premium flag) by id; see TdApi.GetMessageEffect. */
+  public void getMessageEffect (long effectId, RunnableData<TdApi.MessageEffect> callback) {
+    send(new TdApi.GetMessageEffect(effectId), (effect, error) -> {
+      if (callback != null) {
+        callback.runWithData(error != null ? null : effect);
+      }
+    });
   }
 
   @TdlibThread

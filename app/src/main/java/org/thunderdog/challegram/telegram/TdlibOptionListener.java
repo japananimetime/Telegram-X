@@ -27,6 +27,7 @@ public interface TdlibOptionListener {
   default void onTonRevenueStatusUpdated (TdApi.TonRevenueStatus status) { }
   default void onOwnedStarCountChanged (TdApi.StarAmount starAmount) { }
   default void onOwnedTonCountChanged (long tonAmount) { }
+  default void onAvailableMessageEffectsChanged (long[] reactionEffectIds, long[] stickerEffectIds) { }
   default void onSpeedLimitNotification (boolean isUpload)                                              { }
   default void onContactCloseBirthdayUsersChanged (TdApi.CloseBirthdayUser[] birthdayUsers) { }
   default void onArchiveAndMuteChatsFromUnknownUsersEnabled (boolean enabled) { }
