@@ -683,7 +683,8 @@ public class StoryViewController extends ViewController<StoryViewController.Args
 
     // Display caption if present
     if (story.caption != null && story.caption.text != null && !story.caption.text.isEmpty()) {
-      captionView.setText(story.caption.text);
+      // Render entities (bold/italic/spoiler/code/links), not just the raw text.
+      captionView.setText(TD.toCharSequence(story.caption));
       captionView.setVisibility(View.VISIBLE);
       // Adjust caption bottom margin based on reply input visibility
       FrameLayoutFix.LayoutParams captionParams = (FrameLayoutFix.LayoutParams) captionView.getLayoutParams();
@@ -1947,7 +1948,9 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       return;
     }
 
-    TdApi.FormattedText caption = new TdApi.FormattedText(newCaption, new TdApi.TextEntity[0]);
+    // Preserve entities (links/mentions) instead of sending plain text.
+    TdApi.FormattedText parsedCaption = StoryPreviewController.buildCaption(newCaption);
+    final TdApi.FormattedText caption = parsedCaption != null ? parsedCaption : new TdApi.FormattedText("", new TdApi.TextEntity[0]);
     tdlib.client().send(new TdApi.EditStory(currentChatId, currentStoryId, null, null, caption), result -> {
       runOnUiThreadOptional(() -> {
         if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {

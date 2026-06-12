@@ -24,6 +24,7 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
@@ -389,6 +390,20 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
 
   private static final String TAG = "StoryPreview";
 
+  /** Builds a caption with auto-detected entities (URLs, mentions, hashtags) so links aren't lost. */
+  static TdApi.FormattedText buildCaption (String text) {
+    if (StringUtils.isEmpty(text)) {
+      return null;
+    }
+    String trimmed = text.trim();
+    TdApi.TextEntity[] entities = null;
+    try {
+      TdApi.TextEntities result = Client.execute(new TdApi.GetTextEntities(trimmed));
+      entities = result.entities;
+    } catch (Client.ExecutionException ignored) { }
+    return new TdApi.FormattedText(trimmed, entities != null ? entities : new TdApi.TextEntity[0]);
+  }
+
   private void postStory () {
     Args args = getArgumentsStrict();
     String filePath = args.filePath;
@@ -464,8 +479,7 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
     UI.showToast(R.string.StoryPosting, Toast.LENGTH_SHORT);
 
     final int finalDuration = duration;
-    final TdApi.FormattedText caption = StringUtils.isEmpty(captionText) ? null :
-      new TdApi.FormattedText(captionText.trim(), new TdApi.TextEntity[0]);
+    final TdApi.FormattedText caption = buildCaption(captionText);
     tdlib.client().send(new TdApi.PostStory(
       chatId,
       content,
