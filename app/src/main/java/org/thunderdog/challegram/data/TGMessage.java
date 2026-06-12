@@ -9817,21 +9817,60 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public void confirmPaidReaction (View v, TGReaction reaction) {
-    final long starCount = 1;
     final TdApi.PaidReactionType type = tdlib.defaultPaidReaction();
+    // Amount picker: presets + a custom amount (id -1). The amount doubles as the
+    // option id (distinct small ints don't collide with R.id resource values).
     messagesController().showOptions(
-      Lang.getString(R.string.PaidReactionConfirm, (int) starCount),
-      new int[] {R.id.btn_sendPaidReaction, R.id.btn_cancel},
-      new String[] {Lang.getString(R.string.PaidReactionSend), Lang.getString(R.string.Cancel)},
-      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
-      new int[] {R.drawable.baseline_favorite_24, R.drawable.baseline_cancel_24},
+      Lang.getString(R.string.PaidReactionChoose),
+      new int[] {1, 5, 10, 50, -1},
+      new String[] {
+        Lang.plural(R.string.xStars, 1),
+        Lang.plural(R.string.xStars, 5),
+        Lang.plural(R.string.xStars, 10),
+        Lang.plural(R.string.xStars, 50),
+        Lang.getString(R.string.PaidReactionCustom)
+      },
+      null,
+      new int[] {
+        R.drawable.baseline_favorite_24, R.drawable.baseline_favorite_24,
+        R.drawable.baseline_favorite_24, R.drawable.baseline_favorite_24,
+        R.drawable.baseline_edit_24
+      },
       (itemView, id) -> {
-        if (id == R.id.btn_sendPaidReaction) {
-          scheduleSetReactionAnimation(new NextReactionAnimation(reaction, NextReactionAnimation.TYPE_CLICK));
-          messageReactions.sendPaidReaction(starCount, type, handler(v, null, () -> {}));
+        if (id == -1) {
+          promptCustomPaidReactionAmount(v, reaction, type);
+        } else {
+          sendPaidReactionAmount(v, reaction, id, type);
         }
         return true;
       });
+  }
+
+  private void promptCustomPaidReactionAmount (View v, TGReaction reaction, TdApi.PaidReactionType type) {
+    messagesController().openInputAlert(
+      Lang.getString(R.string.PaidReactionCustom),
+      Lang.getString(R.string.PaidReactionAmountHint),
+      R.string.Send, R.string.Cancel, "1",
+      (inputView, result) -> {
+        long amount;
+        try {
+          amount = Long.parseLong(result != null ? result.trim() : "");
+        } catch (NumberFormatException e) {
+          amount = 0;
+        }
+        if (amount < 1) {
+          return false; // invalid — keep the dialog open
+        }
+        sendPaidReactionAmount(v, reaction, amount, type);
+        return true;
+      },
+      false
+    );
+  }
+
+  private void sendPaidReactionAmount (View v, TGReaction reaction, long amount, TdApi.PaidReactionType type) {
+    scheduleSetReactionAnimation(new NextReactionAnimation(reaction, NextReactionAnimation.TYPE_CLICK));
+    messageReactions.sendPaidReaction(amount, type, handler(v, null, () -> {}));
   }
 
   private void showReactionBubbleTooltip (View v, TGReactions.MessageReactionEntry entry, String text) {
