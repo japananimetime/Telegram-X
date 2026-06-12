@@ -76,11 +76,17 @@ Severity: **P0** = crash / security / data-loss / "looks done but isn't". **P1**
 > 16 service-message types now render as grey pills instead of red "unsupported"
 > (c47c13f82); chat-list previews for story/gift/service messages (76cdb97bc);
 > fact-check display (9d1fe85f6); AI message summaries (1e03e781b); voice/video-note
-> transcription (425b5849a).
-> REMAINING named — message effects only (needs available-effects store +
-> compose-time picker + send-effect playback animation; the largest of the batch).
-> Also still open: unread poll-vote badge, unconfirmed-session warning, live
-> accent-color/emoji-status redraw, paid-media / checklist / group-call bubble renderers.
+> transcription (425b5849a); live accent-color/emoji-status redraw in open chat
+> (456d77351); message-effects **foundation** (34cacabf8 — store available effects +
+> accessors + GetMessageEffect resolver + listener).
+> REMAINING for message effects (the big multi-part feature): (1) compose-time effect
+> **picker** UI; (2) thread `effectId` through `MessageSendOptions` on send — no single
+> chokepoint, ~20 `Td.newSendOptions(...)` call sites across text/media/content paths;
+> (3) **playback** of the effect animation on the bubble (resolve via getMessageEffect
+> → play sticker over the message, reusing reactionsOverlayManager).
+> Other still-open stubs (each needs a dedicated UI widget, not a quick wire-up):
+> unread poll-vote **badge** (forum-topic UI), unconfirmed-session security **banner**
+> (chat-list), paid-media / checklist / group-call **bubble renderers**.
 
 **Cheap, high-value (S):**
 - **Stars/TON balance live** — `UpdateOwnedStarCount`/`UpdateOwnedTonCount` empty stubs; gifts/payments shipped but balance is stale. `Tdlib.java:9837,9841`.
