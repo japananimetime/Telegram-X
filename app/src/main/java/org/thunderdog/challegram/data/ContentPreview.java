@@ -590,6 +590,27 @@ public class ContentPreview {
         TdApi.FormattedText formatted = TD.toFormattedText(text, false);
         return new ContentPreview(EMOJI_STARS, 0, formatted, true);
       }
+      case TdApi.MessageUpgradedGift.CONSTRUCTOR: {
+        TdApi.MessageUpgradedGift upgradedGift = (TdApi.MessageUpgradedGift) message.content;
+        String title = upgradedGift.gift != null ? upgradedGift.gift.title : null;
+        String text = StringUtils.isEmpty(title) ? Lang.getString(R.string.GiftUpgraded) : title;
+        return new ContentPreview(EMOJI_GIFT, 0, text, true);
+      }
+      case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.RefundedGift), true);
+      }
+      case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.UpgradedGiftPurchaseOffer), true);
+      }
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR: {
+        TdApi.MessageUpgradedGiftPurchaseOfferRejected rejected = (TdApi.MessageUpgradedGiftPurchaseOfferRejected) message.content;
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(rejected.wasExpired ? R.string.UpgradedGiftOfferExpired : R.string.UpgradedGiftOfferRejected), true);
+      }
+      case TdApi.MessageGiftedTon.CONSTRUCTOR: {
+        TdApi.MessageGiftedTon giftedTon = (TdApi.MessageGiftedTon) message.content;
+        String amount = GiftRarityUtil.formatTon(giftedTon.tonAmount, 9);
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.GiftedTonAmount, amount), true);
+      }
       case TdApi.MessageGiveaway.CONSTRUCTOR: {
         TdApi.MessageGiveaway giveaway = (TdApi.MessageGiveaway) message.content;
         String text;
@@ -716,8 +737,6 @@ public class ContentPreview {
       case TdApi.MessageChatDeletePhoto.CONSTRUCTOR:
       case TdApi.MessageGiveawayCreated.CONSTRUCTOR:
       case TdApi.MessageGift.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGift.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
       case TdApi.MessageVideoChatStarted.CONSTRUCTOR:
       case TdApi.MessageGroupCall.CONSTRUCTOR:
       case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
@@ -770,9 +789,7 @@ public class ContentPreview {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-      case TdApi.MessageGiftedTon.CONSTRUCTOR:
       case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
       case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
       case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
       case TdApi.MessageManagedBotCreated.CONSTRUCTOR:

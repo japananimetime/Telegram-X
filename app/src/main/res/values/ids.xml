@@ -113,6 +113,7 @@
   <item type="id" name="more_btn_markAsUnread" />
   <item type="id" name="more_btn_openReadReceipts" />
   <item type="id" name="more_btn_createStory" />
+  <item type="id" name="more_btn_sendGift" />
 
   <item type="id" name="login_phone" />
   <item type="id" name="login_code" />
@@ -230,6 +231,14 @@
   <item type="id" name="controller_messageSeen" />
   <item type="id" name="controller_joinDialog" />
   <item type="id" name="controller_giftDialog" />
+  <item type="id" name="controller_gifts" />
+  <item type="id" name="controller_giftPicker" />
+  <item type="id" name="controller_giftSettings" />
+  <item type="id" name="controller_upgradedGift" />
+  <item type="id" name="controller_giftResale" />
+  <item type="id" name="controller_giftAuctions" />
+  <item type="id" name="controller_giftAuction" />
+  <item type="id" name="controller_giftCraft" />
   <item type="id" name="controller_storyView" />
   <item type="id" name="controller_storyCompose" />
   <item type="id" name="controller_storyViewers" />
@@ -447,6 +456,61 @@
   <item type="id" name="btn_reactionSelector" />
   <item type="id" name="btn_description" />
   <item type="id" name="btn_profileNote" />
+  <item type="id" name="btn_gifts" />
+  <item type="id" name="btn_giftToggleSaved" />
+  <item type="id" name="btn_giftTogglePinned" />
+  <item type="id" name="btn_giftSettings" />
+  <item type="id" name="btn_giftSend" />
+  <item type="id" name="btn_giftIsPrivate" />
+  <item type="id" name="btn_giftPayForUpgrade" />
+  <item type="id" name="btn_giftSell" />
+  <item type="id" name="btn_giftShowButton" />
+  <item type="id" name="btn_giftAcceptUnlimited" />
+  <item type="id" name="btn_giftAcceptLimited" />
+  <item type="id" name="btn_giftAcceptUpgraded" />
+  <item type="id" name="btn_giftAcceptChannels" />
+  <item type="id" name="btn_giftAcceptPremium" />
+  <item type="id" name="btn_giftUpgrade" />
+  <item type="id" name="btn_giftTransfer" />
+  <item type="id" name="btn_giftWear" />
+  <item type="id" name="btn_giftExport" />
+  <item type="id" name="btn_giftDropDetails" />
+  <item type="id" name="btn_giftKeepOriginalDetails" />
+  <item type="id" name="btn_giftResaleBrowse" />
+  <item type="id" name="btn_giftResaleList" />
+  <item type="id" name="btn_giftResaleChangePrice" />
+  <item type="id" name="btn_giftResaleUnlist" />
+  <item type="id" name="btn_giftResaleBuy" />
+  <item type="id" name="btn_giftResaleSortPrice" />
+  <item type="id" name="btn_giftResaleSortNumber" />
+  <item type="id" name="btn_giftResaleSortDate" />
+  <item type="id" name="btn_giftResaleFilterModel" />
+  <item type="id" name="btn_giftResaleFilterSymbol" />
+  <item type="id" name="btn_giftResaleFilterBackdrop" />
+  <item type="id" name="btn_giftResaleFilterItem" />
+  <item type="id" name="btn_giftResaleClearFilter" />
+  <item type="id" name="btn_giftOfferDurationItem" />
+  <item type="id" name="btn_giftMakeOffer" />
+  <item type="id" name="btn_giftOfferRespond" />
+  <item type="id" name="btn_giftOfferAccept" />
+  <item type="id" name="btn_giftOfferReject" />
+  <item type="id" name="btn_giftPriceStars" />
+  <item type="id" name="btn_giftPriceTon" />
+  <item type="id" name="btn_giftAuctionPlaceBid" />
+  <item type="id" name="btn_giftAuctionRaiseBid" />
+  <item type="id" name="btn_giftAuctionFragment" />
+  <item type="id" name="btn_giftCollectionCreate" />
+  <item type="id" name="btn_giftCollectionRename" />
+  <item type="id" name="btn_giftCollectionDelete" />
+  <item type="id" name="btn_giftCollectionAddTo" />
+  <item type="id" name="btn_giftCollectionRemoveFrom" />
+  <item type="id" name="btn_giftCollectionItem" />
+  <item type="id" name="btn_giftCollectionMoveLeft" />
+  <item type="id" name="btn_giftCollectionMoveRight" />
+  <item type="id" name="btn_giftCollectionGiftMoveLeft" />
+  <item type="id" name="btn_giftCollectionGiftMoveRight" />
+  <item type="id" name="btn_giftCraft" />
+  <item type="id" name="btn_giftCraftSetPrimary" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />
@@ -577,6 +641,7 @@
   <item type="id" name="controller_premium" />
   <item type="id" name="controller_stars" />
   <item type="id" name="controller_starTransactions" />
+  <item type="id" name="controller_tonTransactions" />
   <item type="id" name="btn_buyStars" />
   <item type="id" name="btn_starOption" />
   <item type="id" name="btn_starTransactions" />

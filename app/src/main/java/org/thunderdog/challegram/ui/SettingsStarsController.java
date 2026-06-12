@@ -157,6 +157,12 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
     // Transaction history link
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_starTransactions, R.drawable.baseline_history_24, R.string.StarTransactions));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    // Gift auctions the user is participating in (Slice 6)
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.controller_giftAuctions, R.drawable.baseline_gavel_24, R.string.GiftAuctions));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    // TON transaction history (Slice 9)
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.controller_tonTransactions, R.drawable.baseline_history_24, R.string.TonTransactions));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     // Payment options
@@ -202,18 +208,18 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
       }
     } else if (viewId == R.id.btn_starTransactions) {
       openTransactionHistory();
+    } else if (viewId == R.id.controller_giftAuctions) {
+      GiftAuctionsController.open(this, tdlib);
+    } else if (viewId == R.id.controller_tonTransactions) {
+      navigateTo(new TonTransactionsController(context(), tdlib));
     }
   }
 
   private void purchaseStars(TdApi.StarPaymentOption option) {
-    if (!StringUtils.isEmpty(option.storeProductId)) {
-      // Store purchase - not supported in this build
-      UI.showToast(R.string.PremiumStorePaymentNotAvailable, Toast.LENGTH_SHORT);
-    } else {
-      // Out-of-store purchase via Fragment/TON
-      // This would require TelegramPaymentPurposeStars and createInvoiceLink
-      UI.showToast(R.string.PremiumPaymentUnavailable, Toast.LENGTH_SHORT);
-    }
+    // This build has no Google Play Billing, so buy Stars out-of-store via a Telegram
+    // payment form (card) regardless of any storeProductId. Buying Stars is a regular
+    // payment, so PaymentFormController handles the card UI.
+    tdlib.ui().openStarsPurchase(this, option);
   }
 
   private void openTransactionHistory() {

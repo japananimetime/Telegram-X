@@ -3863,15 +3863,46 @@ public class TdlibUi extends Handler {
         break;
       }
 
+      case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeGiftAuction giftAuctionLink = (TdApi.InternalLinkTypeGiftAuction) linkType;
+        org.thunderdog.challegram.navigation.ViewController<?> current = context.context().navigation() != null ? context.context().navigation().getCurrentStackItem() : null;
+        if (current != null) {
+          org.thunderdog.challegram.ui.GiftAuctionController.openById(current, tdlib, giftAuctionLink.auctionId);
+          if (after != null) {
+            post(() -> after.runWithBool(true));
+          }
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        }
+        break;
+      }
+
+      case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeGiftCollection giftCollectionLink = (TdApi.InternalLinkTypeGiftCollection) linkType;
+        openGiftCollectionLink(context, giftCollectionLink, openParameters, after);
+        break;
+      }
+
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:
       case TdApi.InternalLinkTypePremiumGiftPurchase.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatAffiliateProgram.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeUpgradedGift.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePassportDataRequest.CONSTRUCTOR: {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        break;
+      }
+
+      case TdApi.InternalLinkTypeUpgradedGift.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeUpgradedGift upgradedGiftLink = (TdApi.InternalLinkTypeUpgradedGift) linkType;
+        org.thunderdog.challegram.navigation.ViewController<?> current = context.context().navigation() != null ? context.context().navigation().getCurrentStackItem() : null;
+        if (current != null) {
+          org.thunderdog.challegram.ui.UpgradedGiftController.openByName(current, tdlib, upgradedGiftLink.name);
+          if (after != null) {
+            post(() -> after.runWithBool(true));
+          }
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        }
         break;
       }
 
@@ -3998,6 +4029,53 @@ public class TdlibUi extends Handler {
     if (after != null) {
       after.runWithBool(ok);
     }
+  }
+
+  // Slice 7: resolve internalLinkTypeGiftCollection by searching the owner's
+  // public username, then open the received-gifts surface pre-filtered to the
+  // collection id. Mirrors the SearchPublicChat resolution used by slices 4/5.
+  private void openGiftCollectionLink (TdlibDelegate context, TdApi.InternalLinkTypeGiftCollection link, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
+    String username = link.giftOwnerUsername;
+    if (username != null) {
+      username = username.trim();
+      if (username.startsWith("@")) {
+        username = username.substring(1);
+      }
+    }
+    if (StringUtils.isEmpty(username)) {
+      showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+      if (after != null) {
+        post(() -> after.runWithBool(false));
+      }
+      return;
+    }
+    final int collectionId = link.collectionId;
+    tdlib.send(new TdApi.SearchPublicChat(username), (chat, error) -> post(() -> {
+      org.thunderdog.challegram.navigation.ViewController<?> current = context.context().navigation() != null ? context.context().navigation().getCurrentStackItem() : null;
+      if (error != null || chat == null || current == null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, error != null ? TD.toErrorString(error) : Lang.getString(R.string.GiftCollectionNotFound), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      final TdApi.MessageSender ownerId;
+      final boolean isSelf;
+      TdApi.User user = tdlib.chatUser(chat);
+      if (user != null) {
+        ownerId = new TdApi.MessageSenderUser(user.id);
+        isSelf = tdlib.isSelfUserId(user.id);
+      } else {
+        ownerId = new TdApi.MessageSenderChat(chat.id);
+        isSelf = false;
+      }
+      org.thunderdog.challegram.ui.GiftsController c = new org.thunderdog.challegram.ui.GiftsController(current.context(), tdlib);
+      c.setArguments(new org.thunderdog.challegram.ui.GiftsController.Args(ownerId, isSelf).setInitialCollectionId(collectionId));
+      current.context().navigation().navigateTo(c);
+      if (after != null) {
+        after.runWithBool(true);
+      }
+    }));
   }
 
   private boolean openSettingsSection (TdlibDelegate context, @Nullable TdApi.SettingsSection section, @Nullable UrlOpenParameters openParameters) {
@@ -8074,6 +8152,66 @@ public class TdlibUi extends Handler {
         }
       });
     });
+  }
+
+  // Buying Telegram Stars (top-up)
+
+  /**
+   * Opens a payment form to buy the Stars described by {@code option}. This build has no
+   * Google Play Billing, so the purchase always goes through a Telegram payment form (card)
+   * via {@link TdApi.TelegramPaymentPurposeStars}, regardless of any {@code storeProductId}.
+   */
+  public void openStarsPurchase (ViewController<?> context, TdApi.StarPaymentOption option) {
+    TdApi.TelegramPaymentPurposeStars purpose = new TdApi.TelegramPaymentPurposeStars(option.currency, option.amount, option.starCount, 0);
+    openTelegramPaymentForm(context, new TdApi.InputInvoiceTelegram(purpose));
+  }
+
+  /** Loads and opens a payment form for an arbitrary Telegram input invoice. */
+  public void openTelegramPaymentForm (ViewController<?> context, TdApi.InputInvoice inputInvoice) {
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (result, error) -> UI.post(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        openPaymentForm(context, (TdApi.PaymentForm) result, inputInvoice);
+      }
+    }));
+  }
+
+  /** True if {@code error} indicates the user lacks enough Stars to complete the action. */
+  public static boolean isStarsBalanceLowError (@Nullable TdApi.Error error) {
+    if (error == null || error.message == null) {
+      return false;
+    }
+    String m = error.message;
+    return m.equals("BALANCE_TOO_LOW") || m.contains("not enough stars") || m.contains("STARS_BALANCE_TOO_LOW");
+  }
+
+  /**
+   * If {@code error} is an insufficient-Stars-balance error, prompts the user to buy more Stars
+   * (opening the Stars screen seeded with {@code requiredStarCount}) and returns true. Otherwise
+   * returns false, and the caller should surface the error itself.
+   */
+  public boolean showStarsBalanceLowPrompt (ViewController<?> context, @Nullable TdApi.Error error, long requiredStarCount) {
+    if (!isStarsBalanceLowError(error)) {
+      return false;
+    }
+    context.showOptions(
+      Lang.getString(R.string.GiftStarsTooLow),
+      new int[] {R.id.btn_buyStars, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.BuyStars), Lang.getString(R.string.Cancel)},
+      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_star_24, R.drawable.baseline_cancel_24},
+      (view, optionId) -> {
+        if (optionId == R.id.btn_buyStars) {
+          SettingsStarsController starsController = new SettingsStarsController(context.context(), tdlib);
+          starsController.setArguments(new SettingsStarsController.Args(requiredStarCount, "gift"));
+          context.navigateTo(starsController);
+        }
+        return true;
+      }
+    );
+    return true;
   }
 
   public void openPaymentForm (TdlibDelegate context, String invoiceName, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
