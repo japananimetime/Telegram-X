@@ -238,6 +238,7 @@
   <item type="id" name="controller_giftResale" />
   <item type="id" name="controller_giftAuctions" />
   <item type="id" name="controller_giftAuction" />
+  <item type="id" name="controller_giftCraft" />
   <item type="id" name="controller_storyView" />
   <item type="id" name="controller_storyCompose" />
   <item type="id" name="controller_storyViewers" />
@@ -495,6 +496,8 @@
   <item type="id" name="btn_giftCollectionAddTo" />
   <item type="id" name="btn_giftCollectionRemoveFrom" />
   <item type="id" name="btn_giftCollectionItem" />
+  <item type="id" name="btn_giftCraft" />
+  <item type="id" name="btn_giftCraftSetPrimary" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />
