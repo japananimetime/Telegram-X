@@ -72,6 +72,16 @@ Severity: **P0** = crash / security / data-loss / "looks done but isn't". **P1**
 
 ## TDLib parity gaps (functional, prioritized by visibility ÷ effort)
 
+> **Cheap-wins progress (2026-06-13):** DONE — live Stars/TON balance (58bfd4471);
+> 16 service-message types now render as grey pills instead of red "unsupported"
+> (c47c13f82); chat-list previews for story/gift/service messages (76cdb97bc);
+> fact-check display (9d1fe85f6); AI message summaries (1e03e781b).
+> REMAINING named — voice-to-text (needs in-bubble transcription rendering with
+> pending/error states) and message effects (needs effects picker + send animation);
+> both heavier, deferred to a focused pass. Also still open: unread poll-vote badge,
+> unconfirmed-session warning, live accent-color/emoji-status redraw, paid-media /
+> checklist / group-call bubble renderers.
+
 **Cheap, high-value (S):**
 - **Stars/TON balance live** — `UpdateOwnedStarCount`/`UpdateOwnedTonCount` empty stubs; gifts/payments shipped but balance is stale. `Tdlib.java:9837,9841`.
 - **`MessageStory` / `MessageGiftedTon` chat-list previews** still return `UnsupportedMessage` though bubbles render. `ContentPreview.java:1614,1637`.
