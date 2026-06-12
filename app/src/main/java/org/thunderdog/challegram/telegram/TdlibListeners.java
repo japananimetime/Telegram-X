@@ -287,6 +287,12 @@ public class TdlibListeners {
     }
   }
 
+  void updateUnconfirmedSession (Tdlib tdlib, @Nullable TdApi.UnconfirmedSession session, int unconfirmedSessionCount) {
+    for (SessionListener listener : sessionListeners) {
+      listener.onUnconfirmedSessionChanged(tdlib, session, unconfirmedSessionCount);
+    }
+  }
+
   @AnyThread
   public void addCleanupListener (CleanupStartupDelegate listener) {
     componentDelegates.add(listener);

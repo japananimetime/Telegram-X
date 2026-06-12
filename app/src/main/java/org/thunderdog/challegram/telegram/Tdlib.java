@@ -9217,9 +9217,36 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     });
   }
 
+  private TdApi.UnconfirmedSession unconfirmedSession;
+  private int unconfirmedSessionCount;
+
   @TdlibThread
   private void updateUnconfirmedSession (TdApi.UpdateUnconfirmedSession update) {
-    // TODO
+    final boolean isNew;
+    synchronized (dataLock) {
+      isNew = update.session != null && this.unconfirmedSession == null;
+      this.unconfirmedSession = update.session;
+      this.unconfirmedSessionCount = update.unconfirmedSessionCount;
+    }
+    listeners.updateUnconfirmedSession(this, update.session, update.unconfirmedSessionCount);
+    if (isNew && update.session != null) {
+      // Security-relevant: alert the user to a new login they haven't confirmed.
+      ui().post(() -> UI.showToast(Lang.getString(R.string.UnconfirmedSessionAlert,
+        update.session.deviceModel, update.session.location), Toast.LENGTH_LONG));
+    }
+  }
+
+  @Nullable
+  public TdApi.UnconfirmedSession unconfirmedSession () {
+    synchronized (dataLock) {
+      return unconfirmedSession;
+    }
+  }
+
+  public int unconfirmedSessionCount () {
+    synchronized (dataLock) {
+      return unconfirmedSessionCount;
+    }
   }
 
   // Updates: FILES

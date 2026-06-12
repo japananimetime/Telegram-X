@@ -6206,6 +6206,9 @@
   <string name="ServiceGroupCallEndedDuration">Video chat ended · %1$s</string>
   <string name="VideoChat">Video chat</string>
   <string name="Checklist">Checklist</string>
+  <string name="UnconfirmedSessionAlert">New login: %1$s · %2$s. If this wasn\'t you, open Settings › Devices to end the session.</string>
+  <string name="UnconfirmedSessionWarning">A new device signed in — review it below and terminate it if it wasn\'t you.</string>
+  <string name="UnconfirmedSessionDevice">New login: %1$s · %2$s</string>
 
   <!-- Chat-list previews -->
   <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>

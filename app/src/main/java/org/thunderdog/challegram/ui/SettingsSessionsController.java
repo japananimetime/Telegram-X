@@ -23,6 +23,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.collection.LongSparseArray;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -83,6 +84,15 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
     }
 
     ArrayList<ListItem> items = new ArrayList<>();
+
+    TdApi.UnconfirmedSession unconfirmed = tdlib.unconfirmedSession();
+    if (unconfirmed != null) {
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0,
+        Lang.getString(R.string.UnconfirmedSessionDevice, unconfirmed.deviceModel, unconfirmed.location)).setTextColorId(ColorId.textNegative));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.UnconfirmedSessionWarning).setTextColorId(ColorId.textNegative));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
 
     if (tdlib.allowQrLoginCamera()) {
       items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_qrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.ScanQR).setTextColorId(ColorId.textNeutral));
@@ -353,6 +363,15 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
   @Override
   public void onSessionListChanged (Tdlib tdlib, boolean isWeakGuess) {
     requestActiveSessions();
+  }
+
+  @Override
+  public void onUnconfirmedSessionChanged (Tdlib tdlib, @Nullable TdApi.UnconfirmedSession session, int unconfirmedSessionCount) {
+    runOnUiThreadOptional(() -> {
+      if (sessions != null) {
+        buildCells();
+      }
+    });
   }
 
   @Override

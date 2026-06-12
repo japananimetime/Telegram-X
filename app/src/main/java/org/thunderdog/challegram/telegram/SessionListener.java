@@ -12,6 +12,8 @@
  */
 package org.thunderdog.challegram.telegram;
 
+import androidx.annotation.Nullable;
+
 import org.drinkless.tdlib.TdApi;
 
 public interface SessionListener {
@@ -28,4 +30,5 @@ public interface SessionListener {
   default void onInactiveSessionTtlChanged (Tdlib tdlib, int ttlDays) {
     onSessionListChanged(tdlib, false);
   }
+  default void onUnconfirmedSessionChanged (Tdlib tdlib, @Nullable TdApi.UnconfirmedSession session, int unconfirmedSessionCount) { }
 }
