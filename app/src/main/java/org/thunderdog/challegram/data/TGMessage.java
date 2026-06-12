@@ -5498,11 +5498,12 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int contentWidth = getContentWidth();
       updateMessageContent(message, newContent, isBottomMessage);
       message.content = newContent;
+      boolean footerChanged = checkSpeechRecognition();
       if (width != getWidth() || contentWidth != getContentWidth()) {
         buildMarkup();
       }
       updateReactionAvatars(UI.inUiThread());
-      return height == getHeight() ? MESSAGE_INVALIDATED : MESSAGE_CHANGED;
+      return (height == getHeight() && !footerChanged) ? MESSAGE_INVALIDATED : MESSAGE_CHANGED;
     }
     return MESSAGE_REPLACE_REQUIRED;
   }
@@ -7350,6 +7351,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         this.footerTitle = null;
         this.footerText = null;
       }
+      // The footer may be reclaimable by a voice/video-note transcription.
+      checkSpeechRecognition();
       return;
     }
     setFooter(Lang.getString(R.string.FactCheck), msg.factCheck.text.text, msg.factCheck.text.entities);
@@ -7364,6 +7367,81 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         rebuildAndUpdateContent();
       }
     });
+  }
+
+  // Voice/video-note speech recognition: the transcription is shown in the same
+  // footer slot as the fact-check (a voice note never carries both). Fact-check
+  // takes priority. The result is delivered asynchronously via UpdateMessageContent
+  // after recognizeSpeech(), so checkSpeechRecognition() re-runs on content change.
+  private boolean speechFooterShown;
+
+  @Nullable
+  private TdApi.SpeechRecognitionResult getSpeechRecognitionResult () {
+    switch (msg.content.getConstructor()) {
+      case TdApi.MessageVoiceNote.CONSTRUCTOR:
+        return ((TdApi.MessageVoiceNote) msg.content).voiceNote.speechRecognitionResult;
+      case TdApi.MessageVideoNote.CONSTRUCTOR:
+        return ((TdApi.MessageVideoNote) msg.content).videoNote.speechRecognitionResult;
+      default:
+        return null;
+    }
+  }
+
+  public final boolean canRecognizeSpeech () {
+    TdApi.SpeechRecognitionResult result = getSpeechRecognitionResult();
+    // Offer transcription for voice/video notes that don't already have final text.
+    switch (msg.content.getConstructor()) {
+      case TdApi.MessageVoiceNote.CONSTRUCTOR:
+      case TdApi.MessageVideoNote.CONSTRUCTOR:
+        return result == null || result.getConstructor() == TdApi.SpeechRecognitionResultError.CONSTRUCTOR;
+      default:
+        return false;
+    }
+  }
+
+  public final void recognizeSpeech () {
+    tdlib.send(new TdApi.RecognizeSpeech(msg.chatId, msg.id), (ok, error) -> {
+      if (error != null) {
+        runOnUiThreadOptional(() ->
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT)
+        );
+      }
+    });
+  }
+
+  protected final boolean checkSpeechRecognition () {
+    if (factCheckFooterShown) {
+      return false; // fact-check owns the footer
+    }
+    TdApi.SpeechRecognitionResult result = getSpeechRecognitionResult();
+    String text = null;
+    if (result != null) {
+      switch (result.getConstructor()) {
+        case TdApi.SpeechRecognitionResultText.CONSTRUCTOR:
+          text = ((TdApi.SpeechRecognitionResultText) result).text;
+          break;
+        case TdApi.SpeechRecognitionResultPending.CONSTRUCTOR: {
+          String partial = ((TdApi.SpeechRecognitionResultPending) result).partialText;
+          text = !StringUtils.isEmpty(partial) ? partial : Lang.getString(R.string.TranscriptionInProgress);
+          break;
+        }
+        case TdApi.SpeechRecognitionResultError.CONSTRUCTOR:
+          break; // leave the footer empty on error
+      }
+    }
+    boolean show = !StringUtils.isEmpty(text);
+    if (!show) {
+      if (speechFooterShown) {
+        speechFooterShown = false;
+        this.footerTitle = null;
+        this.footerText = null;
+        return true;
+      }
+      return false;
+    }
+    setFooter(Lang.getString(R.string.Transcription), text, null);
+    speechFooterShown = true;
+    return true;
   }
 
   protected final int getFooterTop () {
