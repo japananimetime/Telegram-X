@@ -29,6 +29,7 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.navigation.ViewController.OptionColor;
 import org.thunderdog.challegram.util.OptionDelegate;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.AttachDelegate;
@@ -193,6 +194,13 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         titles.add(Lang.getString(gift.isPinned ? R.string.GiftUnpin : R.string.GiftPin));
         icons.add(gift.isPinned ? R.drawable.deproko_baseline_pin_undo_24 : R.drawable.deproko_baseline_pin_24);
       }
+
+      // Convert (sell) a regular gift for Stars. Upgraded gifts can't be sold this way.
+      if (!isUpgraded && gift.sellStarCount > 0 && !gift.wasRefunded) {
+        ids.add(R.id.btn_giftSell);
+        titles.add(Lang.getString(R.string.ConvertGiftToStars));
+        icons.add(R.drawable.baseline_star_24);
+      }
       // TODO(Slice 4/5): Upgrade / Transfer / Resale actions.
     }
 
@@ -215,6 +223,8 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         toggleSaved(gift);
       } else if (id == R.id.btn_giftTogglePinned) {
         togglePinned(gift);
+      } else if (id == R.id.btn_giftSell) {
+        confirmSell(gift);
       }
       return true;
     };
@@ -313,6 +323,39 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         adapter.notifyItemChanged(index);
       }
       UI.showToast(shouldPin ? R.string.GiftPinnedToTop : R.string.GiftUnpinned, android.widget.Toast.LENGTH_SHORT);
+    }));
+  }
+
+  private void confirmSell (TdApi.ReceivedGift gift) {
+    if (gift == null || StringUtils.isEmpty(gift.receivedGiftId) || gift.sellStarCount <= 0) {
+      return;
+    }
+    showOptions(Lang.pluralBold(R.string.ConvertGiftConfirm, (int) gift.sellStarCount),
+      new int[] {R.id.btn_giftSell, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.ConvertGiftToStars), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.NORMAL, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_star_24, R.drawable.baseline_cancel_24},
+      (itemView, id) -> {
+        if (id == R.id.btn_giftSell) {
+          sellGift(gift);
+        }
+        return true;
+      });
+  }
+
+  private void sellGift (TdApi.ReceivedGift gift) {
+    final String id = gift.receivedGiftId;
+    tdlib.send(new TdApi.SellGift(null, id), (ok, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      int index = indexOfGift(id);
+      if (index != -1) {
+        gifts.remove(index);
+        adapter.notifyItemRemoved(index);
+      }
+      UI.showToast(R.string.GiftConvertedToStars, android.widget.Toast.LENGTH_SHORT);
     }));
   }
 

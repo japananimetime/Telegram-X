@@ -5731,6 +5731,35 @@
   <string name="GiftUnpinned">Unpinned</string>
   <string name="GiftPinFailed">Unable to pin this gift</string>
 
+  <!-- Sending gifts (Slice 3) -->
+  <string name="SendGift">Send a Gift</string>
+  <string name="GiftSoldOut">This gift is sold out</string>
+  <string name="GiftCannotSend">This gift can\'t be sent right now</string>
+  <string name="GiftMessageHint">Add a message (optional)</string>
+  <string name="MakePrivate">Hide my name and message</string>
+  <string name="PayForUpgradeStars_one">Pay %1$d Star to allow upgrade</string>
+  <string name="PayForUpgradeStars_other">Pay %1$d Stars to allow upgrade</string>
+  <string name="SendGiftConfirm_one">Send this gift for %1$d Star?</string>
+  <string name="SendGiftConfirm_other">Send this gift for %1$d Stars?</string>
+
+  <!-- Convert (sell) a received gift -->
+  <string name="ConvertGiftToStars">Convert to Stars</string>
+  <string name="ConvertGiftConfirm_one">Convert this gift to %1$d Star? The gift will be removed.</string>
+  <string name="ConvertGiftConfirm_other">Convert this gift to %1$d Stars? The gift will be removed.</string>
+  <string name="GiftConvertedToStars">Gift converted to Stars</string>
+
+  <!-- Gift-receiving settings -->
+  <string name="GiftSettings">Gift Settings</string>
+  <string name="GiftShowButton">Show gift button</string>
+  <string name="GiftShowButtonDesc">Always show a button to send a gift in the input field.</string>
+  <string name="GiftAcceptedTypes">Accepted gift types</string>
+  <string name="GiftAcceptedTypesDesc">Choose which kinds of gifts you accept from others.</string>
+  <string name="GiftAcceptUnlimited">Unlimited gifts</string>
+  <string name="GiftAcceptLimited">Limited gifts</string>
+  <string name="GiftAcceptUpgraded">Upgraded gifts</string>
+  <string name="GiftAcceptChannels">Gifts from channels</string>
+  <string name="GiftAcceptPremium">Premium subscription</string>
+
   <!-- Upgraded (collectible) gifts -->
   <string name="UpgradedGiftNumber">Gift #%1$d of %2$d</string>
   <string name="UpgradedGiftRarity">Rarity: %1$s</string>

@@ -54,6 +54,7 @@ public class GiftView extends View implements AttachDelegate {
 
   private @Nullable Tdlib tdlib;
   private @Nullable TdApi.ReceivedGift gift;
+  private @Nullable TdApi.AvailableGift availableGift;
 
   private boolean animated;
   private @Nullable GifFile gifFile;
@@ -61,6 +62,7 @@ public class GiftView extends View implements AttachDelegate {
 
   private @Nullable String starText;
   private boolean isPinned;
+  private boolean isDimmed;
 
   public GiftView (Context context) {
     super(context);
@@ -70,11 +72,13 @@ public class GiftView extends View implements AttachDelegate {
   public void setGift (@Nullable Tdlib tdlib, @Nullable TdApi.ReceivedGift gift) {
     this.tdlib = tdlib;
     this.gift = gift;
+    this.availableGift = null;
     this.animated = false;
     this.gifFile = null;
     this.imageFile = null;
     this.starText = null;
     this.isPinned = false;
+    this.isDimmed = false;
 
     if (gift != null && tdlib != null) {
       this.isPinned = gift.isPinned;
@@ -103,6 +107,45 @@ public class GiftView extends View implements AttachDelegate {
 
   public @Nullable TdApi.ReceivedGift getGift () {
     return gift;
+  }
+
+  public void setAvailableGift (@Nullable Tdlib tdlib, @Nullable TdApi.AvailableGift availableGift, boolean dimmed) {
+    this.tdlib = tdlib;
+    this.availableGift = availableGift;
+    this.gift = null;
+    this.animated = false;
+    this.gifFile = null;
+    this.imageFile = null;
+    this.starText = null;
+    this.isPinned = false;
+    this.isDimmed = dimmed;
+
+    if (availableGift != null && availableGift.gift != null && tdlib != null) {
+      TdApi.Gift g = availableGift.gift;
+      if (g.starCount > 0) {
+        this.starText = Long.toString(g.starCount);
+      }
+      TdApi.Sticker sticker = g.sticker;
+      if (sticker != null) {
+        this.animated = Td.isAnimated(sticker.format);
+        if (animated) {
+          GifFile gif = new GifFile(tdlib, sticker);
+          gif.setScaleType(GifFile.FIT_CENTER);
+          gif.setPlayOnce();
+          this.gifFile = gif;
+        } else {
+          ImageFile img = new ImageFile(tdlib, sticker.sticker);
+          img.setScaleType(ImageFile.FIT_CENTER);
+          this.imageFile = img;
+        }
+      }
+    }
+    requestFiles();
+    invalidate();
+  }
+
+  public @Nullable TdApi.AvailableGift getAvailableGift () {
+    return availableGift;
   }
 
   private static @Nullable TdApi.Sticker stickerOf (@Nullable TdApi.SentGift sentGift) {
@@ -181,6 +224,11 @@ public class GiftView extends View implements AttachDelegate {
       Receiver rec = animated ? receiver.getGifReceiver(0) : receiver.getImageReceiver(0);
       final int sx = cx - stickerSize / 2;
       rec.setBounds(sx, top, sx + stickerSize, top + stickerSize);
+      if (isDimmed) {
+        rec.setAlpha(0.4f);
+      } else {
+        rec.setAlpha(1f);
+      }
       rec.draw(c);
     }
 
