@@ -566,11 +566,33 @@ public class MessagesController extends ViewController<MessagesController.Argume
                                          long backgroundCustomEmojiId,
                                          int profileAccentColorId,
                                          long profileBackgroundCustomEmojiId) {
-    // TODO(chat-accent): re-render the header/name accent colors for the open chat
-    // when the peer changes them. Accent colors are resolved per-render via
-    // tdlib.chatAccentColor(chat)/TdlibAccentColor, so the values flow from the
-    // already-updated TdApi.Chat on the next redraw; an explicit forced invalidate
-    // of the header/name views could be wired here if a stale-color case is observed.
+    // Accent colors are resolved per-render from the (already-updated) TdApi.Chat,
+    // but nothing repaints on its own — refresh the header and rebuild the visible
+    // message layouts (author names are tinted with the chat accent).
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        refreshChatHeaderAppearance();
+      }
+    });
+  }
+
+  @Override
+  public void onChatEmojiStatusChanged (long chatId, @Nullable TdApi.EmojiStatus emojiStatus) {
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        refreshChatHeaderAppearance();
+      }
+    });
+  }
+
+  private void refreshChatHeaderAppearance () {
+    if (headerCell != null && chat != null) {
+      TdApi.Chat headerChat = messageThread != null ? tdlib.chatSync(messageThread.getContextChatId()) : null;
+      headerCell.setChat(tdlib, headerChat != null ? headerChat : chat, messageThread, forumTopic);
+    }
+    if (manager != null) {
+      manager.rebuildLayouts();
+    }
   }
 
   @Override
