@@ -93,7 +93,7 @@ Ranked by visibility ÷ effort. None of these are bugs — they're missing featu
 
 | Rank | Feature area | Key unused TDLib funcs | Vis | Effort |
 |------|--------------|------------------------|-----|--------|
-| 1 | **Chat boosts** | `GetChatBoostStatus`, `BoostChat`, `GetAvailableChatBoostSlots`, `GetChatBoostLink` | High | M |
+| 1 | ~~**Chat boosts**~~ — ✅ DONE (`850be94ed`): `ChatBoostController` (status/level/progress + `BoostChat` + share link), wired from the channel/supergroup profile menu | High | M |
 | 2 | **Fact-check editing** | `SetMessageFactCheck` (display already done) | Low-Med | S |
 | 3 | **Quick replies** | `LoadQuickReplyShortcuts`, `AddQuickReplyShortcutMessage`, `EditQuickReplyMessage` (updates already cached) | Med | M |
 | 4 | **Downloads manager** | `SearchFileDownloads`, `GetFileDownloads`, `ToggleDownloadIsPaused` (`UpdateFileDownload` already arrives) | Med | M |
