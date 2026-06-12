@@ -518,6 +518,61 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return wallpaperView;
   }
 
+  // Tracks whether a peer-set chat-specific wallpaper is currently applied, so
+  // we can revert to the global theme wallpaper when it is removed.
+  private boolean hasCustomChatBackground;
+
+  // Applies (or clears) a peer-set chat-specific wallpaper to the chat background.
+  // Only active in the regular chat view (PREVIEW_MODE_NONE); the wallpaper-picker
+  // preview modes manage wallpaperView themselves and must not be overridden.
+  private void applyChatBackground (@Nullable TdApi.ChatBackground chatBackground, boolean animated) {
+    if (wallpaperView == null || previewMode != PREVIEW_MODE_NONE) {
+      return;
+    }
+    if (chatBackground != null && chatBackground.background != null) {
+      wallpaperView.initWithCustomWallpaper(new TGBackground(tdlib, chatBackground.background));
+      hasCustomChatBackground = true;
+    } else if (hasCustomChatBackground) {
+      // Peer removed their custom wallpaper: fall back to the user's theme wallpaper.
+      wallpaperView.initWithSetupMode(false);
+      hasCustomChatBackground = false;
+    }
+  }
+
+  // ChatListener: peer-set chat theme / background / accent colors (live updates)
+
+  @Override
+  public void onChatBackgroundChanged (long chatId, @Nullable TdApi.ChatBackground background) {
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        applyChatBackground(background, true);
+      }
+    });
+  }
+
+  @Override
+  public void onChatThemeChanged (long chatId, TdApi.ChatTheme theme) {
+    // TODO(chat-theme): apply peer-set named chat themes (TdApi.ChatTheme provides
+    // light/dark ThemeSettings with accent/background/outgoing-bubble colors). This
+    // requires building a transient ThemeDelegate from the ChatTheme and swapping it
+    // in for the duration of the open chat, which touches the global theme pipeline
+    // (ThemeManager/ThemeSet) and is out of scope for this pass. The peer-set
+    // *background* portion is already handled live via onChatBackgroundChanged above.
+  }
+
+  @Override
+  public void onChatAccentColorsChanged (long chatId,
+                                         int accentColorId,
+                                         long backgroundCustomEmojiId,
+                                         int profileAccentColorId,
+                                         long profileBackgroundCustomEmojiId) {
+    // TODO(chat-accent): re-render the header/name accent colors for the open chat
+    // when the peer changes them. Accent colors are resolved per-render via
+    // tdlib.chatAccentColor(chat)/TdlibAccentColor, so the values flow from the
+    // already-updated TdApi.Chat on the next redraw; an explicit forced invalidate
+    // of the header/name views could be wired here if a stale-color case is observed.
+  }
+
   @Override
   public void performComplexPhotoOpen () {
     long headerChatId = getHeaderChatId();
@@ -3074,6 +3129,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (previewSearchSender == null) {
       manager.openChat(chat, messageThread, messageTopicId, previewSearchFilter, this, areScheduled, !inPreviewMode && !isInForceTouchMode());
     }
+
+    // Apply any peer-set chat-specific wallpaper for the chat being opened.
+    applyChatBackground(chat.background, false);
 
     updateShadowColor();
     if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chat.id))) {

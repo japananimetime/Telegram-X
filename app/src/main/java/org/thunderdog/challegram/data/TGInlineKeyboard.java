@@ -450,6 +450,8 @@ public class TGInlineKeyboard {
       TextPaint textPaint = Paints.getBoldPaint14(needFakeBold);
       this.wrapper = new EmojiString(text, maxWidth, textPaint);
       this.type = button.type;
+      this.customColorId = colorIdForStyle(button.style);
+      // TODO(td): render button.iconCustomEmojiId as a leading custom-emoji icon.
       if (type.getConstructor() == TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR) {
         // Only get currency char if the message is actually an invoice
         if (parent.getMessage().content.getConstructor() == TdApi.MessageInvoice.CONSTRUCTOR) {
@@ -479,8 +481,28 @@ public class TGInlineKeyboard {
       return useWhiteMode() ? text : text.toUpperCase();
     }
 
+    // Maps a bot button's TdApi.ButtonStyle to the inline button accent color used
+    // for its outline/text/icon. Default keeps the theme's neutral inline colors.
+    private static @ColorId int colorIdForStyle (@Nullable TdApi.ButtonStyle style) {
+      if (style == null) {
+        return ColorId.NONE;
+      }
+      switch (style.getConstructor()) {
+        case TdApi.ButtonStylePrimary.CONSTRUCTOR:
+          return ColorId.textLink;
+        case TdApi.ButtonStyleDanger.CONSTRUCTOR:
+          return ColorId.textNegative;
+        case TdApi.ButtonStyleSuccess.CONSTRUCTOR:
+          return ColorId.textSecure;
+        case TdApi.ButtonStyleDefault.CONSTRUCTOR:
+        default:
+          return ColorId.NONE;
+      }
+    }
+
     public void set (TdApi.InlineKeyboardButton button, int maxWidth) {
       this.type = button.type;
+      this.customColorId = colorIdForStyle(button.style);
       String text = uppercase(cleanButtonText(button.text));
       final boolean reset = !wrapper.getText().equals(text);
       if (reset || wrapper.getMaxWidth() != maxWidth) {

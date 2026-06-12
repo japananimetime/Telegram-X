@@ -78,7 +78,8 @@ import me.vkryl.core.ColorUtils;
 
 public class StoryViewController extends ViewController<StoryViewController.Args> implements
   PopupLayout.AnimatedPopupProvider, FactorAnimator.Target, View.OnClickListener,
-  PopupLayout.TouchSectionProvider, Player.Listener, RootFrameLayout.InsetsChangeListener {
+  PopupLayout.TouchSectionProvider, Player.Listener, RootFrameLayout.InsetsChangeListener,
+  org.thunderdog.challegram.telegram.StoryListener {
 
   private static final long REVEAL_ANIMATION_DURATION = 280;
   private static final int ANIMATOR_REVEAL = 0;
@@ -488,6 +489,13 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     // Fetch fresh ChatActiveStories to ensure we have all stories
     refreshActiveStories();
 
+    // Subscribe to live story updates (edits/deletes/stealth) for the open viewer.
+    // We subscribe to the GLOBAL story list because the currently-shown story
+    // (currentChatId/currentStoryId) changes as the user navigates between stories;
+    // the callbacks filter by the currently-displayed story.
+    tdlib.listeners().subscribeToStoryUpdates(this);
+    storyListenerSubscribed = true;
+
     // Load story
     if (currentStory != null) {
       displayStory(currentStory);
@@ -496,6 +504,42 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     }
 
     return contentView;
+  }
+
+  // StoryListener (live refresh of the open viewer)
+
+  private boolean storyListenerSubscribed;
+
+  @Override
+  public void onStoryUpdated (@NonNull TdApi.Story story) {
+    runOnUiThreadOptional(() -> {
+      // Only refresh if this update is for the story currently on screen.
+      if (story.posterChatId == currentChatId && story.id == currentStoryId) {
+        // Re-render caption, reactions, privacy and media (displayStory reads
+        // all of these off the Story object and updates the relevant views).
+        displayStory(story);
+      }
+    });
+  }
+
+  @Override
+  public void onStoryDeleted (long storySenderChatId, int storyId) {
+    runOnUiThreadOptional(() -> {
+      if (storySenderChatId == currentChatId && storyId == currentStoryId) {
+        // The story being viewed was deleted: advance to the next story.
+        // navigateNext() closes the viewer if there is nothing left to show.
+        navigateNext();
+      }
+    });
+  }
+
+  @Override
+  public void onStoryStealthModeUpdated (int activeUntilDate, int cooldownUntilDate) {
+    // The story viewer does not currently surface persistent stealth-mode state
+    // in its UI (stealth is offered only as a one-shot action in the options menu),
+    // so there is nothing to refresh here.
+    // TODO(stealth-ui): if a stealth-mode indicator is added to the viewer chrome,
+    // update it from this callback.
   }
 
   public void open () {
@@ -1129,6 +1173,10 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   @Override
   public void destroy () {
     super.destroy();
+    if (storyListenerSubscribed) {
+      tdlib.listeners().unsubscribeFromStoryUpdates(this);
+      storyListenerSubscribed = false;
+    }
     closeStory();
     releasePlayer();
     setRootView(null);

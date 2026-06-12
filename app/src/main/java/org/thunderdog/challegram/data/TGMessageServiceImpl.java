@@ -104,6 +104,15 @@ abstract class TGMessageServiceImpl extends TGMessage {
     }
   }
 
+  // Generic media preview block (reuses the chat-photo render path for any
+  // square/rounded preview, e.g. a shared story thumbnail). Pass null to clear.
+  protected void setDisplayMediaPreview (@Nullable MediaPreview mediaPreview) {
+    this.chatPhoto = mediaPreview;
+    // Trigger a relayout/redraw so the newly-set preview is measured, requested
+    // (via requestMediaContent) and drawn.
+    rebuildAndUpdateContent();
+  }
+
   private ServiceMessageCreator originalMessageCreator;
   private Filter<TdApi.Message> previewCallback;
   private TdApi.Message previewMessage;
@@ -213,6 +222,12 @@ abstract class TGMessageServiceImpl extends TGMessage {
     @Override
     public void onClickAt (View view, float x, float y) {
       if (isWithinPhotoCoordinates(x, y)) {
+        // Allow subclasses to handle the preview tap (e.g. a shared-story card
+        // opens the story viewer); fall back to the media viewer otherwise.
+        if (onMediaPreviewClick != null) {
+          onMediaPreviewClick.onClick();
+          return;
+        }
         MediaItem item = MediaItem.valueOf(context(), tdlib(), getMessage());
         if (item != null) {
           MediaViewController.openFromMessage(TGMessageServiceImpl.this, item);
@@ -220,6 +235,15 @@ abstract class TGMessageServiceImpl extends TGMessage {
       }
     }
   });
+
+  private OnClickListener onMediaPreviewClick;
+
+  // When set, a tap on the media preview block invokes this instead of opening
+  // the in-app media viewer (used by previews that aren't openable media items,
+  // e.g. a shared story).
+  protected void setOnMediaPreviewClickListener (@Nullable OnClickListener listener) {
+    this.onMediaPreviewClick = listener;
+  }
 
   @Override
   protected void buildContent (int maxWidth) {
