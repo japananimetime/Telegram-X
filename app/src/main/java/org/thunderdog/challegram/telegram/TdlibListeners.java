@@ -363,6 +363,26 @@ public class TdlibListeners {
     specificPrivateCallListeners.remove(callId, listener);
   }
 
+  @AnyThread
+  public void addGroupCallListener (GroupCallListener listener) {
+    groupCallListeners.add(listener);
+  }
+
+  @AnyThread
+  public void removeGroupCallListener (GroupCallListener listener) {
+    groupCallListeners.remove(listener);
+  }
+
+  @AnyThread
+  public void subscribeToGroupCallUpdates (int groupCallId, GroupCallListener listener) {
+    specificGroupCallListeners.add(groupCallId, listener);
+  }
+
+  @AnyThread
+  public void unsubscribeFromGroupCallUpdates (int groupCallId, GroupCallListener listener) {
+    specificGroupCallListeners.remove(groupCallId, listener);
+  }
+
   public void performStartup (boolean isAfterRestart) {
     for (CleanupStartupDelegate delegate : componentDelegates) {
       delegate.onPerformStartup(isAfterRestart);

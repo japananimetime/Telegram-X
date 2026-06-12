@@ -7530,7 +7530,14 @@ public class TdlibUi extends Handler {
   }
 
   public void openVoiceChat (ViewController<?> context, int groupCallId, @Nullable UrlOpenParameters openParameters) {
-    // TODO open voice chat layer
+    if (groupCallId == 0) {
+      return;
+    }
+    // Read-only group-call info screen. Joining/muting (the WebRTC layer) is a
+    // separate follow-up slice; for now this surfaces the live call state.
+    org.thunderdog.challegram.ui.GroupCallController c = new org.thunderdog.challegram.ui.GroupCallController(context.context(), context.tdlib());
+    c.setArguments(new org.thunderdog.challegram.ui.GroupCallController.Args(groupCallId));
+    context.navigateTo(c);
   }
 
   // Suggestions by emoji

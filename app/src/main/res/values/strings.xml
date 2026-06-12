@@ -6205,6 +6205,21 @@
   <string name="MyNotes">My Notes</string>
   <string name="AuthorHidden">Hidden Author</string>
   <string name="DeleteSavedMessagesTopicConfirm">Delete this topic and all of its messages from Saved Messages?</string>
+
+  <!-- Group calls / video chats -->
+  <string name="VoiceChat">Voice Chat</string>
+  <string name="GroupCallType">Type</string>
+  <string name="GroupCallStatus">Status</string>
+  <string name="GroupCallParticipants">Participants</string>
+  <string name="GroupCallSpeaking">Recently active</string>
+  <string name="GroupCallSpeakingNow">Speaking</string>
+  <string name="GroupCallActive">Live now</string>
+  <string name="GroupCallEnded">Ended</string>
+  <string name="GroupCallScheduledFor">Scheduled for %1$s</string>
+  <string name="GroupCallRtmp">Live stream (RTMP)</string>
+  <string name="GroupCallLiveStream">Live stream</string>
+  <string name="xParticipants_one">%1$s participant</string>
+  <string name="xParticipants_other">%1$s participants</string>
   <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
 
   <!-- Sticker pack authoring -->
