@@ -6183,4 +6183,18 @@
   <string name="ServiceProtectedContentOff">%1$s disabled content protection</string>
   <string name="ServiceProtectedContentDisableRequested">A request to disable content protection was sent</string>
 
+  <!-- Chat-list previews -->
+  <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>
+  <string name="ChatListSuggestedBirthdate">Suggested a date of birth</string>
+  <string name="ChatListPassportSent">Passport data sent</string>
+  <string name="ChatListGiftedTon">TON gift</string>
+  <string name="ChatListPaidRefund">Stars refunded</string>
+  <string name="ChatListPaidPriceChanged">Paid message price changed</string>
+  <string name="ChatListGiveawayStars">Stars prize</string>
+  <string name="ChatListChecklistUpdated">Checklist updated</string>
+  <string name="ChatListPollUpdated">Poll updated</string>
+  <string name="ChatListOwnerChanged">Group ownership transferred</string>
+  <string name="ChatListManagedBot">Bot added to manage chat</string>
+  <string name="ChatListProtectedContent">Content protection changed</string>
+
 </resources>
