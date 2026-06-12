@@ -32,6 +32,7 @@ import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
@@ -74,6 +75,14 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
   private String cardExpiry = "";
   private String cardCvc = "";
   private String cardHolder = "";
+
+  // Tip + order info
+  private long tipAmount = 0;
+  private String orderName = "";
+  private String orderPhone = "";
+  private String orderEmail = "";
+  private String validatedOrderInfoId = "";
+  private ListItem orderNameItem, orderPhoneItem, orderEmailItem;
 
   // ListItem references for text fields
   private ListItem cardNumberItem;
@@ -246,6 +255,15 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
       cardCvc = text;
     } else if (item == cardHolderItem) {
       cardHolder = text;
+    } else if (item == orderNameItem) {
+      orderName = text;
+      validatedOrderInfoId = ""; // contact info changed; re-validate before paying
+    } else if (item == orderPhoneItem) {
+      orderPhone = text;
+      validatedOrderInfoId = "";
+    } else if (item == orderEmailItem) {
+      orderEmail = text;
+      validatedOrderInfoId = "";
     }
   }
 
@@ -265,6 +283,30 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
     if (paymentForm.type instanceof TdApi.PaymentFormTypeRegular) {
       TdApi.PaymentFormTypeRegular regular = (TdApi.PaymentFormTypeRegular) paymentForm.type;
 
+      // Contact information (collected before payment via ValidateOrderInfo)
+      if (regular.invoice.needName || regular.invoice.needPhoneNumber || regular.invoice.needEmailAddress) {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentContactInfo));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        boolean firstField = true;
+        if (regular.invoice.needName) {
+          orderNameItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentName, 0, R.string.PaymentName).setStringValue(orderName);
+          items.add(orderNameItem);
+          firstField = false;
+        }
+        if (regular.invoice.needPhoneNumber) {
+          if (!firstField) items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          orderPhoneItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentPhone, 0, R.string.PaymentPhone).setStringValue(orderPhone);
+          items.add(orderPhoneItem);
+          firstField = false;
+        }
+        if (regular.invoice.needEmailAddress) {
+          if (!firstField) items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          orderEmailItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentEmail, 0, R.string.PaymentEmail).setStringValue(orderEmail);
+          items.add(orderEmailItem);
+        }
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
+
       // Saved cards
       if (regular.savedCredentials != null && regular.savedCredentials.length > 0) {
         items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentSavedCards));
@@ -280,6 +322,28 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
           items.add(item);
         }
         items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
+
+      // Tip (optional)
+      if (regular.invoice.maxTipAmount > 0 && regular.invoice.suggestedTipAmounts != null && regular.invoice.suggestedTipAmounts.length > 0) {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentTipOptional));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        boolean firstTip = true;
+        for (long tip : regular.invoice.suggestedTipAmounts) {
+          if (!firstTip) {
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          }
+          firstTip = false;
+          ListItem item = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_paymentTip, 0,
+            formatPrice(regular.invoice.currency, tip));
+          item.setLongValue(tip);
+          if (tip == tipAmount) {
+            item.setTextColorId(ColorId.textNeutral);
+          }
+          items.add(item);
+        }
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.PaymentTipHint));
       }
 
       // New card input
@@ -312,9 +376,9 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
 
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-      // Pay button
+      // Pay button (total includes the chosen tip)
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      long totalAmount = calculateTotalAmount(regular.invoice.priceParts);
+      long totalAmount = calculateTotalAmount(regular.invoice.priceParts) + tipAmount;
       String priceText = formatPrice(regular.invoice.currency, totalAmount);
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_paymentSubmit, R.drawable.baseline_payment_24, Lang.getString(R.string.PaymentPay, priceText)));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -334,9 +398,17 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
         TdApi.SavedCredentials creds = (TdApi.SavedCredentials) item.getData();
         payWithSavedCredentials(creds);
       }
+    } else if (viewId == R.id.btn_paymentTip) {
+      ListItem item = (ListItem) v.getTag();
+      if (item != null) {
+        long tip = item.getLongValue();
+        // Tapping the selected tip clears it.
+        tipAmount = (tip == tipAmount) ? 0 : tip;
+        buildCells();
+      }
     } else if (viewId == R.id.btn_paymentSubmit) {
       if (validateCard()) {
-        processNewCardPayment();
+        ensureOrderInfoThenPay();
       }
     }
   }
@@ -575,14 +647,41 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
     }
   }
 
+  private boolean needsOrderInfo () {
+    if (!(paymentForm.type instanceof TdApi.PaymentFormTypeRegular)) {
+      return false;
+    }
+    TdApi.Invoice inv = ((TdApi.PaymentFormTypeRegular) paymentForm.type).invoice;
+    return inv.needName || inv.needPhoneNumber || inv.needEmailAddress;
+  }
+
+  /** Validates collected contact info (if required) before processing the card payment. */
+  private void ensureOrderInfoThenPay () {
+    if (!needsOrderInfo() || !StringUtils.isEmpty(validatedOrderInfoId)) {
+      processNewCardPayment();
+      return;
+    }
+    isProcessing = true;
+    TdApi.OrderInfo orderInfo = new TdApi.OrderInfo(orderName, orderPhone, orderEmail, null);
+    tdlib.send(new TdApi.ValidateOrderInfo(inputInvoice, orderInfo, false), (result, error) -> runOnUiThreadOptional(() -> {
+      isProcessing = false;
+      if (error != null) {
+        UI.showToast(Lang.getString(R.string.PaymentOrderInfoError) + " " + TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else if (result instanceof TdApi.ValidatedOrderInfo) {
+        validatedOrderInfoId = ((TdApi.ValidatedOrderInfo) result).orderInfoId;
+        processNewCardPayment();
+      }
+    }));
+  }
+
   private void sendPaymentForm(TdApi.InputCredentials credentials) {
     TdApi.SendPaymentForm request = new TdApi.SendPaymentForm(
       inputInvoice,
       paymentForm.id,
-      "", // orderInfoId
-      "", // shippingOptionId
+      validatedOrderInfoId,
+      "", // shippingOptionId (shipping selection is a follow-up)
       credentials,
-      0   // tipAmount
+      tipAmount
     );
 
     tdlib.send(request, (result, error) -> {

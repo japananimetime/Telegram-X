@@ -133,6 +133,13 @@
   <string name="PaymentSavedCards">Saved Cards</string>
   <string name="PaymentNewCard">Add New Card</string>
   <string name="PaymentPay">Pay %1$s</string>
+  <string name="PaymentTipOptional">Tip (optional)</string>
+  <string name="PaymentTipHint">Tap an amount to add a tip; tap again to remove it.</string>
+  <string name="PaymentContactInfo">Contact information</string>
+  <string name="PaymentName">Name</string>
+  <string name="PaymentPhone">Phone number</string>
+  <string name="PaymentEmail">Email</string>
+  <string name="PaymentOrderInfoError">Couldn\'t validate your contact information.</string>
   <string name="PaymentProcessing">Processing payment…</string>
   <string name="PaymentSuccess">Payment successful!</string>
   <string name="PaymentFailed">Payment failed: %1$s</string>

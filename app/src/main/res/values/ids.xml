@@ -639,6 +639,10 @@
   <item type="id" name="btn_paymentCard" />
   <item type="id" name="btn_paymentSavedCard" />
   <item type="id" name="btn_paymentSubmit" />
+  <item type="id" name="btn_paymentTip" />
+  <item type="id" name="btn_paymentName" />
+  <item type="id" name="btn_paymentPhone" />
+  <item type="id" name="btn_paymentEmail" />
   <item type="id" name="controller_premium" />
   <item type="id" name="controller_stars" />
   <item type="id" name="controller_starTransactions" />
