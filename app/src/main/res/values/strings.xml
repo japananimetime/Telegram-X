@@ -6187,6 +6187,34 @@
   <string name="MonetizationWithdrawUnavailable">Withdrawal isn\'t available yet.</string>
   <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
 
+  <!-- Telegram Business -->
+  <string name="TelegramBusiness">Telegram Business</string>
+  <string name="BusinessHint">Telegram Business lets you set up a business presence: opening hours, location, a custom start page, and automatic greeting and away messages.</string>
+  <string name="BusinessStartPage">Start Page</string>
+  <string name="BusinessStartPageHint">Customize the message people see before they start a chat with you.</string>
+  <string name="BusinessStartPageTitle">Title</string>
+  <string name="BusinessStartPageMessage">Message</string>
+  <string name="BusinessLocation">Location</string>
+  <string name="BusinessLocationHint">Display the location of your business on your account.</string>
+  <string name="BusinessLocationAddress">Address</string>
+  <string name="BusinessOpeningHours">Opening Hours</string>
+  <string name="BusinessGreetingMessage">Greeting Message</string>
+  <string name="BusinessAwayMessage">Away Message</string>
+  <string name="BusinessConnectedBot">Chatbots</string>
+  <string name="BusinessChatLinks">Chat Links</string>
+  <string name="BusinessChatLinksHint">Create links that start a chat with you, complete with a ready-to-send message.</string>
+  <string name="BusinessChatLinksEmpty">You have no chat links yet.</string>
+  <string name="BusinessChatLinkCreate">Create a link</string>
+  <string name="BusinessChatLinkTitle">Link name (optional)</string>
+  <string name="BusinessChatLinkText">Message text</string>
+  <string name="BusinessChatLinkDelete">Delete link</string>
+  <string name="BusinessChatLinkViews_one">%1$d view</string>
+  <string name="BusinessChatLinkViews_other">%1$d views</string>
+  <string name="BusinessValueOn">On</string>
+  <string name="BusinessValueOff">Off</string>
+  <string name="BusinessTurnOff">Turn off</string>
+  <string name="BusinessEditUnavailable">Editing this from Telegram X is coming soon. You can turn it off here.</string>
+
   <!-- Downloads -->
   <string name="DownloadsEmpty">You have no downloads.</string>
   <string name="DownloadComplete">Completed</string>

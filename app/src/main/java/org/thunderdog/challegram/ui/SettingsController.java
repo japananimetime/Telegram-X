@@ -665,6 +665,8 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_downloadsSettings, R.drawable.baseline_file_download_24, R.string.Downloads));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_businessSettings, R.drawable.baseline_work_24, R.string.TelegramBusiness));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_languageSettings, R.drawable.baseline_language_24, R.string.Language));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
@@ -1170,6 +1172,8 @@ public class SettingsController extends ViewController<Void> implements
       navigateTo(new QuickRepliesController(context, tdlib));
     } else if (viewId == R.id.btn_downloadsSettings) {
       navigateTo(new DownloadsController(context, tdlib));
+    } else if (viewId == R.id.btn_businessSettings) {
+      navigateTo(new SettingsBusinessController(context, tdlib));
     } else if (viewId == R.id.btn_languageSettings) {
       navigateTo(new SettingsLanguageController(context, tdlib));
     } else if (viewId == R.id.btn_notificationSettings) {

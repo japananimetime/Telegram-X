@@ -666,6 +666,20 @@
   <item type="id" name="btn_downloadsSettings" />
   <item type="id" name="controller_starRevenue" />
   <item type="id" name="btn_withdrawStars" />
+  <item type="id" name="controller_business" />
+  <item type="id" name="controller_businessStartPage" />
+  <item type="id" name="controller_businessLocation" />
+  <item type="id" name="controller_businessChatLinks" />
+  <item type="id" name="btn_businessSettings" />
+  <item type="id" name="btn_businessStartPage" />
+  <item type="id" name="btn_businessLocation" />
+  <item type="id" name="btn_businessOpeningHours" />
+  <item type="id" name="btn_businessGreeting" />
+  <item type="id" name="btn_businessAway" />
+  <item type="id" name="btn_businessConnectedBot" />
+  <item type="id" name="btn_businessChatLinks" />
+  <item type="id" name="btn_businessChatLink" />
+  <item type="id" name="btn_businessChatLinkCreate" />
   <item type="id" name="more_btn_monetization" />
   <item type="id" name="btn_boost" />
   <item type="id" name="btn_boostLink" />
