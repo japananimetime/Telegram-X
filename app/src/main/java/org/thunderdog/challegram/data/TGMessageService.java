@@ -21,6 +21,7 @@ import androidx.annotation.StringRes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.chat.MediaPreview;
 import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
@@ -28,6 +29,7 @@ import org.thunderdog.challegram.telegram.TdlibSender;
 import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.ui.MapController;
 import org.thunderdog.challegram.util.text.FormattedText;
@@ -2325,6 +2327,49 @@ public final class TGMessageService extends TGMessageServiceImpl {
     setOnClickListener(() ->
       tdlib.ui().openStory(context.controller(), messageStory.storyPosterChatId, messageStory.storyId)
     );
+    // Tapping the thumbnail card opens the story viewer (the preview is not an
+    // openable in-app media item, so route it explicitly).
+    setOnMediaPreviewClickListener(() ->
+      tdlib.ui().openStory(context.controller(), messageStory.storyPosterChatId, messageStory.storyId)
+    );
+    // Upgrade the plain service line into a tappable preview card: fetch the
+    // referenced story and render its thumbnail below the "Shared a story" text.
+    // While loading (or if the story is unavailable), the service line alone is
+    // shown; tap-to-open keeps working regardless.
+    requestStoryPreview(messageStory.storyPosterChatId, messageStory.storyId);
+  }
+
+  private void requestStoryPreview (long storyPosterChatId, int storyId) {
+    tdlib.send(new TdApi.GetStory(storyPosterChatId, storyId, false), (story, error) -> {
+      if (story == null) {
+        return; // Story unavailable/expired: keep the plain service line.
+      }
+      MediaPreview preview = buildStoryPreview(story);
+      if (preview == null) {
+        return;
+      }
+      runOnUiThreadOptional(() -> setDisplayMediaPreview(preview));
+    });
+  }
+
+  @Nullable
+  private MediaPreview buildStoryPreview (@NonNull TdApi.Story story) {
+    final int size = Screen.dp(50f);
+    final int cornerRadius = Screen.dp(8f); // rounded square, distinct from circular avatars
+    switch (story.content.getConstructor()) {
+      case TdApi.StoryContentPhoto.CONSTRUCTOR: {
+        TdApi.StoryContentPhoto photo = (TdApi.StoryContentPhoto) story.content;
+        return MediaPreview.valueOf(tdlib, photo.photo, size, cornerRadius, false);
+      }
+      case TdApi.StoryContentVideo.CONSTRUCTOR: {
+        TdApi.StoryVideo video = ((TdApi.StoryContentVideo) story.content).video;
+        return MediaPreview.valueOf(tdlib, video.thumbnail, video.minithumbnail, size, cornerRadius);
+      }
+      case TdApi.StoryContentUnsupported.CONSTRUCTOR:
+      default:
+        // No thumbnail available for unsupported content; leave the service line as-is.
+        return null;
+    }
   }
 
   // Pre-impl: utilities used by constructors
