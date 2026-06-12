@@ -489,6 +489,12 @@
   <item type="id" name="btn_giftAuctionPlaceBid" />
   <item type="id" name="btn_giftAuctionRaiseBid" />
   <item type="id" name="btn_giftAuctionFragment" />
+  <item type="id" name="btn_giftCollectionCreate" />
+  <item type="id" name="btn_giftCollectionRename" />
+  <item type="id" name="btn_giftCollectionDelete" />
+  <item type="id" name="btn_giftCollectionAddTo" />
+  <item type="id" name="btn_giftCollectionRemoveFrom" />
+  <item type="id" name="btn_giftCollectionItem" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />

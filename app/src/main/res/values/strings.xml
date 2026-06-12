@@ -5866,6 +5866,26 @@
   <string name="GiftAuctionFragment">View on Fragment</string>
   <string name="GiftAuctionNotFound">Auction not found.</string>
 
+  <string name="GiftCollections">Collections</string>
+  <string name="GiftCollectionAll">All</string>
+  <string name="GiftCollectionNew">New Collection</string>
+  <string name="GiftCollectionManage">Manage Collections</string>
+  <string name="GiftCollectionCreate">Create collection</string>
+  <string name="GiftCollectionRename">Rename collection</string>
+  <string name="GiftCollectionDelete">Delete collection</string>
+  <string name="GiftCollectionNameHint">Collection name</string>
+  <string name="GiftCollectionNameInvalid">Enter a name of 1-12 characters.</string>
+  <string name="GiftCollectionCreated">Collection created.</string>
+  <string name="GiftCollectionRenamed">Collection renamed.</string>
+  <string name="GiftCollectionDeleted">Collection deleted.</string>
+  <string name="GiftCollectionDeleteConfirm">Delete the collection \"%1$s\"? The gifts themselves are not removed.</string>
+  <string name="GiftCollectionAddTo">Add to collection…</string>
+  <string name="GiftCollectionRemoveFrom">Remove from collection</string>
+  <string name="GiftCollectionGiftAdded">Added to collection.</string>
+  <string name="GiftCollectionGiftRemoved">Removed from collection.</string>
+  <string name="GiftCollectionPickTitle">Choose a collection</string>
+  <string name="GiftCollectionNotFound">Collection not found.</string>
+
   <string name="YouSharedUser">You shared **%1$s**</string>
   <string name="YouSharedUsers_one">You shared **%1$s user**</string>
   <string name="YouSharedUsers_other">You shared **%1$s users**</string>
