@@ -56,6 +56,7 @@ public class GiftView extends View implements AttachDelegate {
   private @Nullable TdApi.ReceivedGift gift;
   private @Nullable TdApi.AvailableGift availableGift;
   private @Nullable TdApi.GiftForResale resaleGift;
+  private @Nullable TdApi.GiftAuctionState auctionGift;
 
   private boolean animated;
   private @Nullable GifFile gifFile;
@@ -75,6 +76,7 @@ public class GiftView extends View implements AttachDelegate {
     this.gift = gift;
     this.availableGift = null;
     this.resaleGift = null;
+    this.auctionGift = null;
     this.animated = false;
     this.gifFile = null;
     this.imageFile = null;
@@ -116,6 +118,7 @@ public class GiftView extends View implements AttachDelegate {
     this.availableGift = availableGift;
     this.gift = null;
     this.resaleGift = null;
+    this.auctionGift = null;
     this.animated = false;
     this.gifFile = null;
     this.imageFile = null;
@@ -161,6 +164,7 @@ public class GiftView extends View implements AttachDelegate {
     this.resaleGift = resaleGift;
     this.gift = null;
     this.availableGift = null;
+    this.auctionGift = null;
     this.animated = false;
     this.gifFile = null;
     this.imageFile = null;
@@ -190,6 +194,48 @@ public class GiftView extends View implements AttachDelegate {
 
   public @Nullable TdApi.GiftForResale getResaleGift () {
     return resaleGift;
+  }
+
+  /**
+   * Renders a gift currently on auction ({@link TdApi.GiftAuctionState}). The
+   * sticker is the gift's own sticker; {@code bidText} (if non-null) is drawn
+   * below in place of the star value (e.g. the current min/your bid).
+   */
+  public void setAuctionGift (@Nullable Tdlib tdlib, @Nullable TdApi.GiftAuctionState auctionGift, @Nullable String bidText) {
+    this.tdlib = tdlib;
+    this.auctionGift = auctionGift;
+    this.gift = null;
+    this.availableGift = null;
+    this.resaleGift = null;
+    this.animated = false;
+    this.gifFile = null;
+    this.imageFile = null;
+    this.starText = bidText;
+    this.isPinned = false;
+    this.isDimmed = false;
+
+    if (auctionGift != null && auctionGift.gift != null && tdlib != null) {
+      TdApi.Sticker sticker = auctionGift.gift.sticker;
+      if (sticker != null) {
+        this.animated = Td.isAnimated(sticker.format);
+        if (animated) {
+          GifFile gif = new GifFile(tdlib, sticker);
+          gif.setScaleType(GifFile.FIT_CENTER);
+          gif.setPlayOnce();
+          this.gifFile = gif;
+        } else {
+          ImageFile img = new ImageFile(tdlib, sticker.sticker);
+          img.setScaleType(ImageFile.FIT_CENTER);
+          this.imageFile = img;
+        }
+      }
+    }
+    requestFiles();
+    invalidate();
+  }
+
+  public @Nullable TdApi.GiftAuctionState getAuctionGift () {
+    return auctionGift;
   }
 
   private static @Nullable TdApi.Sticker stickerOf (@Nullable TdApi.SentGift sentGift) {

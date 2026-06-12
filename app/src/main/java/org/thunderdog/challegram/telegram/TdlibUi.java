@@ -3863,10 +3863,23 @@ public class TdlibUi extends Handler {
         break;
       }
 
+      case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeGiftAuction giftAuctionLink = (TdApi.InternalLinkTypeGiftAuction) linkType;
+        org.thunderdog.challegram.navigation.ViewController<?> current = context.context().navigation() != null ? context.context().navigation().getCurrentStackItem() : null;
+        if (current != null) {
+          org.thunderdog.challegram.ui.GiftAuctionController.openById(current, tdlib, giftAuctionLink.auctionId);
+          if (after != null) {
+            post(() -> after.runWithBool(true));
+          }
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        }
+        break;
+      }
+
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:
       case TdApi.InternalLinkTypePremiumGiftPurchase.CONSTRUCTOR:
       case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatAffiliateProgram.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePassportDataRequest.CONSTRUCTOR: {

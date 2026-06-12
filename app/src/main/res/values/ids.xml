@@ -236,6 +236,8 @@
   <item type="id" name="controller_giftSettings" />
   <item type="id" name="controller_upgradedGift" />
   <item type="id" name="controller_giftResale" />
+  <item type="id" name="controller_giftAuctions" />
+  <item type="id" name="controller_giftAuction" />
   <item type="id" name="controller_storyView" />
   <item type="id" name="controller_storyCompose" />
   <item type="id" name="controller_storyViewers" />
@@ -484,6 +486,9 @@
   <item type="id" name="btn_giftOfferReject" />
   <item type="id" name="btn_giftPriceStars" />
   <item type="id" name="btn_giftPriceTon" />
+  <item type="id" name="btn_giftAuctionPlaceBid" />
+  <item type="id" name="btn_giftAuctionRaiseBid" />
+  <item type="id" name="btn_giftAuctionFragment" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />

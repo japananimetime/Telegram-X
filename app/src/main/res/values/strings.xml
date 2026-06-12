@@ -5836,6 +5836,35 @@
   <string name="RefundedGift">Refunded Gift</string>
   <string name="RefundedGiftDesc">This gift was refunded.</string>
   <string name="GiftedTonAmount">%1$s TON</string>
+  <!-- Gift auctions (Slice 6) -->
+  <string name="GiftAuctions">Gift Auctions</string>
+  <string name="GiftAuction">Auction</string>
+  <string name="GiftAuctionsEmpty">You are not taking part in any gift auctions right now.</string>
+  <string name="GiftAuctionMinBid">Minimum bid</string>
+  <string name="GiftAuctionYourBid">Your bid</string>
+  <string name="GiftAuctionNextBid">Next bid from</string>
+  <string name="GiftAuctionRound">Round</string>
+  <string name="GiftAuctionRoundOf">Round %1$d of %2$d</string>
+  <string name="GiftAuctionRoundEnds">Round ends in</string>
+  <string name="GiftAuctionEnds">Auction ends in</string>
+  <string name="GiftAuctionStarts">Auction starts in</string>
+  <string name="GiftAuctionItemsLeft">Items left</string>
+  <string name="GiftAuctionItemsAcquired">Items you acquired</string>
+  <string name="GiftAuctionItemsDistributed">Items distributed</string>
+  <string name="GiftAuctionPlaceBid">Place Bid</string>
+  <string name="GiftAuctionRaiseBid">Raise Bid</string>
+  <string name="GiftAuctionBidHint">Enter your bid in Stars (at least %1$s).</string>
+  <string name="GiftAuctionRaiseHint">Enter your new bid in Stars (more than %1$s).</string>
+  <string name="GiftAuctionBidTooLow">Your bid is below the minimum.</string>
+  <string name="GiftAuctionRaiseTooLow">Your new bid must be higher than your current bid.</string>
+  <string name="GiftAuctionBidInvalid">Enter a valid amount of Stars.</string>
+  <string name="GiftAuctionBidPlaced">Bid placed.</string>
+  <string name="GiftAuctionBidRaised">Bid raised.</string>
+  <string name="GiftAuctionBidReturned">Your bid was outbid and returned.</string>
+  <string name="GiftAuctionFinished">Auction finished</string>
+  <string name="GiftAuctionAveragePrice">Average price</string>
+  <string name="GiftAuctionFragment">View on Fragment</string>
+  <string name="GiftAuctionNotFound">Auction not found.</string>
 
   <string name="YouSharedUser">You shared **%1$s**</string>
   <string name="YouSharedUsers_one">You shared **%1$s user**</string>
