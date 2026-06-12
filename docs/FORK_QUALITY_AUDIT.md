@@ -10,6 +10,11 @@ Severity: **P0** = crash / security / data-loss / "looks done but isn't". **P1**
 
 ## P0 — Fix first (crashes, security, fake-working features)
 
+> **Status: all 8 RESOLVED** (2026-06-12) — compiles green. Commits: profile notes
+> (198ab6a9b), paid reactions (078404e7b), stories caption+progress (8c999bde0),
+> mini-app JS injection (9f768b98b), location consent + plaintext storage (46fb585ae).
+
+
 | # | Issue | Evidence | Action |
 |---|---|---|---|
 | 1 | **Profile note crashes any profile that has one.** `calculateHeight()` throws `UnsupportedOperationException` for `btn_profileNote` (`TYPE_INFO_MULTILINE`). | `ui/ProfileController.java:5868-5891` | Add a `btn_profileNote` branch mirroring `btn_description`. |
