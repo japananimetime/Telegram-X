@@ -190,6 +190,7 @@ import org.thunderdog.challegram.player.RoundVideoController;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.telegram.ChatListener;
+import org.thunderdog.challegram.telegram.GroupCallListener;
 import org.thunderdog.challegram.telegram.EmojiMediaType;
 import org.thunderdog.challegram.telegram.GlobalAccountListener;
 import org.thunderdog.challegram.telegram.ListManager;
@@ -1051,6 +1052,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     actionView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, actionBarHeight));
     actionView.addThemeListeners(this);
 
+    callBarView = new TopBarView(context);
+    callBarView.setCanDismiss(false);
+    callBarView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, actionBarHeight));
+    callBarView.addThemeListeners(this);
+
     int requestsViewHeight = Screen.dp(48f);
     requestsView = new JoinRequestsView(context, tdlib);
     requestsView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, requestsViewHeight));
@@ -1129,7 +1135,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     };
 
     topBar.initWithList(new CollapseListView.Item[] {
-      // TODO voice chat bar
+      callBarItem = new CollapseListView.ViewItem(callBarView, actionBarHeight),
       pinnedMessagesItem,
       requestsItem = new CollapseListView.ViewItem(requestsView, requestsViewHeight),
       liveLocationItem = new CollapseListView.ViewItem(liveLocationView, liveLocationHeight),
@@ -3264,6 +3270,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     if (!inPreviewMode && !isInForceTouchMode()) {
       checkActionBar();
+      checkCallBar();
       checkJoinRequests(chat.pendingJoinRequests);
       checkCanSendMessagesToUser(true);
     }
@@ -4695,6 +4702,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void destroy () {
     resetSelectableControl();
+
+    if (callBarGroupCallId != 0) {
+      tdlib.listeners().unsubscribeFromGroupCallUpdates(callBarGroupCallId, callBarListener);
+      callBarGroupCallId = 0;
+    }
 
     discardAttachedFiles(false);
     setScrollToBottomVisible(false, false);
@@ -6971,6 +6983,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private TopBarView actionView;
   private CollapseListView.Item actionItem;
 
+  private TopBarView callBarView;
+  private CollapseListView.Item callBarItem;
+
   private CustomTextView toastAlertView;
   private CollapseListView.Item toastAlertItem;
 
@@ -9076,6 +9091,74 @@ public class MessagesController extends ViewController<MessagesController.Argume
       actionView.setItems(items.toArray(new TopBarView.Item[0]));
     }
     topBar.setItemVisible(actionItem, !items.isEmpty(), isFocused());
+  }
+
+  // Active group-call (video chat) bar
+
+  private int callBarGroupCallId;
+  private int callBarTypeRes = R.string.VoiceChat;
+
+  private final GroupCallListener callBarListener = new GroupCallListener() {
+    @Override
+    public void onGroupCallUpdated (TdApi.GroupCall groupCall) {
+      if (groupCall != null && groupCall.id == callBarGroupCallId) {
+        runOnUiThreadOptional(() -> applyCallBarType(groupCallTypeRes(groupCall)));
+      }
+    }
+  };
+
+  private static int groupCallTypeRes (TdApi.GroupCall groupCall) {
+    if (groupCall.isRtmpStream)
+      return R.string.GroupCallRtmp;
+    if (groupCall.isLiveStory)
+      return R.string.GroupCallLiveStream;
+    return groupCall.isVideoChat ? R.string.VideoChat : R.string.VoiceChat;
+  }
+
+  private TopBarView.Item newCallBarItem (int groupCallId, int typeRes) {
+    return new TopBarView.Item(R.id.btn_openGroupCall, typeRes,
+      v -> tdlib.ui().openVoiceChat(this, groupCallId, null)).setNoDismiss();
+  }
+
+  private void applyCallBarType (int typeRes) {
+    this.callBarTypeRes = typeRes;
+    if (callBarGroupCallId != 0 && callBarView != null) {
+      callBarView.setItems(newCallBarItem(callBarGroupCallId, typeRes));
+    }
+  }
+
+  private void checkCallBar () {
+    if (callBarView == null || callBarItem == null) {
+      return;
+    }
+    TdApi.Chat chat = tdlib.chat(getChatId());
+    int groupCallId = chat != null && chat.videoChat != null ? chat.videoChat.groupCallId : 0;
+    if (groupCallId != callBarGroupCallId) {
+      if (callBarGroupCallId != 0) {
+        tdlib.listeners().unsubscribeFromGroupCallUpdates(callBarGroupCallId, callBarListener);
+      }
+      callBarGroupCallId = groupCallId;
+      callBarTypeRes = R.string.VoiceChat;
+      if (groupCallId != 0) {
+        tdlib.listeners().subscribeToGroupCallUpdates(groupCallId, callBarListener);
+        tdlib.send(new TdApi.GetGroupCall(groupCallId), (result, error) -> runOnUiThreadOptional(() -> {
+          if (error == null && result != null && result.id == callBarGroupCallId) {
+            applyCallBarType(groupCallTypeRes(result));
+          }
+        }));
+      }
+    }
+    if (groupCallId != 0) {
+      callBarView.setItems(newCallBarItem(groupCallId, callBarTypeRes));
+    }
+    topBar.setItemVisible(callBarItem, groupCallId != 0, isFocused());
+  }
+
+  @Override
+  public void onChatVideoChatChanged (long chatId, TdApi.VideoChat videoChat) {
+    if (chatId == getChatId()) {
+      runOnUiThreadOptional(this::checkCallBar);
+    }
   }
 
   // Callback shit
