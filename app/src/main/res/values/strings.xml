@@ -6193,6 +6193,9 @@
   <string name="BoostApplied">Boost applied!</string>
 
   <string name="FactCheck">Fact Check</string>
+  <string name="FactCheckAdd">Add fact check</string>
+  <string name="FactCheckEdit">Edit fact check</string>
+  <string name="FactCheckHint">Fact check (leave empty to remove)</string>
   <string name="MessageEffectAdd">Add animated effect</string>
   <string name="MessageEffectChange">Change effect</string>
   <string name="MessageEffectChoose">Choose an effect</string>

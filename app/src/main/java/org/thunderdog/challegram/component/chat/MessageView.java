@@ -918,6 +918,13 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       icons.append(R.drawable.baseline_mic_24);
     }
 
+    // Fact check (admins/moderators)
+    if (!isMore && isSent && messageCount == 1 && msg.canSetFactCheck()) {
+      ids.append(R.id.btn_messageFactCheck);
+      strings.append(msg.getFactCheck() != null ? R.string.FactCheckEdit : R.string.FactCheckAdd);
+      icons.append(R.drawable.baseline_info_24);
+    }
+
     if (messageCount == 1) {
       if (!isMore && msg.getMessage().content.getConstructor() == TdApi.MessageSticker.CONSTRUCTOR) {
         TdApi.Sticker sticker = ((TdApi.MessageSticker) msg.getMessage().content).sticker;

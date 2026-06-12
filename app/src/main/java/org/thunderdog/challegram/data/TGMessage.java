@@ -5157,6 +5157,20 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return properties.canGetStatistics;
   }
 
+  public final boolean canSetFactCheck () {
+    return lastMessageProperties().canSetFactCheck;
+  }
+
+  @Nullable
+  public final TdApi.FactCheck getFactCheck () {
+    return msg.factCheck;
+  }
+
+  public final void setFactCheck (@Nullable TdApi.FormattedText text) {
+    TdApi.FormattedText factText = text != null ? text : new TdApi.FormattedText("", new TdApi.TextEntity[0]);
+    tdlib.send(new TdApi.SetMessageFactCheck(msg.chatId, msg.id, factText), tdlib.typedOkHandler());
+  }
+
   public final boolean canGetViewers () {
     TdApi.MessageProperties properties = lastMessageProperties();
     return properties.canGetViewers;
