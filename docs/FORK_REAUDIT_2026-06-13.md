@@ -42,6 +42,9 @@ the code added since, plus a fresh parity sweep.
 | Forum new-message-in-unknown-topic full reload → targeted `GetForumTopic` insert | `987fe1fd9` |
 | Story caption entities dropped (display/compose/edit) | `94c887197` |
 | `StarAmount` aliased Tdlib's cached object → copy | `069c9b00a` |
+| Payment tips never collected (`tipAmount=0`) — tip section + total + `SendPaymentForm` | `e16722a74` |
+| Order info never collected (`orderInfoId=""`) — contact-info form + `ValidateOrderInfo` | `e16722a74` |
+| Paid-reaction amount hardcoded to 1 — preset + custom amount picker | `614c4ccf1` |
 
 ## P1 — correctness, still open
 
@@ -51,10 +54,8 @@ the code added since, plus a fresh parity sweep.
 - `resortAndRefresh` uses `notifyDataSetChanged()` (flicker); should diff/range-notify. `:1622`.
 - `copyForumTopics` shares nested `lastMessage`/`info` refs; `onMessageContentChanged` mutates `lastMessage.content` in place across threads. `Tdlib.java:3599`.
 
-**Payments** (remaining — UI-heavy)
-- Order info / shipping never collected (`orderInfoId`/`shippingOptionId` always `""`); `ValidateOrderInfo` unused — needs an address form. `PaymentFormController.java:581`.
-- Tips ignored (`tipAmount=0` hardcoded; `suggestedTipAmounts` never rendered) — needs tip UI. `:584`.
-- Paid-reaction amount hardcoded to 1 Star — needs an amount slider. `TGMessage.java:9819`.
+**Payments** (remaining)
+- **Shipping address** + shipping-option selection still not collected (`shippingOptionId` always `""`); the `Address` form + `ValidateOrderInfo`→`shippingOptions`→select flow is the last payment piece. Name/phone/email order-info and tips are now done. `PaymentFormController.java`.
 
 **Mini Apps** (remaining)
 - Biometry access flags (`biometryAccessRequested/Granted`) are ephemeral per-session while the token is persisted → inconsistent `biometry_info_received`. `:1411`.
