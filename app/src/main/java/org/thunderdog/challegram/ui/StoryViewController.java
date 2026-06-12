@@ -39,11 +39,13 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
@@ -729,11 +731,23 @@ public class StoryViewController extends ViewController<StoryViewController.Args
         prepareVideoPlayer(videoContent.video);
         break;
       }
-      case TdApi.StoryContentUnsupported.CONSTRUCTOR: {
-        showError();
+      case TdApi.StoryContentUnsupported.CONSTRUCTOR:
+      default: {
+        // StoryContentLive (group-call/RTMP) and any future content type aren't
+        // playable here — skip to the next story instead of hanging on a black screen.
+        skipUnplayableStory();
         break;
       }
     }
+  }
+
+  private void skipUnplayableStory () {
+    releasePlayer();
+    UI.post(() -> {
+      if (!isDestroyed()) {
+        navigateNext();
+      }
+    }, 800);
   }
 
   private void showError () {
@@ -775,9 +789,17 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     if (TD.isFileLoaded(file)) {
       startVideoPlayback(file.local.path);
     } else {
+      // Capture the story this download is for; if the user navigates away before
+      // it finishes, the stale callback must not start the old video over the new story.
+      final long requestedChatId = currentChatId;
+      final int requestedStoryId = currentStoryId;
       tdlib.files().downloadFile(file, TdlibFilesManager.PRIORITY_USER_REQUEST_DOWNLOAD, (downloadedFile, error) -> {
         if (error == null && downloadedFile != null && TD.isFileLoaded(downloadedFile)) {
-          UI.post(() -> startVideoPlayback(downloadedFile.local.path));
+          UI.post(() -> {
+            if (!isDestroyed() && currentChatId == requestedChatId && currentStoryId == requestedStoryId) {
+              startVideoPlayback(downloadedFile.local.path);
+            }
+          });
         }
       });
     }
@@ -811,6 +833,16 @@ public class StoryViewController extends ViewController<StoryViewController.Args
         startProgressTimer(duration);
       }
     } else if (playbackState == Player.STATE_ENDED) {
+      navigateNext();
+    }
+  }
+
+  @Override
+  public void onPlayerError (@NonNull PlaybackException error) {
+    // A failed video would otherwise hang forever on the thumbnail (STATE_READY
+    // never fires). Skip to the next story.
+    Log.w("Story video playback failed: %s", error.getMessage());
+    if (!isDestroyed()) {
       navigateNext();
     }
   }
