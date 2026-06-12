@@ -109,6 +109,7 @@ set(TGCALLS_LIB "tgcallsjni")
 
 add_library(${TGCALLS_LIB} SHARED
   tgvoip.cpp
+  group_call.cpp
 
   "${WEBRTC_DIR}/sdk/android/native_api/audio_device_module/audio_device_android.cc"
   "${WEBRTC_DIR}/sdk/android/native_api/base/init.cc"
@@ -281,6 +282,11 @@ list(APPEND TGCALLS_EXCLUDE_LIBS
 Join(TGCALLS_EXCLUDE_LIBS "${TGCALLS_EXCLUDE_LIBS}" ",")
 target_link_options(${TGCALLS_LIB} PUBLIC
   -Wl,--exclude-libs,${TGCALLS_EXCLUDE_LIBS}
+  # The tgcalls group engine references both opus and rnnoise; rnnoise vendors a
+  # copy of opus's FFT (opus_fft_c/opus_ifft_c/opus_fft_impl), colliding with
+  # libopus.a once the group code is actually linked. They are the same routine,
+  # so let the linker take the first definition instead of erroring.
+  -Wl,--allow-multiple-definition
 )
 
 if (${ANDROID_ABI} STREQUAL "arm64-v8a" OR ${ANDROID_ABI} STREQUAL "x86_64")
