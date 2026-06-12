@@ -230,6 +230,7 @@
   <item type="id" name="controller_messageSeen" />
   <item type="id" name="controller_joinDialog" />
   <item type="id" name="controller_giftDialog" />
+  <item type="id" name="controller_gifts" />
   <item type="id" name="controller_storyView" />
   <item type="id" name="controller_storyCompose" />
   <item type="id" name="controller_storyViewers" />
@@ -447,6 +448,9 @@
   <item type="id" name="btn_reactionSelector" />
   <item type="id" name="btn_description" />
   <item type="id" name="btn_profileNote" />
+  <item type="id" name="btn_gifts" />
+  <item type="id" name="btn_giftToggleSaved" />
+  <item type="id" name="btn_giftTogglePinned" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />
