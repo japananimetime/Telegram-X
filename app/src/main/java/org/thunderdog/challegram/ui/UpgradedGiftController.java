@@ -31,6 +31,7 @@ import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.util.OptionDelegate;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.AttachDelegate;
 import org.thunderdog.challegram.widget.UpgradedGiftHeaderView;
@@ -430,21 +431,52 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
           UI.showToast(R.string.GiftResalePriceInvalid, Toast.LENGTH_SHORT);
           return false;
         }
-        sendOffer(price);
+        promptOfferDuration(price);
         return true;
       }, true);
   }
 
-  private void sendOffer (@NonNull TdApi.GiftResalePrice price) {
+  // Lets the user pick how long the purchase offer stays open before sending it.
+  private void promptOfferDuration (@NonNull TdApi.GiftResalePrice price) {
+    final int[] durations = {86400, 259200, 604800, 2592000};
+    final String[] labels = {
+      Lang.getString(R.string.GiftOfferDuration1Day),
+      Lang.getString(R.string.GiftOfferDuration3Days),
+      Lang.getString(R.string.GiftOfferDuration1Week),
+      Lang.getString(R.string.GiftOfferDuration1Month)
+    };
+    final int[] ids = new int[durations.length];
+    final int[] icons = new int[durations.length];
+    for (int i = 0; i < durations.length; i++) {
+      ids[i] = R.id.btn_giftOfferDurationItem;
+      icons[i] = R.drawable.baseline_watch_later_24;
+    }
+    final OptionDelegate delegate = new OptionDelegate() {
+      @Override
+      public boolean onOptionItemPressed (View optionItemView, int id) {
+        Object tag = optionItemView.getTag();
+        if (tag instanceof Integer) {
+          sendOffer(price, (Integer) tag);
+        }
+        return true;
+      }
+
+      @Override
+      public Object getTagForItem (int position) {
+        return position >= 0 && position < durations.length ? durations[position] : null;
+      }
+    };
+    showOptions(Lang.getString(R.string.GiftOfferDurationTitle), ids, labels, null, icons, delegate);
+  }
+
+  private void sendOffer (@NonNull TdApi.GiftResalePrice price, int durationSeconds) {
     final TdApi.UpgradedGift gift = getArgumentsStrict().gift;
     if (gift.ownerId == null || StringUtils.isEmpty(gift.name)) {
       return;
     }
-    // Default to a 1-day offer duration. paidMessageStarCount should be the
-    // recipient's outgoingPaidMessageStarCount; for the common (user, no paid
-    // messages) case 0 is correct. A full fetch of userFullInfo to honor paid
-    // DMs is out of scope for this slice.
-    final int durationSeconds = 86400;
+    // paidMessageStarCount should be the recipient's outgoingPaidMessageStarCount;
+    // for the common (user, no paid messages) case 0 is correct. A full fetch of
+    // userFullInfo to honor paid DMs is out of scope here.
     tdlib.send(new TdApi.SendGiftPurchaseOffer(gift.ownerId, gift.name, price, durationSeconds, 0), (ok, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
         UI.showError(error);

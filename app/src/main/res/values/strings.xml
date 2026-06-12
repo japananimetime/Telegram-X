@@ -5828,6 +5828,11 @@
   <string name="GiftResaleFilterSymbol">Filter by symbol</string>
   <string name="GiftResaleFilterBackdrop">Filter by backdrop</string>
   <string name="GiftResaleClearFilter">Clear filters</string>
+  <string name="GiftOfferDurationTitle">Offer valid for</string>
+  <string name="GiftOfferDuration1Day">1 day</string>
+  <string name="GiftOfferDuration3Days">3 days</string>
+  <string name="GiftOfferDuration1Week">1 week</string>
+  <string name="GiftOfferDuration1Month">1 month</string>
   <string name="GiftResaleBought">Gift purchased.</string>
   <string name="UpgradedGiftSell">Sell Gift</string>
   <string name="UpgradedGiftListed">Listed for resale</string>

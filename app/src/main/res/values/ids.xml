@@ -489,6 +489,7 @@
   <item type="id" name="btn_giftResaleFilterBackdrop" />
   <item type="id" name="btn_giftResaleFilterItem" />
   <item type="id" name="btn_giftResaleClearFilter" />
+  <item type="id" name="btn_giftOfferDurationItem" />
   <item type="id" name="btn_giftMakeOffer" />
   <item type="id" name="btn_giftOfferRespond" />
   <item type="id" name="btn_giftOfferAccept" />
