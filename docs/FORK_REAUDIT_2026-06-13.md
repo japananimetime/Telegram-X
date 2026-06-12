@@ -45,6 +45,7 @@ the code added since, plus a fresh parity sweep.
 | Payment tips never collected (`tipAmount=0`) — tip section + total + `SendPaymentForm` | `e16722a74` |
 | Order info never collected (`orderInfoId=""`) — contact-info form + `ValidateOrderInfo` | `e16722a74` |
 | Paid-reaction amount hardcoded to 1 — preset + custom amount picker | `614c4ccf1` |
+| Shipping address + shipping-option selection never collected — full address form + `ValidateOrderInfo`→options→total | `0e0168549` |
 
 ## P1 — correctness, still open
 
@@ -54,8 +55,7 @@ the code added since, plus a fresh parity sweep.
 - `resortAndRefresh` uses `notifyDataSetChanged()` (flicker); should diff/range-notify. `:1622`.
 - `copyForumTopics` shares nested `lastMessage`/`info` refs; `onMessageContentChanged` mutates `lastMessage.content` in place across threads. `Tdlib.java:3599`.
 
-**Payments** (remaining)
-- **Shipping address** + shipping-option selection still not collected (`shippingOptionId` always `""`); the `Address` form + `ValidateOrderInfo`→`shippingOptions`→select flow is the last payment piece. Name/phone/email order-info and tips are now done. `PaymentFormController.java`.
+**Payments** — ✅ **closed out.** Tips, contact info (name/phone/email), and the full shipping-address + shipping-option flow are all implemented. Minor polish remaining: email/phone keyboard input types on the order-info fields (cosmetic).
 
 **Mini Apps** (remaining)
 - Biometry access flags (`biometryAccessRequested/Granted`) are ephemeral per-session while the token is persisted → inconsistent `biometry_info_received`. `:1411`.
