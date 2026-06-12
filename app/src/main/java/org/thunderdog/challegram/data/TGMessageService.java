@@ -404,16 +404,17 @@ public final class TGMessageService extends TGMessageServiceImpl {
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGroupCall groupCall) {
     super(context, msg);
     setTextCreator(() -> {
+      // MessageGroupCall is a call not bound to a chat; isVideo selects video vs voice.
       if (groupCall.isActive) {
         return msg.isOutgoing
-          ? getText(R.string.ServiceGroupCallStarted_outgoing)
-          : getText(R.string.ServiceGroupCallStarted, new SenderArgument(sender, isUserChat()));
+          ? getText(groupCall.isVideo ? R.string.ServiceVideoCallStarted_outgoing : R.string.ServiceVoiceCallStarted_outgoing)
+          : getText(groupCall.isVideo ? R.string.ServiceVideoCallStarted : R.string.ServiceVoiceCallStarted, new SenderArgument(sender, isUserChat()));
       } else if (groupCall.wasMissed) {
-        return getText(R.string.ServiceGroupCallMissed);
+        return getText(groupCall.isVideo ? R.string.ServiceVideoCallMissed : R.string.ServiceVoiceCallMissed);
       } else if (groupCall.duration > 0) {
-        return getText(R.string.ServiceGroupCallEndedDuration, new BoldArgument(Lang.getDuration(groupCall.duration)));
+        return getText(groupCall.isVideo ? R.string.ServiceVideoCallEndedDuration : R.string.ServiceVoiceCallEndedDuration, new BoldArgument(Lang.getDuration(groupCall.duration)));
       } else {
-        return getText(R.string.ServiceGroupCallEnded);
+        return getText(groupCall.isVideo ? R.string.ServiceVideoCallEnded : R.string.ServiceVoiceCallEnded);
       }
     });
   }

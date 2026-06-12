@@ -484,6 +484,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private boolean hasAvailableMessageEffects () {
+    // TDLib applies effectId only to sendMessage/sendMessageAlbum in private,
+    // non-secret chats — don't offer the picker where the server would ignore it.
+    if (chat == null || !tdlib.isUserChat(chat.id) || ChatId.isSecret(chat.id)) {
+      return false;
+    }
     return tdlib.availableReactionEffectIds().length > 0 || tdlib.availableStickerEffectIds().length > 0;
   }
 

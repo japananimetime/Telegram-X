@@ -7376,6 +7376,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
     setFooter(Lang.getString(R.string.FactCheck), msg.factCheck.text.text, msg.factCheck.text.entities);
     factCheckFooterShown = true;
+    speechFooterShown = false; // fact-check now owns the footer slot
   }
 
   public final void updateMessageFactCheck (TdApi.FactCheck factCheck) {

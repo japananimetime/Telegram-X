@@ -423,6 +423,12 @@ public class TGMessageText extends TGMessage {
 
   @Override
   protected boolean isSupportedMessageContent (TdApi.Message message, TdApi.MessageContent messageContent) {
+    // Paid media is rendered via buildPaidMediaText() (lock state + caption). An
+    // in-place text update can't re-evaluate the locked/unlocked state, so force a
+    // full rebuild (MESSAGE_REPLACE_REQUIRED) when paid-media content changes.
+    if (messageContent.getConstructor() == TdApi.MessagePaidMedia.CONSTRUCTOR) {
+      return false;
+    }
     final @EmojiMessageContentType int contentType = getEmojiMessageContentType(messageContent);
     if (messageContent.getConstructor() == TdApi.MessageText.CONSTRUCTOR || messageContent.getConstructor() == TdApi.MessageAnimatedEmoji.CONSTRUCTOR) {
       return contentType == EmojiMessageContentType.NOT_EMOJI;
