@@ -625,6 +625,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.StartEncryptedChat);
     }
 
+    if (user.id != myUserId && canSendGiftToUser()) {
+      ids.append(R.id.more_btn_sendGift);
+      strings.append(R.string.SendGift);
+    }
+
     if (isBot) {
       if (Td.hasUsername(user)) {
         ids.append(R.id.more_btn_share);
@@ -775,6 +780,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
             }
           } else if (id == R.id.more_btn_delete) {
             tdlib.ui().deleteContact(this, user.id);
+          } else if (id == R.id.more_btn_sendGift) {
+            openGiftPicker(new TdApi.MessageSenderUser(user.id));
           }
         }
         break;
@@ -2504,6 +2511,45 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     navigateTo(c);
   }
 
+  // Whether the "Send a Gift" entry should be offered for this user/bot.
+  private boolean canSendGiftToUser () {
+    if (!isUserMode() || user == null || userFull == null) {
+      return false;
+    }
+    if (tdlib.isSelfUserId(user.id)) {
+      return false;
+    }
+    TdApi.GiftSettings settings = userFull.giftSettings;
+    if (settings == null) {
+      // Unknown - still allow; SendGift will fail server-side if disallowed.
+      return true;
+    }
+    TdApi.AcceptedGiftTypes types = settings.acceptedGiftTypes;
+    if (types == null) {
+      return true;
+    }
+    return types.unlimitedGifts || types.limitedGifts || types.upgradedGifts;
+  }
+
+  private void openGiftPicker (TdApi.MessageSender ownerId) {
+    GiftPickerController c = new GiftPickerController(context, tdlib);
+    c.setArguments(new GiftPickerController.Args(ownerId));
+    navigateTo(c);
+  }
+
+  private ListItem newGiftSettingsItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_giftSettings, R.drawable.baseline_gift_outline_24, R.string.GiftSettings);
+  }
+
+  private void openGiftSettings () {
+    if (userFull == null) {
+      return;
+    }
+    GiftSettingsController c = new GiftSettingsController(context, tdlib);
+    c.setArguments(new GiftSettingsController.Args(userFull.giftSettings));
+    navigateTo(c);
+  }
+
   private ListItem newPeerIdItem () {
     return new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, R.drawable.baseline_identifier_24, R.string.PeerId);
   }
@@ -2565,6 +2611,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
         }
         items.add(newGiftsItem());
+        addedCount++;
+      }
+      if (tdlib.isSelfUserId(user.id)) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newGiftSettingsItem());
         addedCount++;
       }
     }
@@ -5230,6 +5283,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
     } else if (viewId == R.id.btn_gifts) {
       openGifts();
+    } else if (viewId == R.id.btn_giftSettings) {
+      openGiftSettings();
     } else if (viewId == R.id.btn_notifications) {
       tdlib.ui().showMuteOptions(this, chat.id, true, null);
     } else if (viewId == R.id.btn_encryptionKey) {
