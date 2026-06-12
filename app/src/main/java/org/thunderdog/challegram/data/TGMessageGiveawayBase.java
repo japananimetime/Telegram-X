@@ -15,7 +15,10 @@
 package org.thunderdog.challegram.data;
 
 import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.text.SpannableStringBuilder;
 import android.view.MotionEvent;
@@ -32,6 +35,9 @@ import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.component.user.BubbleWrapView2;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.ComplexReceiver;
+import org.thunderdog.challegram.loader.ImageFile;
+import org.thunderdog.challegram.loader.Receiver;
+import org.thunderdog.challegram.loader.gif.GifFile;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
@@ -438,6 +444,129 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
     @Override
     public void draw (Canvas c, MessageView v, int x, int y) {
       Drawables.draw(c, drawable, x + (width - drawable.getMinimumWidth()) / 2f, y, PorterDuffPaint.get(ColorId.icon));
+    }
+  }
+
+  /**
+   * Centered gift card visual: an optional backdrop gradient (from an upgraded
+   * gift's {@link TdApi.UpgradedGiftBackdropColors}) drawn in a rounded square,
+   * with the gift's model sticker drawn on top (animated when available, static
+   * otherwise). Used by the upgraded-gift renderers.
+   */
+  public static class ContentGiftCard extends ContentPart {
+    private static final int CARD_SIZE_DP = 110;
+    private static final int CARD_RADIUS_DP = 16;
+    private static final int STICKER_SIZE_DP = 90;
+
+    private final long receiverKey;
+    private final boolean animated;
+    private final @Nullable ImageFile imageFile;
+    private final @Nullable GifFile gifFile;
+
+    // Backdrop colors (already ARGB, alpha forced opaque); -1 = no backdrop
+    private final int centerColor;
+    private final int edgeColor;
+    private final boolean hasBackdrop;
+
+    private int width;
+
+    // Hoisted drawing state (never allocated in draw)
+    private final Paint backdropPaint;
+    private final RectF cardRect = new RectF();
+    private RadialGradient cachedGradient;
+    private float cachedGradientCx, cachedGradientCy, cachedGradientRadius;
+
+    public ContentGiftCard (Tdlib tdlib, long receiverKey, @Nullable TdApi.Sticker sticker, @Nullable TdApi.UpgradedGiftBackdropColors backdropColors) {
+      this.receiverKey = receiverKey;
+      if (backdropColors != null) {
+        this.hasBackdrop = true;
+        this.centerColor = 0xFF000000 | backdropColors.centerColor;
+        this.edgeColor = 0xFF000000 | backdropColors.edgeColor;
+        this.backdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      } else {
+        this.hasBackdrop = false;
+        this.centerColor = 0;
+        this.edgeColor = 0;
+        this.backdropPaint = null;
+      }
+      if (sticker != null && tdlib != null) {
+        this.animated = Td.isAnimated(sticker.format);
+        if (animated) {
+          GifFile gif = new GifFile(tdlib, sticker);
+          gif.setScaleType(GifFile.FIT_CENTER);
+          gif.setPlayOnce();
+          this.gifFile = gif;
+          this.imageFile = null;
+        } else {
+          ImageFile img = new ImageFile(tdlib, sticker.sticker);
+          img.setScaleType(ImageFile.FIT_CENTER);
+          this.imageFile = img;
+          this.gifFile = null;
+        }
+      } else {
+        // TODO(gift-animation): fall back to a static gift icon when no sticker is provided
+        this.animated = false;
+        this.imageFile = null;
+        this.gifFile = null;
+      }
+    }
+
+    @Override
+    public void build (int width) {
+      this.width = width;
+    }
+
+    @Override
+    public int getWidth () {
+      return Screen.dp(CARD_SIZE_DP);
+    }
+
+    @Override
+    public int getHeight () {
+      return Screen.dp(CARD_SIZE_DP);
+    }
+
+    @Override
+    public void requestFiles (ComplexReceiver r) {
+      if (animated) {
+        r.getGifReceiver(receiverKey).requestFile(gifFile);
+      } else if (imageFile != null) {
+        r.getImageReceiver(receiverKey).requestFile(imageFile);
+      } else {
+        r.getImageReceiver(receiverKey).requestFile(null);
+      }
+    }
+
+    @Override
+    public void draw (Canvas c, MessageView v, int x, int y) {
+      final int cardSize = Screen.dp(CARD_SIZE_DP);
+      final int cardX = x + (width - cardSize) / 2;
+      cardRect.set(cardX, y, cardX + cardSize, y + cardSize);
+
+      if (hasBackdrop && backdropPaint != null) {
+        final float cx = cardRect.centerX();
+        final float cy = cardRect.centerY();
+        final float radius = cardSize / 2f;
+        if (cachedGradient == null || cachedGradientCx != cx || cachedGradientCy != cy || cachedGradientRadius != radius) {
+          cachedGradient = new RadialGradient(cx, cy, radius, centerColor, edgeColor, Shader.TileMode.CLAMP);
+          cachedGradientCx = cx;
+          cachedGradientCy = cy;
+          cachedGradientRadius = radius;
+        }
+        backdropPaint.setShader(cachedGradient);
+        final float r = Screen.dp(CARD_RADIUS_DP);
+        c.drawRoundRect(cardRect, r, r, backdropPaint);
+      }
+
+      if (v != null && (animated || imageFile != null)) {
+        ComplexReceiver cr = v.getGiveawayAvatarsReceiver();
+        Receiver receiver = animated ? cr.getGifReceiver(receiverKey) : cr.getImageReceiver(receiverKey);
+        final int stickerSize = Screen.dp(STICKER_SIZE_DP);
+        final int sx = cardX + (cardSize - stickerSize) / 2;
+        final int sy = y + (cardSize - stickerSize) / 2;
+        receiver.setBounds(sx, sy, sx + stickerSize, sy + stickerSize);
+        receiver.draw(c);
+      }
     }
   }
 
