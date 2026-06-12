@@ -6196,6 +6196,12 @@
   <string name="ServiceProtectedContentOn">%1$s enabled content protection</string>
   <string name="ServiceProtectedContentOff">%1$s disabled content protection</string>
   <string name="ServiceProtectedContentDisableRequested">A request to disable content protection was sent</string>
+  <string name="ServiceGroupCallStarted">%1$s started a video chat</string>
+  <string name="ServiceGroupCallStarted_outgoing">You started a video chat</string>
+  <string name="ServiceGroupCallMissed">Missed video chat</string>
+  <string name="ServiceGroupCallEnded">Video chat ended</string>
+  <string name="ServiceGroupCallEndedDuration">Video chat ended · %1$s</string>
+  <string name="VideoChat">Video chat</string>
 
   <!-- Chat-list previews -->
   <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>

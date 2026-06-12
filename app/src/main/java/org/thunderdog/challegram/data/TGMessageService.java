@@ -401,6 +401,23 @@ public final class TGMessageService extends TGMessageServiceImpl {
     setTextCreator(() -> getText(R.string.ServiceProtectedContentDisableRequested));
   }
 
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGroupCall groupCall) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (groupCall.isActive) {
+        return msg.isOutgoing
+          ? getText(R.string.ServiceGroupCallStarted_outgoing)
+          : getText(R.string.ServiceGroupCallStarted, new SenderArgument(sender, isUserChat()));
+      } else if (groupCall.wasMissed) {
+        return getText(R.string.ServiceGroupCallMissed);
+      } else if (groupCall.duration > 0) {
+        return getText(R.string.ServiceGroupCallEndedDuration, new BoldArgument(Lang.getDuration(groupCall.duration)));
+      } else {
+        return getText(R.string.ServiceGroupCallEnded);
+      }
+    });
+  }
+
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageExpiredPhoto expiredPhoto) {
     super(context, msg);
     setTextCreator(() ->

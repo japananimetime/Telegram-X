@@ -8612,9 +8612,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
           return new TGMessageService(context, msg, (TdApi.MessagePollOptionDeleted) content);
 
+        case TdApi.MessageGroupCall.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGroupCall) content);
+
         // unsupported / bubble placeholders still pending dedicated renderers
         case TdApi.MessagePaidMedia.CONSTRUCTOR:
-        case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
         case TdApi.MessageChecklist.CONSTRUCTOR: // TODO TGMessagePoll
         case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:

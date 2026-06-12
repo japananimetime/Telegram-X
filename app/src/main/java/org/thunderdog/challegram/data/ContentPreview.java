@@ -1643,6 +1643,8 @@ public class ContentPreview {
       case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
       case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
         return new ContentPreview(EMOJI_LOCK, R.string.ChatListProtectedContent);
+      case TdApi.MessageGroupCall.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_CALL, R.string.VideoChat);
       case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
         return new ContentPreview(EMOJI_INVOICE, R.string.ServicePaymentSentBot);
 
@@ -1652,7 +1654,6 @@ public class ContentPreview {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageGroupCall.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
