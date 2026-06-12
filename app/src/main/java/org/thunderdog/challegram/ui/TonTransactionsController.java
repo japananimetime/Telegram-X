@@ -15,6 +15,8 @@ package org.thunderdog.challegram.ui;
 import android.content.Context;
 import android.view.View;
 
+import android.widget.Toast;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
@@ -23,11 +25,16 @@ import org.thunderdog.challegram.data.GiftRarityUtil;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibOptionListener;
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import me.vkryl.core.StringUtils;
 
 /**
  * Controller for viewing TON (Toncoin) transaction history. Render-only: pages
@@ -38,6 +45,8 @@ public class TonTransactionsController extends RecyclerViewController<Void> impl
 
   private SettingsAdapter adapter;
   private TdApi.TonTransactions transactions;
+  private final List<TdApi.TonTransaction> allTransactions = new ArrayList<>();
+  private boolean isLoadingMore;
 
   public TonTransactionsController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -94,15 +103,30 @@ public class TonTransactionsController extends RecyclerViewController<Void> impl
   }
 
   private void fetchTransactions (String offset) {
+    final boolean isFirstPage = StringUtils.isEmpty(offset);
+    isLoadingMore = !isFirstPage;
     tdlib.send(new TdApi.GetTonTransactions(
       null, // direction - null for all
       offset,
       50
     ), (result, error) -> runOnUiThreadOptional(() -> {
+      isLoadingMore = false;
       if (error != null) {
-        showError(TD.toErrorString(error));
+        if (isFirstPage) {
+          showError(TD.toErrorString(error));
+        } else {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          buildCells();
+        }
       } else {
-        transactions = (TdApi.TonTransactions) result;
+        TdApi.TonTransactions page = (TdApi.TonTransactions) result;
+        if (isFirstPage) {
+          allTransactions.clear();
+        }
+        if (page.transactions != null) {
+          Collections.addAll(allTransactions, page.transactions);
+        }
+        transactions = page;
         buildCells();
       }
     }));
@@ -127,12 +151,12 @@ public class TonTransactionsController extends RecyclerViewController<Void> impl
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, balanceText));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-    if (transactions.transactions != null && transactions.transactions.length > 0) {
+    if (!allTransactions.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.TonTransactions));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
       boolean first = true;
-      for (TdApi.TonTransaction transaction : transactions.transactions) {
+      for (TdApi.TonTransaction transaction : allTransactions) {
         if (!first) {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
         }
@@ -151,6 +175,11 @@ public class TonTransactionsController extends RecyclerViewController<Void> impl
         );
         item.setString(amount + " • " + date);
         items.add(item);
+      }
+
+      if (transactions != null && !StringUtils.isEmpty(transactions.nextOffset)) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_showMore, 0, R.string.ShowMore).setTextColorId(ColorId.textNeutral));
       }
 
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -197,6 +226,10 @@ public class TonTransactionsController extends RecyclerViewController<Void> impl
 
   @Override
   public void onClick (View v) {
-    // Render-only screen; transaction rows are informational.
+    if (v.getId() == R.id.btn_showMore) {
+      if (!isLoadingMore && transactions != null && !StringUtils.isEmpty(transactions.nextOffset)) {
+        fetchTransactions(transactions.nextOffset);
+      }
+    }
   }
 }

@@ -8134,21 +8134,29 @@ public class TdlibUi extends Handler {
       new int[] { R.drawable.baseline_star_24, R.drawable.baseline_cancel_24 },
       (view, optionId) -> {
         if (optionId == R.id.btn_done) {
-          sendStarsPayment(paymentForm, inputInvoice);
+          sendStarsPayment(context, paymentForm, inputInvoice);
         }
         return true;
       }
     );
   }
 
-  private void sendStarsPayment (TdApi.PaymentForm paymentForm, TdApi.InputInvoice inputInvoice) {
+  private void sendStarsPayment (ViewController<?> context, TdApi.PaymentForm paymentForm, TdApi.InputInvoice inputInvoice) {
     UI.showToast(R.string.PaymentProcessing, Toast.LENGTH_SHORT);
     tdlib.send(new TdApi.SendPaymentForm(inputInvoice, paymentForm.id, "", "", null, 0), (result, error) -> {
       UI.post(() -> {
         if (error != null) {
           UI.showToast(Lang.getString(R.string.StarsPaymentFailed, TD.toErrorString(error)), Toast.LENGTH_SHORT);
-        } else {
-          UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
+        } else if (result instanceof TdApi.PaymentResult) {
+          TdApi.PaymentResult paymentResult = (TdApi.PaymentResult) result;
+          if (paymentResult.success) {
+            UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
+          } else if (!StringUtils.isEmpty(paymentResult.verificationUrl)) {
+            // Some payments require a final verification step (e.g. 3D Secure).
+            openUrl(context, paymentResult.verificationUrl, null);
+          } else {
+            UI.showToast(R.string.PaymentVerificationNeeded, Toast.LENGTH_SHORT);
+          }
         }
       });
     });

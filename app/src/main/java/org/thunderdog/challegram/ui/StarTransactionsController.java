@@ -15,6 +15,8 @@ package org.thunderdog.challegram.ui;
 import android.content.Context;
 import android.view.View;
 
+import android.widget.Toast;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
@@ -22,11 +24,16 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibOptionListener;
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import me.vkryl.core.StringUtils;
 
 /**
  * Controller for viewing Star transaction history.
@@ -35,6 +42,8 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
 
   private SettingsAdapter adapter;
   private TdApi.StarTransactions transactions;
+  private final List<TdApi.StarTransaction> allTransactions = new ArrayList<>();
+  private boolean isLoadingMore;
 
   public StarTransactionsController(Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -95,6 +104,8 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
   }
 
   private void fetchTransactions(String offset) {
+    final boolean isFirstPage = StringUtils.isEmpty(offset);
+    isLoadingMore = !isFirstPage;
     tdlib.send(new TdApi.GetStarTransactions(
       new TdApi.MessageSenderUser(tdlib.myUserId()),
       null, // subscriptionId
@@ -103,10 +114,23 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
       50 // limit
     ), (result, error) -> {
       runOnUiThreadOptional(() -> {
+        isLoadingMore = false;
         if (error != null) {
-          showError(TD.toErrorString(error));
+          if (isFirstPage) {
+            showError(TD.toErrorString(error));
+          } else {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+            buildCells();
+          }
         } else {
-          transactions = (TdApi.StarTransactions) result;
+          TdApi.StarTransactions page = (TdApi.StarTransactions) result;
+          if (isFirstPage) {
+            allTransactions.clear();
+          }
+          if (page.transactions != null) {
+            Collections.addAll(allTransactions, page.transactions);
+          }
+          transactions = page; // keeps live starAmount + nextOffset cursor
           buildCells();
         }
       });
@@ -133,12 +157,12 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     // Transactions
-    if (transactions.transactions != null && transactions.transactions.length > 0) {
+    if (!allTransactions.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.StarTransactions));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
       boolean first = true;
-      for (TdApi.StarTransaction transaction : transactions.transactions) {
+      for (TdApi.StarTransaction transaction : allTransactions) {
         if (!first) {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
         }
@@ -147,7 +171,7 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
         String title = getTransactionTitle(transaction);
         String amount = formatTransactionAmount(transaction);
         String date = Lang.dateYearShortTime(transaction.date, TimeUnit.SECONDS);
-        
+
         ListItem item = new ListItem(
           ListItem.TYPE_INFO_MULTILINE,
           0,
@@ -157,6 +181,12 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
         );
         item.setString(amount + " • " + date);
         items.add(item);
+      }
+
+      // "Show more" when the server has another page (nextOffset is non-empty).
+      if (transactions != null && !StringUtils.isEmpty(transactions.nextOffset)) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_showMore, 0, R.string.ShowMore).setTextColorId(ColorId.textNeutral));
       }
 
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -265,6 +295,10 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
 
   @Override
   public void onClick(View v) {
-    // Handle clicks on transaction items if needed
+    if (v.getId() == R.id.btn_showMore) {
+      if (!isLoadingMore && transactions != null && !StringUtils.isEmpty(transactions.nextOffset)) {
+        fetchTransactions(transactions.nextOffset);
+      }
+    }
   }
 }

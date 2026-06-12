@@ -159,6 +159,7 @@
   <string name="PaidReactionSend">Send Star</string>
   <string name="StarTransactions">Transaction History</string>
   <string name="NoStarTransactions">No transactions yet</string>
+  <string name="ShowMore">Show more</string>
   <!-- TON (Toncoin) transaction history (Slice 9) -->
   <string name="TonTransactions">TON Transactions</string>
   <string name="NoTonTransactions">No TON transactions yet</string>
