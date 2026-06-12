@@ -277,6 +277,130 @@ public final class TGMessageService extends TGMessageServiceImpl {
     });
   }
 
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatSetBackground setBackground) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (msg.isOutgoing) {
+        return getText(setBackground.onlyForSelf ? R.string.YouChangedWallpaperForThisChat : R.string.YouChangedWallpaper);
+      } else {
+        return getText(
+          setBackground.onlyForSelf ? R.string.XChangedWallpaper : R.string.XChangedWallpaperForBoth,
+          new SenderArgument(sender, isUserChat())
+        );
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestProfilePhoto suggestPhoto) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (msg.isOutgoing) {
+        return getText(R.string.YouSuggestedPhoto);
+      } else {
+        return getText(R.string.XSuggestedPhoto, new SenderArgument(sender, isUserChat()));
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestBirthdate suggestBirthdate) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (msg.isOutgoing) {
+        return getText(R.string.YouSuggestedBirthdate);
+      } else {
+        return getText(R.string.XSuggestedBirthdate, new SenderArgument(sender, isUserChat()));
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePassportDataSent passportDataSent) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePassportDataSent));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentSuccessfulBot paymentSuccessfulBot) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePaymentSentBot));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaidMessagesRefunded paidMessagesRefunded) {
+    super(context, msg);
+    setTextCreator(() -> getPlural(
+      R.string.ServicePaidMessagesRefunded,
+      paidMessagesRefunded.messageCount,
+      new BoldArgument(Long.toString(paidMessagesRefunded.starCount))
+    ));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaidMessagePriceChanged priceChanged) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (priceChanged.paidMessageStarCount <= 0) {
+        return getText(R.string.ServicePaidMessagePriceChangedFree);
+      }
+      return getPlural(R.string.ServicePaidMessagePriceChanged, priceChanged.paidMessageStarCount);
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGiveawayPrizeStars giveawayPrizeStars) {
+    super(context, msg);
+    setTextCreator(() -> getPlural(R.string.ServiceGiveawayPrizeStars, giveawayPrizeStars.starCount));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChecklistTasksAdded tasksAdded) {
+    super(context, msg);
+    setTextCreator(() -> getPlural(
+      R.string.ServiceChecklistTasksAdded,
+      tasksAdded.tasks != null ? tasksAdded.tasks.length : 0,
+      new SenderArgument(sender, isUserChat())
+    ));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChecklistTasksDone tasksDone) {
+    super(context, msg);
+    setTextCreator(() -> {
+      int doneCount = tasksDone.markedAsDoneTaskIds != null ? tasksDone.markedAsDoneTaskIds.length : 0;
+      return getPlural(
+        R.string.ServiceChecklistTasksDone,
+        doneCount,
+        new SenderArgument(sender, isUserChat())
+      );
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePollOptionAdded pollOptionAdded) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePollOptionAdded, new SenderArgument(sender, isUserChat())));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePollOptionDeleted pollOptionDeleted) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePollOptionDeleted, new SenderArgument(sender, isUserChat())));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatOwnerChanged ownerChanged) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServiceChatOwnerChanged, new SenderArgument(sender, isUserChat())));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageManagedBotCreated managedBotCreated) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServiceManagedBotCreated));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatHasProtectedContentToggled protectedContentToggled) {
+    super(context, msg);
+    setTextCreator(() -> getText(
+      protectedContentToggled.newHasProtectedContent ? R.string.ServiceProtectedContentOn : R.string.ServiceProtectedContentOff,
+      new SenderArgument(sender, isUserChat())
+    ));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatHasProtectedContentDisableRequested protectedContentDisableRequested) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServiceProtectedContentDisableRequested));
+  }
+
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageExpiredPhoto expiredPhoto) {
     super(context, msg);
     setTextCreator(() ->

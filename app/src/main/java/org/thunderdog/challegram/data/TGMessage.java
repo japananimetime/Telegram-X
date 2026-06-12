@@ -8457,35 +8457,50 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageInvoice.CONSTRUCTOR: {
           return new TGMessageInvoice(context, msg, (TdApi.MessageInvoice) content);
         }
-        // unsupported
+        // Service messages (centered grey pill)
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
         case TdApi.MessageChatSetBackground.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatSetBackground) content);
         case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestProfilePhoto) content);
         case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
-        case TdApi.MessagePaidMedia.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestBirthdate) content);
         case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGiveawayPrizeStars) content);
+        case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaidMessagesRefunded) content);
+        case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaidMessagePriceChanged) content);
+        case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChecklistTasksAdded) content);
+        case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChecklistTasksDone) content);
+        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaymentSuccessfulBot) content);
+        case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatOwnerChanged) content);
+        case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageManagedBotCreated) content);
+        case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatHasProtectedContentToggled) content);
+        case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatHasProtectedContentDisableRequested) content);
+        case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePollOptionAdded) content);
+        case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePollOptionDeleted) content);
 
+        // unsupported / bubble placeholders still pending dedicated renderers
+        case TdApi.MessagePaidMedia.CONSTRUCTOR:
         case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
-        case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageChecklist.CONSTRUCTOR: // TODO TGMessagePoll
-        case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessageChecklistTasksDone.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
-
-        // TODO dedicated renderers; routed to the unsupported placeholder for now
-        case TdApi.MessageChatOwnerChanged.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageChatOwnerLeft.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessageManagedBotCreated.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessagePollOptionAdded.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessagePollOptionDeleted.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageStakeDice.CONSTRUCTOR: // TODO TGMessageDice (gambling)
           break;
 
