@@ -148,6 +148,11 @@ public class TGMessageGiveaway extends TGMessageGiveawayBase implements TGInline
   }
 
   @Override
+  protected boolean hasButton () {
+    return true;
+  }
+
+  @Override
   protected void onBuildButton (int maxWidth) {
     final boolean isParticipating = TD.isParticipating(giveawayInfo);
     rippleButton.setCustom(isParticipating ? R.drawable.baseline_check_18 : 0, Lang.getString(isParticipating ? R.string.GiveawayParticipating : R.string.GiveawayLearnMore), maxWidth, false, this);
