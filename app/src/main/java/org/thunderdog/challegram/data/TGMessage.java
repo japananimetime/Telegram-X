@@ -8462,6 +8462,17 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
         case TdApi.MessageGiftedTon.CONSTRUCTOR:
         case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+
+        // TODO dedicated renderers; routed to the unsupported placeholder for now
+        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
+        case TdApi.MessageChatOwnerChanged.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessageChatOwnerLeft.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessageManagedBotCreated.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessagePollOptionAdded.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessagePollOptionDeleted.CONSTRUCTOR: // TODO TGMessageService
+        case TdApi.MessageStakeDice.CONSTRUCTOR: // TODO TGMessageDice (gambling)
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
