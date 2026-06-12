@@ -706,6 +706,16 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     }
   }
 
+  // Width of one button when main and secondary are shown side by side.
+  // Falls back to half the screen width before the content view is laid out.
+  private int sideBySideButtonWidth () {
+    int parentWidth = contentView != null ? contentView.getWidth() : 0;
+    if (parentWidth <= 0) {
+      parentWidth = Screen.currentWidth();
+    }
+    return parentWidth / 2;
+  }
+
   private void updateButtonPositions () {
     int buttonHeight = Screen.dp(48f);
 
@@ -731,25 +741,29 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
           mainParams.gravity = Gravity.BOTTOM;
           secondaryParams.gravity = Gravity.BOTTOM;
           break;
-        case "right":
-          // Secondary to the right of main — side by side
+        case "right": {
+          // Secondary to the right of main — each takes half the width, side by side
+          int halfWidth = sideBySideButtonWidth();
           secondaryParams.bottomMargin = 0;
           mainParams.bottomMargin = 0;
-          secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
-          mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          secondaryParams.width = halfWidth;
+          mainParams.width = halfWidth;
           mainParams.gravity = Gravity.BOTTOM | Gravity.START;
           secondaryParams.gravity = Gravity.BOTTOM | Gravity.END;
           break;
+        }
         case "left":
-        default:
-          // Secondary to the left of main — side by side (default)
+        default: {
+          // Secondary to the left of main — each takes half the width, side by side (default)
+          int halfWidth = sideBySideButtonWidth();
           secondaryParams.bottomMargin = 0;
           mainParams.bottomMargin = 0;
-          secondaryParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
-          mainParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+          secondaryParams.width = halfWidth;
+          mainParams.width = halfWidth;
           mainParams.gravity = Gravity.BOTTOM | Gravity.END;
           secondaryParams.gravity = Gravity.BOTTOM | Gravity.START;
           break;
+        }
       }
       secondaryButtonView.setLayoutParams(secondaryParams);
       mainButtonView.setLayoutParams(mainParams);
