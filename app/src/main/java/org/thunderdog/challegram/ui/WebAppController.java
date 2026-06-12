@@ -1607,15 +1607,52 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   // ==================== Location Services ====================
 
+  // Per-bot location consent (independent of the OS permission). A bot only gets
+  // GPS after the user has explicitly granted it for that specific bot — having
+  // the OS-level location permission is necessary but not sufficient.
+  private SharedPreferences getLocationGrantPrefs () {
+    return context().getSharedPreferences("webapp_location_grants", Context.MODE_PRIVATE);
+  }
+
+  private String getLocationGrantKey () {
+    Args args = getArguments();
+    long botId = args != null ? args.botUserId : 0;
+    return "loc_grant_" + tdlib.id() + "_" + botId;
+  }
+
+  // null = never asked, TRUE = granted, FALSE = explicitly denied
+  @Nullable
+  private Boolean getBotLocationGrant () {
+    try {
+      SharedPreferences prefs = getLocationGrantPrefs();
+      String key = getLocationGrantKey();
+      if (!prefs.contains(key)) {
+        return null;
+      }
+      return prefs.getBoolean(key, false);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private void setBotLocationGrant (boolean granted) {
+    try {
+      getLocationGrantPrefs().edit().putBoolean(getLocationGrantKey(), granted).apply();
+    } catch (Exception ignored) { }
+  }
+
   public void onWebAppCheckLocation () {
     BaseActivity activity = context();
     if (activity == null) {
       sendEventToWebApp("location_checked", "{\"available\":false,\"access_requested\":false,\"access_granted\":false}");
       return;
     }
-    boolean granted = activity.checkLocationPermissions(false) == PackageManager.PERMISSION_GRANTED;
+    boolean osGranted = activity.checkLocationPermissions(false) == PackageManager.PERMISSION_GRANTED;
+    Boolean botGrant = getBotLocationGrant();
+    boolean accessRequested = botGrant != null;
+    boolean accessGranted = osGranted && Boolean.TRUE.equals(botGrant);
     sendEventToWebApp("location_checked",
-      String.format("{\"available\":true,\"access_requested\":%b,\"access_granted\":%b}", granted, granted));
+      String.format("{\"available\":true,\"access_requested\":%b,\"access_granted\":%b}", accessRequested, accessGranted));
   }
 
   private boolean awaitingLocationSettingsReturn = false;
@@ -1636,12 +1673,17 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       return;
     }
 
-    // Check permission
+    // A previously-denied bot stays denied until the user clears it; don't re-prompt.
+    if (Boolean.FALSE.equals(getBotLocationGrant())) {
+      sendLocationResult(false, null);
+      return;
+    }
+
+    // Step 1: ensure the OS-level location permission.
     if (activity.checkLocationPermissions(false) != PackageManager.PERMISSION_GRANTED) {
-      // Use BaseActivity's permission system which handles the full flow
       activity.requestLocationPermission(false, false, (code, permissions, grantResults, grantCount) -> {
         if (grantCount > 0) {
-          getAndSendLocation();
+          ensureBotLocationConsentThenSend();
         } else {
           sendLocationResult(false, null);
         }
@@ -1649,7 +1691,30 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       return;
     }
 
-    getAndSendLocation();
+    // Step 2: ensure per-bot consent.
+    ensureBotLocationConsentThenSend();
+  }
+
+  private void ensureBotLocationConsentThenSend () {
+    if (Boolean.TRUE.equals(getBotLocationGrant())) {
+      getAndSendLocation();
+      return;
+    }
+    showOptions(
+      Lang.getString(R.string.WebAppLocationAccess),
+      new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
+      (itemView, id) -> {
+        boolean granted = id == R.id.btn_done;
+        setBotLocationGrant(granted);
+        if (granted) {
+          getAndSendLocation();
+        } else {
+          sendLocationResult(false, null);
+        }
+        return true;
+      }
+    );
   }
 
   @SuppressLint("MissingPermission")
@@ -1832,8 +1897,15 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       if (value == null) {
         prefs.edit().remove(key).apply();
       } else {
-        // Encrypt at rest with a Keystore-held key (plaintext fallback on API < 23)
-        prefs.edit().putString(key, WebAppSecureStorage.encrypt(value)).apply();
+        // Encrypt at rest with a Keystore-held key. If encryption is unavailable
+        // (API < 23 or cipher failure) encrypt() returns null — reject the write
+        // rather than silently persisting plaintext that pretends to be secure.
+        String encrypted = WebAppSecureStorage.encrypt(value);
+        if (encrypted == null) {
+          sendEventToWebApp("secure_storage_failed", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"error\":\"UNAVAILABLE\"}");
+          return;
+        }
+        prefs.edit().putString(key, encrypted).apply();
       }
       sendEventToWebApp("secure_storage_key_saved", "{\"req_id\":\"" + escapeJsonString(reqId) + "\"}");
     } catch (Exception e) {

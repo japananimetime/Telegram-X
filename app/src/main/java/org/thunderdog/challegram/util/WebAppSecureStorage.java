@@ -34,10 +34,11 @@ import javax.crypto.spec.GCMParameterSpec;
  * Android Keystore (hardware-backed where available), so values are not stored
  * in plaintext at rest.
  *
- * On API < 23 the Keystore AES API is unavailable; values are stored as-is and
- * {@link #isEncryptionAvailable()} returns false so callers can decide policy.
- * The stored format is {@code 1:base64(iv):base64(ciphertext)}; legacy plaintext
- * values (no prefix) are returned unchanged for backwards compatibility.
+ * On API < 23 the Keystore AES API is unavailable; {@link #encrypt(String)} then
+ * returns {@code null} so the caller can reject the write rather than persist
+ * plaintext that masquerades as secure. The stored format is
+ * {@code 1:base64(iv):base64(ciphertext)}; any value without that prefix is
+ * treated as untrusted and never handed back.
  */
 public final class WebAppSecureStorage {
   private static final String KEYSTORE = "AndroidKeyStore";
@@ -81,14 +82,15 @@ public final class WebAppSecureStorage {
   }
 
   /**
-   * Encrypts a value for storage. Falls back to the raw value when the Keystore
-   * is unavailable (API < 23 or key generation failure).
+   * Encrypts a value for storage. Returns {@code null} when the value cannot be
+   * encrypted (Keystore unavailable on API &lt; 23, or any key/cipher failure) so
+   * the caller can reject the write instead of persisting unprotected plaintext.
    */
-  @NonNull
+  @Nullable
   public static String encrypt (@NonNull String value) {
     SecretKey key = obtainKey();
     if (key == null) {
-      return value;
+      return null;
     }
     try {
       Cipher cipher = Cipher.getInstance(TRANSFORMATION);
@@ -100,18 +102,19 @@ public final class WebAppSecureStorage {
         + Base64.encodeToString(ciphertext, Base64.NO_WRAP);
     } catch (Throwable t) {
       Log.e("Cannot encrypt WebApp secure-storage value", t);
-      return value;
+      return null;
     }
   }
 
   /**
-   * Decrypts a stored value. Values without the encryption prefix (legacy
-   * plaintext) are returned unchanged.
+   * Decrypts a stored value. Anything without the encryption prefix is considered
+   * untrusted (corrupt or never properly encrypted) and yields {@code null} — we
+   * never return plaintext as if it were a trusted secure-storage value.
    */
   @Nullable
   public static String decrypt (@Nullable String stored) {
     if (stored == null || !stored.startsWith(PREFIX)) {
-      return stored;
+      return null;
     }
     SecretKey key = obtainKey();
     if (key == null) {
