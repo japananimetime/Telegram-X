@@ -8035,6 +8035,17 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   @TdlibThread
+  private void updateChatUnreadPollVoteCount (TdApi.UpdateChatUnreadPollVoteCount update) {
+    synchronized (dataLock) {
+      TdApi.Chat chat = chats.get(update.chatId);
+      if (TdlibUtils.assertChat(update.chatId, chat, update)) {
+        return;
+      }
+      chat.unreadPollVoteCount = update.unreadPollVoteCount;
+    }
+  }
+
+  @TdlibThread
   private void updateChatUnreadReactionCount (TdApi.UpdateChatUnreadReactionCount update) {
     final boolean availabilityChanged;
     final TdApi.Chat chat;
@@ -10866,8 +10877,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       case TdApi.UpdatePendingMessage.CONSTRUCTOR: // TODO: handle pending message previews (messageText/messageRichMessage)
       case TdApi.UpdateLiveStoryTopDonors.CONSTRUCTOR:
       case TdApi.UpdateChatJoinResult.CONSTRUCTOR: // TODO: guard bot join result flow
-      case TdApi.UpdateChatUnreadPollVoteCount.CONSTRUCTOR: // TODO: unread poll vote counters
-      case TdApi.UpdateMessageContainsUnreadPollVotes.CONSTRUCTOR: // TODO: unread poll vote counters
+      case TdApi.UpdateChatUnreadPollVoteCount.CONSTRUCTOR: {
+        updateChatUnreadPollVoteCount((TdApi.UpdateChatUnreadPollVoteCount) update);
+        break;
+      }
+      case TdApi.UpdateMessageContainsUnreadPollVotes.CONSTRUCTOR: // TODO: per-message unread poll-vote flag (niche, creator-only)
       case TdApi.UpdateNewOauthRequest.CONSTRUCTOR: // TODO: OAuth authorization requests
       case TdApi.UpdateStakeDiceState.CONSTRUCTOR: // TODO: stake dice
       case TdApi.UpdateTextCompositionStyles.CONSTRUCTOR: // TODO: text composition styles
