@@ -559,14 +559,41 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
   }
 
   // Export to TON
-  // GetUpgradedGiftWithdrawalUrl(receivedGiftId, password) requires the user's
-  // 2-step verification password. A full password-prompt + getUrl + openUrl flow
-  // is out of scope for this slice; surface a clear message instead of shipping a
-  // broken half-flow.
+  // Withdrawing the gift to the TON blockchain (as an NFT on Fragment) requires the
+  // user's 2-step verification password: fetch the password state, confirm the
+  // password via PasswordController, then GetUpgradedGiftWithdrawalUrl and open it.
   private void exportToTon () {
-    // TODO(Slice 5): collect the 2-step password (PasswordController), then call
-    // GetUpgradedGiftWithdrawalUrl(receivedGiftId, password) and open the returned URL.
-    UI.showToast(R.string.UpgradedGiftExportUnavailable, Toast.LENGTH_LONG);
+    final Args args = getArgumentsStrict();
+    if (StringUtils.isEmpty(args.receivedGiftId) || isDestroyed()) {
+      return;
+    }
+    tdlib.send(new TdApi.GetPasswordState(), (state, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      if (state == null || !state.hasPassword) {
+        // Withdrawal needs 2-step verification enabled on the account.
+        UI.showToast(R.string.UpgradedGiftExportNeeds2FA, Toast.LENGTH_LONG);
+        return;
+      }
+      PasswordController controller = new PasswordController(context(), tdlib);
+      controller.setArguments(new PasswordController.Args(PasswordController.MODE_CONFIRM, state)
+        .setSuccessListener(password -> requestWithdrawalUrl(args.receivedGiftId, password)));
+      navigateTo(controller);
+    }));
+  }
+
+  private void requestWithdrawalUrl (String receivedGiftId, String password) {
+    tdlib.send(new TdApi.GetUpgradedGiftWithdrawalUrl(receivedGiftId, password), (result, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      if (result != null && !StringUtils.isEmpty(result.url)) {
+        tdlib.ui().openUrl(this, result.url, null);
+      }
+    }));
   }
 
   // Drop original details

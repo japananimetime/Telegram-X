@@ -5813,6 +5813,7 @@
   <string name="UpgradedGiftTransferred">Gift transferred.</string>
   <string name="UpgradedGiftTransferNoUser">User not found.</string>
   <string name="UpgradedGiftExportUnavailable">NFT export requires 2-step verification and isn\'t available here yet.</string>
+  <string name="UpgradedGiftExportNeeds2FA">Exporting this gift to TON requires 2-step verification. Enable it in Settings → Privacy and Security first.</string>
   <!-- Resale + purchase offers (Slice 5) -->
   <string name="GiftResale">Resale Market</string>
   <string name="GiftResaleEmpty">No gifts are listed for resale right now.</string>
