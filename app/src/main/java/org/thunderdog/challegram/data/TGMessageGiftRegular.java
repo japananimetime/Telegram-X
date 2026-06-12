@@ -101,10 +101,8 @@ public class TGMessageGiftRegular extends TGMessageGiveawayBase {
   }
 
   @Override public void onClick (View view, TGInlineKeyboard keyboard, TGInlineKeyboard.Button button) {
-    // Open gift details - for now just show a toast
-    // Full implementation would open a gift details screen
     if (gift.receivedGiftId != null && !gift.receivedGiftId.isEmpty()) {
-      // TODO: Open gift details screen using getReceivedGift
+      org.thunderdog.challegram.ui.GiftsController.openGiftDetailsById(controller(), tdlib, gift.receivedGiftId);
     }
   }
 

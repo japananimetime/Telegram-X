@@ -5713,6 +5713,23 @@
   <string name="xGiftCanBeSold_one">Can be converted to %1$s Star</string>
   <string name="xGiftCanBeSold_other">Can be converted to %1$s Stars</string>
 
+  <!-- Received gifts surface (profile) -->
+  <string name="Gifts">Gifts</string>
+  <string name="xGifts_one">%1$d Gift</string>
+  <string name="xGifts_other">%1$d Gifts</string>
+  <string name="GiftsNone">No gifts yet</string>
+  <string name="GiftDetails">Gift</string>
+  <string name="GiftPrivate">Hidden sender</string>
+  <string name="GiftSave">Display on my page</string>
+  <string name="GiftUnsave">Hide from my page</string>
+  <string name="GiftPin">Pin to top</string>
+  <string name="GiftUnpin">Unpin</string>
+  <string name="GiftDisplayedOnPage">Displayed on your page</string>
+  <string name="GiftHiddenFromPage">Hidden from your page</string>
+  <string name="GiftPinnedToTop">Pinned to the top of your page</string>
+  <string name="GiftUnpinned">Unpinned</string>
+  <string name="GiftPinFailed">Unable to pin this gift</string>
+
   <!-- Upgraded (collectible) gifts -->
   <string name="UpgradedGiftNumber">Gift #%1$d of %2$d</string>
   <string name="UpgradedGiftRarity">Rarity: %1$s</string>

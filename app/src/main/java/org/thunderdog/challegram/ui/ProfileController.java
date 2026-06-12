@@ -1817,6 +1817,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         } else if (itemId == R.id.btn_profileNote) {
           view.setText(profileNoteWrapper);
           view.setName(R.string.ProfileNote);
+        } else if (itemId == R.id.btn_gifts) {
+          view.setData(Lang.plural(R.string.xGifts, getGiftCount()));
         } else if (itemId == R.id.btn_manageInviteLinks) {
           if (inviteLinksCount == -1) {
             view.setData(Lang.getString(R.string.LoadingInformation));
@@ -2469,6 +2471,39 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     return new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_profileNote, R.drawable.baseline_edit_24, R.string.ProfileNote);
   }
 
+  private ListItem newGiftsItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_gifts, R.drawable.baseline_gift_outline_24, R.string.Gifts);
+  }
+
+  private int getGiftCount () {
+    if (isUserMode() && userFull != null) {
+      return userFull.giftCount;
+    }
+    if ((mode == Mode.CHANNEL || mode == Mode.SUPERGROUP) && supergroupFull != null) {
+      return supergroupFull.giftCount;
+    }
+    return 0;
+  }
+
+  private void openGifts () {
+    final int giftCount = getGiftCount();
+    if (giftCount <= 0) {
+      return;
+    }
+    final TdApi.MessageSender ownerId;
+    final boolean isSelf;
+    if (isUserMode()) {
+      ownerId = new TdApi.MessageSenderUser(user.id);
+      isSelf = tdlib.isSelfUserId(user.id);
+    } else {
+      ownerId = new TdApi.MessageSenderChat(getChatId());
+      isSelf = false;
+    }
+    GiftsController c = new GiftsController(context, tdlib);
+    c.setArguments(new GiftsController.Args(ownerId, isSelf));
+    navigateTo(c);
+  }
+
   private ListItem newPeerIdItem () {
     return new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, R.drawable.baseline_identifier_24, R.string.PeerId);
   }
@@ -2523,6 +2558,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
         }
         items.add(newProfileNoteItem());
+        addedCount++;
+      }
+      if (userFull.giftCount > 0) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newGiftsItem());
         addedCount++;
       }
     }
@@ -3257,6 +3299,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         items.add(new ListItem(ListItem.TYPE_SEPARATOR));
       }
       items.add(newInviteLinkItem());
+      addedCount++;
+    }
+
+    if (supergroupFull != null && supergroupFull.giftCount > 0) {
+      if (addedCount > 0) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      }
+      items.add(newGiftsItem());
       addedCount++;
     }
 
@@ -5178,6 +5228,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       } else {
         showDescriptionOptions(false, descriptionLanguage = null);
       }
+    } else if (viewId == R.id.btn_gifts) {
+      openGifts();
     } else if (viewId == R.id.btn_notifications) {
       tdlib.ui().showMuteOptions(this, chat.id, true, null);
     } else if (viewId == R.id.btn_encryptionKey) {
