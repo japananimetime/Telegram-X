@@ -658,6 +658,12 @@
   <item type="id" name="controller_quickReplies" />
   <item type="id" name="btn_quickReply" />
   <item type="id" name="btn_quickRepliesSettings" />
+  <item type="id" name="controller_downloads" />
+  <item type="id" name="btn_download" />
+  <item type="id" name="btn_clearDownloads" />
+  <item type="id" name="btn_pauseDownload" />
+  <item type="id" name="btn_removeDownload" />
+  <item type="id" name="btn_downloadsSettings" />
   <item type="id" name="btn_boost" />
   <item type="id" name="btn_boostLink" />
   <item type="id" name="controller_tonTransactions" />

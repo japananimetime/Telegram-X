@@ -6177,6 +6177,15 @@
   <string name="ReplyInOtherChat">Reply in other chat</string>
   <string name="QuoteInOtherChat">Quote in other chat</string>
 
+  <!-- Downloads -->
+  <string name="DownloadsEmpty">You have no downloads.</string>
+  <string name="DownloadComplete">Completed</string>
+  <string name="DownloadPaused">Paused</string>
+  <string name="DownloadsClearAll">Clear all downloads</string>
+  <string name="DownloadResume">Resume</string>
+  <string name="DownloadPause">Pause</string>
+  <string name="DownloadRemove">Remove from downloads</string>
+
   <!-- Quick replies -->
   <string name="QuickReplies">Quick Replies</string>
   <string name="QuickRepliesHint">Set up shortcuts to quickly send messages you use often.</string>
