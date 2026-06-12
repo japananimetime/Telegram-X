@@ -81,6 +81,7 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
   private float timeTextWidth;
   private Counter unreadCounter;
   private Counter reactionsCounter;
+  private Counter mentionCounter;
   private boolean isMuted;
   private String highlightQuery;
 
@@ -292,6 +293,19 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
       unreadCounter = null;
     }
 
+    // Mention counter - show the "@" badge if there are unread mentions/replies
+    if (topic.unreadMentionCount > 0) {
+      if (mentionCounter == null) {
+        mentionCounter = new Counter.Builder()
+          .drawable(R.drawable.baseline_at_16, 16f, 0f, Gravity.CENTER)
+          .callback(this)
+          .build();
+      }
+      mentionCounter.setCount(topic.unreadMentionCount, isMuted, false);
+    } else {
+      mentionCounter = null;
+    }
+
     // Reactions counter - show if there are unread reactions
     // Using same pattern as TGChat: baseline_favorite_14 icon at 16f size
     if (topic.unreadReactionCount > 0) {
@@ -349,6 +363,9 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     }
     if (unreadCounter != null) {
       reservedRightWidth += (int) unreadCounter.getWidth() + Screen.dp(4f);
+    }
+    if (mentionCounter != null) {
+      reservedRightWidth += (int) mentionCounter.getWidth() + Screen.dp(4f);
     }
     if (reactionsCounter != null) {
       reservedRightWidth += (int) reactionsCounter.getWidth() + Screen.dp(4f);
@@ -656,6 +673,15 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
       previewRight -= (int) (counterWidth + Screen.dp(4f));
       int textColorId = isMuted ? ColorId.badgeMutedText : ColorId.badgeText;
       reactionsCounter.draw(canvas, textRight - counterWidth / 2, counterCenterY, Gravity.CENTER, 1f, this, textColorId);
+      textRight -= (int) (counterWidth + Screen.dp(4f));
+    }
+
+    // Draw mention "@" badge (to the left of reactions/unread)
+    if (mentionCounter != null) {
+      float counterWidth = mentionCounter.getWidth();
+      previewRight -= (int) (counterWidth + Screen.dp(4f));
+      int textColorId = isMuted ? ColorId.badgeMutedText : ColorId.badgeText;
+      mentionCounter.draw(canvas, textRight - counterWidth / 2, counterCenterY, Gravity.CENTER, 1f, this, textColorId);
       textRight -= (int) (counterWidth + Screen.dp(4f));
     }
 

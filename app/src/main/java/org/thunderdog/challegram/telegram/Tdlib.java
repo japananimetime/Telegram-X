@@ -8585,6 +8585,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
             topic.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
             topic.unreadMentionCount = update.unreadMentionCount;
             topic.unreadReactionCount = update.unreadReactionCount;
+            topic.unreadPollVoteCount = update.unreadPollVoteCount;
             topic.notificationSettings = update.notificationSettings;
             topic.draftMessage = update.draftMessage;
             // unreadCount is not part of the update; it can only be inferred
@@ -9921,6 +9922,26 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       this.trustedMiniAppBotUserIds = update.botUserIds;
     }
     listeners.updateTrustedMiniAppBots(update);
+  }
+
+  /**
+   * Whether a Mini App bot is trusted, i.e. it can be opened without a confirmation
+   * and is allowed to access sensitive APIs such as clipboard reads.
+   */
+  public boolean isTrustedMiniAppBot (long botUserId) {
+    if (botUserId == 0) {
+      return false;
+    }
+    synchronized (dataLock) {
+      if (trustedMiniAppBotUserIds != null) {
+        for (long trustedId : trustedMiniAppBotUserIds) {
+          if (trustedId == botUserId) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   private void updateSavedAnimations (TdApi.UpdateSavedAnimations update) {

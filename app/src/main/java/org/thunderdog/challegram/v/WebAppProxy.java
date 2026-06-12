@@ -45,6 +45,11 @@ public final class WebAppProxy {
   }
 
   private void handleEvent (String eventName, String eventData) {
+    // Drop events that didn't originate from the Mini App's own origin when same-origin is required
+    if (!controller.isEventOriginAllowed()) {
+      Log.i("WebApp postEvent dropped (cross-origin): %s", eventName);
+      return;
+    }
     try {
       switch (eventName) {
         // ==================== Core Events ====================

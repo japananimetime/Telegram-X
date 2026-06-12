@@ -8108,7 +8108,6 @@ public class TdlibUi extends Handler {
               after.runWithBool(false);
             }
           } else {
-            // TODO: pass webAppUrl.requireSameOrigin to WebAppController once Args supports it
             TdApi.WebAppUrl webAppUrl = (TdApi.WebAppUrl) linkResult;
             WebAppController controller = new WebAppController(context.context(), tdlib);
             controller.setArguments(new WebAppController.Args(
@@ -8118,7 +8117,7 @@ public class TdlibUi extends Handler {
               webAppUrl.url,
               0,
               mode
-            ));
+            ).setRequireSameOrigin(webAppUrl.requireSameOrigin));
             context.context().navigation().navigateTo(controller);
             if (after != null) {
               after.runWithBool(true);
@@ -8178,7 +8177,6 @@ public class TdlibUi extends Handler {
             }
           } else {
             TdApi.MainWebApp mainWebApp = (TdApi.MainWebApp) mainResult;
-            // TODO: pass mainWebApp.url.requireSameOrigin to WebAppController once Args supports it
             WebAppController controller = new WebAppController(context.context(), tdlib);
             controller.setArguments(new WebAppController.Args(
               chat.id,
@@ -8187,7 +8185,7 @@ public class TdlibUi extends Handler {
               mainWebApp.url.url,
               0,
               mainWebApp.mode
-            ));
+            ).setRequireSameOrigin(mainWebApp.url.requireSameOrigin));
             context.context().navigation().navigateTo(controller);
             if (after != null) {
               after.runWithBool(true);
