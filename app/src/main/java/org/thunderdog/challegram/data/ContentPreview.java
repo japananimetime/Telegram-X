@@ -765,6 +765,15 @@ public class ContentPreview {
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
       case TdApi.MessageGiftedTon.CONSTRUCTOR:
       case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
         break;
 
       // Bots only. Unused
@@ -1603,6 +1612,15 @@ public class ContentPreview {
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
       case TdApi.MessageGiftedTon.CONSTRUCTOR:
       case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
         // TODO support these previews
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessage);
         
