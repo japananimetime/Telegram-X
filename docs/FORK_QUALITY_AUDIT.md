@@ -80,9 +80,15 @@ Severity: **P0** = crash / security / data-loss / "looks done but isn't". **P1**
 > (456d77351); **message effects — COMPLETE**: foundation/store (34cacabf8),
 > choke-layer + compose picker + apply-on-send (9344be8e4), bubble playback
 > auto-on-arrival + tap-to-replay (72f6bd3b1).
-> All named cheap-wins DONE. Other still-open stubs (each needs a dedicated UI widget,
-> not a quick wire-up): unread poll-vote **badge** (forum-topic UI), unconfirmed-session
-> security **banner** (chat-list), paid-media / checklist / group-call **bubble renderers**.
+> All named cheap-wins DONE. **Remaining items also addressed (2026-06-13):**
+> group-call → video-chat service message (7374b3291); checklist → readable bubble
+> (6f83a7110); paid-media → purchasable locked-content bubble (3a5e72550);
+> unconfirmed-session security warning — toast + Devices-screen block (56c3e57f1);
+> chat unread poll-vote count now maintained (94240c505).
+> Remaining follow-ups (lower value / larger): inline display of *unlocked* paid
+> media (needs media pipeline), interactive mark-as-done checklist bubble, a dedicated
+> forum poll-vote badge counter, group-call join card (needs group-call subsystem),
+> one-tap confirm for unconfirmed sessions (needs session-id lookup).
 
 **Cheap, high-value (S):**
 - **Stars/TON balance live** — `UpdateOwnedStarCount`/`UpdateOwnedTonCount` empty stubs; gifts/payments shipped but balance is stale. `Tdlib.java:9837,9841`.
