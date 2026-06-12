@@ -10874,13 +10874,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         break;
       }
 
-      case TdApi.UpdatePendingMessage.CONSTRUCTOR: // TODO: handle pending message previews (messageText/messageRichMessage)
-      case TdApi.UpdateLiveStoryTopDonors.CONSTRUCTOR:
-      case TdApi.UpdateChatJoinResult.CONSTRUCTOR: // TODO: guard bot join result flow
       case TdApi.UpdateChatUnreadPollVoteCount.CONSTRUCTOR: {
         updateChatUnreadPollVoteCount((TdApi.UpdateChatUnreadPollVoteCount) update);
         break;
       }
+
+      case TdApi.UpdatePendingMessage.CONSTRUCTOR: // TODO: handle pending message previews (messageText/messageRichMessage)
+      case TdApi.UpdateLiveStoryTopDonors.CONSTRUCTOR:
+      case TdApi.UpdateChatJoinResult.CONSTRUCTOR: // TODO: guard bot join result flow
       case TdApi.UpdateMessageContainsUnreadPollVotes.CONSTRUCTOR: // TODO: per-message unread poll-vote flag (niche, creator-only)
       case TdApi.UpdateNewOauthRequest.CONSTRUCTOR: // TODO: OAuth authorization requests
       case TdApi.UpdateStakeDiceState.CONSTRUCTOR: // TODO: stake dice
