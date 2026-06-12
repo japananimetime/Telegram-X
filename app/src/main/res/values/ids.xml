@@ -234,6 +234,7 @@
   <item type="id" name="controller_gifts" />
   <item type="id" name="controller_giftPicker" />
   <item type="id" name="controller_giftSettings" />
+  <item type="id" name="controller_upgradedGift" />
   <item type="id" name="controller_storyView" />
   <item type="id" name="controller_storyCompose" />
   <item type="id" name="controller_storyViewers" />
@@ -465,6 +466,12 @@
   <item type="id" name="btn_giftAcceptUpgraded" />
   <item type="id" name="btn_giftAcceptChannels" />
   <item type="id" name="btn_giftAcceptPremium" />
+  <item type="id" name="btn_giftUpgrade" />
+  <item type="id" name="btn_giftTransfer" />
+  <item type="id" name="btn_giftWear" />
+  <item type="id" name="btn_giftExport" />
+  <item type="id" name="btn_giftDropDetails" />
+  <item type="id" name="btn_giftKeepOriginalDetails" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />

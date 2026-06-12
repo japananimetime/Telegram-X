@@ -3868,10 +3868,23 @@ public class TdlibUi extends Handler {
       case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR:
       case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatAffiliateProgram.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeUpgradedGift.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePassportDataRequest.CONSTRUCTOR: {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        break;
+      }
+
+      case TdApi.InternalLinkTypeUpgradedGift.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeUpgradedGift upgradedGiftLink = (TdApi.InternalLinkTypeUpgradedGift) linkType;
+        org.thunderdog.challegram.navigation.ViewController<?> current = context.context().navigation() != null ? context.context().navigation().getCurrentStackItem() : null;
+        if (current != null) {
+          org.thunderdog.challegram.ui.UpgradedGiftController.openByName(current, tdlib, upgradedGiftLink.name);
+          if (after != null) {
+            post(() -> after.runWithBool(true));
+          }
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        }
         break;
       }
 
