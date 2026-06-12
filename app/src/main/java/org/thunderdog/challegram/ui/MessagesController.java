@@ -2420,6 +2420,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return sendOptions;
   }
 
+  /**
+   * Stamps the pending one-shot effect onto an already-built (non-null) options
+   * object in place and consumes it. Used by the media/content send paths that
+   * don't funnel through send() — so a chosen effect isn't silently dropped (and
+   * doesn't leak into a later text send).
+   */
+  private void stampPendingMessageEffect (TdApi.MessageSendOptions sendOptions) {
+    if (sendOptions == null || pendingMessageEffectId == 0 || isEditingMessage()) {
+      return;
+    }
+    sendOptions.effectId = pendingMessageEffectId;
+    setPendingMessageEffectId(0);
+  }
+
   private void send (TdApi.MessageSendOptions sendOptions) {
     send(sendOptions, true);
   }
@@ -9878,6 +9892,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         getInputSuggestedPostInfo(replyInfo),
         obtainSilentMode()
       );
+      stampPendingMessageEffect(sendOptions);
 
       TdApi.InputMessageContent inputMessageContent = content.getValue();
       tdlib.sendMessage(chat.id, topicId, replyTo, sendOptions, inputMessageContent, null);
@@ -11142,6 +11157,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       getInputSuggestedPostInfo(replyInfo),
       obtainSilentMode()
     );
+    stampPendingMessageEffect(finalSendOptions);
 
     final boolean isSecretChat = isSecretChat();
 
