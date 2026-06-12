@@ -157,6 +157,9 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
     // Transaction history link
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_starTransactions, R.drawable.baseline_history_24, R.string.StarTransactions));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    // Gift auctions the user is participating in (Slice 6)
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.controller_giftAuctions, R.drawable.baseline_gavel_24, R.string.GiftAuctions));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     // Payment options
@@ -202,6 +205,8 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
       }
     } else if (viewId == R.id.btn_starTransactions) {
       openTransactionHistory();
+    } else if (viewId == R.id.controller_giftAuctions) {
+      GiftAuctionsController.open(this, tdlib);
     }
   }
 
