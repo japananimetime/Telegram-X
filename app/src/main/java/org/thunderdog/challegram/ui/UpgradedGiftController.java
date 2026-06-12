@@ -175,13 +175,22 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
     }
 
     // Owner actions.
+    final boolean isOwner = !StringUtils.isEmpty(args.receivedGiftId);
     final List<ListItem> actions = new ArrayList<>();
-    if (!StringUtils.isEmpty(args.receivedGiftId)) {
+    if (isOwner) {
       if (args.canBeTransferred) {
         actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftTransfer, R.drawable.baseline_share_arrow_24, R.string.UpgradedGiftTransfer));
       }
       if (gift.colors != null) {
         actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftWear, R.drawable.baseline_palette_24, R.string.UpgradedGiftWear));
+      }
+      // Resale (Slice 5): list / relist / unlist this gift.
+      if (gift.resaleParameters != null) {
+        actions.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_giftResaleChangePrice, R.drawable.baseline_star_24, R.string.UpgradedGiftChangePrice)
+          .setStringValue(Lang.getString(R.string.UpgradedGiftListedPrice, listedPriceLabel(gift.resaleParameters))));
+        actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftResaleUnlist, R.drawable.baseline_remove_circle_24, R.string.UpgradedGiftUnlist));
+      } else {
+        actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftResaleList, R.drawable.baseline_star_24, R.string.UpgradedGiftSell));
       }
       if (args.exportDate != 0) {
         actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftExport, R.drawable.baseline_open_in_browser_24, R.string.UpgradedGiftExport));
@@ -189,6 +198,16 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
       if (gift.originalDetails != null && args.dropOriginalDetailsStarCount >= 0) {
         actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftDropDetails, R.drawable.baseline_delete_24, R.string.UpgradedGiftDropDetails));
       }
+    } else {
+      // Non-owner actions (Slice 5): make a purchase offer on someone else's gift.
+      if (gift.canSendPurchaseOffer && gift.ownerId != null && !StringUtils.isEmpty(gift.name)) {
+        actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftMakeOffer, R.drawable.baseline_star_24, R.string.UpgradedGiftMakeOffer));
+      }
+    }
+    // Resale market browser (Slice 5): visible to anyone when the gift can be
+    // resold, so users can buy other copies of this collectible family.
+    if (gift.regularGiftId != 0 && (gift.resaleParameters != null || gift.canSendPurchaseOffer)) {
+      actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftResaleBrowse, R.drawable.baseline_galaxy_store_24, R.string.GiftResaleBrowse));
     }
     if (!actions.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.UpgradedGiftActions));
@@ -258,7 +277,174 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
       exportToTon();
     } else if (id == R.id.btn_giftDropDetails) {
       confirmDropDetails();
+    } else if (id == R.id.btn_giftResaleList || id == R.id.btn_giftResaleChangePrice) {
+      startSetResalePrice();
+    } else if (id == R.id.btn_giftResaleUnlist) {
+      confirmUnlist();
+    } else if (id == R.id.btn_giftMakeOffer) {
+      startMakeOffer();
+    } else if (id == R.id.btn_giftResaleBrowse) {
+      openResaleMarket();
     }
+  }
+
+  // Resale: list / relist / unlist (SetGiftResalePrice)
+
+  private static String listedPriceLabel (@NonNull TdApi.GiftResaleParameters params) {
+    if (params.toncoinOnly || (params.starCount <= 0 && params.toncoinCentCount > 0)) {
+      return Lang.getString(R.string.GiftedTonAmount, GiftRarityUtil.formatTon(params.toncoinCentCount, 2));
+    }
+    return Lang.plural(R.string.xStars, params.starCount);
+  }
+
+  private void startSetResalePrice () {
+    // Pick the currency first, then the amount. A custom dual-field widget would
+    // be over-building the filter UI for this slice.
+    showOptions(Lang.getString(R.string.GiftResalePriceTitle),
+      new int[] {R.id.btn_giftPriceStars, R.id.btn_giftPriceTon, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.GiftPriceStars), Lang.getString(R.string.GiftPriceTon), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.NORMAL, OptionColor.NORMAL, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_star_24, R.drawable.baseline_galaxy_store_24, R.drawable.baseline_cancel_24},
+      (itemView, optionId) -> {
+        if (optionId == R.id.btn_giftPriceStars) {
+          promptResaleAmount(false);
+        } else if (optionId == R.id.btn_giftPriceTon) {
+          promptResaleAmount(true);
+        }
+        return true;
+      });
+  }
+
+  private void promptResaleAmount (boolean ton) {
+    openInputAlert(
+      Lang.getString(R.string.GiftResalePriceTitle),
+      Lang.getString(ton ? R.string.GiftResalePriceHintTon : R.string.GiftResalePriceHintStars),
+      R.string.Save, R.string.Cancel, null,
+      (inputView, result) -> {
+        TdApi.GiftResalePrice price = parsePrice(result, ton);
+        if (price == null) {
+          UI.showToast(R.string.GiftResalePriceInvalid, Toast.LENGTH_SHORT);
+          return false;
+        }
+        applyResalePrice(price);
+        return true;
+      }, true);
+  }
+
+  private static @Nullable TdApi.GiftResalePrice parsePrice (@Nullable String input, boolean ton) {
+    if (StringUtils.isEmpty(input)) {
+      return null;
+    }
+    String clean = input.trim();
+    try {
+      if (ton) {
+        // Accept a decimal TON amount; store as 1/100-of-Toncoin cents.
+        double value = Double.parseDouble(clean);
+        long cents = Math.round(value * 100.0);
+        if (cents <= 0) {
+          return null;
+        }
+        return new TdApi.GiftResalePriceTon(cents);
+      } else {
+        long stars = Long.parseLong(clean);
+        if (stars <= 0) {
+          return null;
+        }
+        return new TdApi.GiftResalePriceStar(stars);
+      }
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private void applyResalePrice (@Nullable TdApi.GiftResalePrice price) {
+    final Args args = getArgumentsStrict();
+    tdlib.send(new TdApi.SetGiftResalePrice(args.receivedGiftId, price), (ok, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      UI.showToast(price == null ? R.string.UpgradedGiftUnlisted : R.string.UpgradedGiftListed_done, Toast.LENGTH_SHORT);
+      navigateBack();
+    }));
+  }
+
+  private void confirmUnlist () {
+    showOptions(Lang.getString(R.string.UpgradedGiftUnlist),
+      new int[] {R.id.btn_giftResaleUnlist, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.UpgradedGiftUnlist), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.RED, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24},
+      (itemView, optionId) -> {
+        if (optionId == R.id.btn_giftResaleUnlist) {
+          applyResalePrice(null);
+        }
+        return true;
+      });
+  }
+
+  // Make a purchase offer (SendGiftPurchaseOffer)
+
+  private void startMakeOffer () {
+    showOptions(Lang.getString(R.string.UpgradedGiftMakeOffer),
+      new int[] {R.id.btn_giftPriceStars, R.id.btn_giftPriceTon, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.GiftPriceStars), Lang.getString(R.string.GiftPriceTon), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.NORMAL, OptionColor.NORMAL, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_star_24, R.drawable.baseline_galaxy_store_24, R.drawable.baseline_cancel_24},
+      (itemView, optionId) -> {
+        if (optionId == R.id.btn_giftPriceStars) {
+          promptOfferAmount(false);
+        } else if (optionId == R.id.btn_giftPriceTon) {
+          promptOfferAmount(true);
+        }
+        return true;
+      });
+  }
+
+  private void promptOfferAmount (boolean ton) {
+    openInputAlert(
+      Lang.getString(R.string.UpgradedGiftMakeOffer),
+      Lang.getString(ton ? R.string.GiftResalePriceHintTon : R.string.GiftResalePriceHintStars),
+      R.string.Continue, R.string.Cancel, null,
+      (inputView, result) -> {
+        TdApi.GiftResalePrice price = parsePrice(result, ton);
+        if (price == null) {
+          UI.showToast(R.string.GiftResalePriceInvalid, Toast.LENGTH_SHORT);
+          return false;
+        }
+        sendOffer(price);
+        return true;
+      }, true);
+  }
+
+  private void sendOffer (@NonNull TdApi.GiftResalePrice price) {
+    final TdApi.UpgradedGift gift = getArgumentsStrict().gift;
+    if (gift.ownerId == null || StringUtils.isEmpty(gift.name)) {
+      return;
+    }
+    // Default to a 1-day offer duration. paidMessageStarCount should be the
+    // recipient's outgoingPaidMessageStarCount; for the common (user, no paid
+    // messages) case 0 is correct. A full fetch of userFullInfo to honor paid
+    // DMs is out of scope for this slice.
+    final int durationSeconds = 86400;
+    tdlib.send(new TdApi.SendGiftPurchaseOffer(gift.ownerId, gift.name, price, durationSeconds, 0), (ok, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      UI.showToast(R.string.UpgradedGiftOfferSent, Toast.LENGTH_SHORT);
+      navigateBack();
+    }));
+  }
+
+  // Resale market browser
+
+  private void openResaleMarket () {
+    final TdApi.UpgradedGift gift = getArgumentsStrict().gift;
+    if (gift.regularGiftId == 0) {
+      return;
+    }
+    GiftResaleController.open(this, tdlib, gift.regularGiftId, gift.title);
   }
 
   // Transfer

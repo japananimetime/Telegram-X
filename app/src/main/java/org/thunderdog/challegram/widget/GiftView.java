@@ -55,6 +55,7 @@ public class GiftView extends View implements AttachDelegate {
   private @Nullable Tdlib tdlib;
   private @Nullable TdApi.ReceivedGift gift;
   private @Nullable TdApi.AvailableGift availableGift;
+  private @Nullable TdApi.GiftForResale resaleGift;
 
   private boolean animated;
   private @Nullable GifFile gifFile;
@@ -73,6 +74,7 @@ public class GiftView extends View implements AttachDelegate {
     this.tdlib = tdlib;
     this.gift = gift;
     this.availableGift = null;
+    this.resaleGift = null;
     this.animated = false;
     this.gifFile = null;
     this.imageFile = null;
@@ -113,6 +115,7 @@ public class GiftView extends View implements AttachDelegate {
     this.tdlib = tdlib;
     this.availableGift = availableGift;
     this.gift = null;
+    this.resaleGift = null;
     this.animated = false;
     this.gifFile = null;
     this.imageFile = null;
@@ -146,6 +149,47 @@ public class GiftView extends View implements AttachDelegate {
 
   public @Nullable TdApi.AvailableGift getAvailableGift () {
     return availableGift;
+  }
+
+  /**
+   * Renders a gift listed for resale ({@link TdApi.GiftForResale}). The sticker
+   * is the upgraded gift's model; {@code priceText} (if non-null) is drawn below
+   * in place of the star value.
+   */
+  public void setResaleGift (@Nullable Tdlib tdlib, @Nullable TdApi.GiftForResale resaleGift, @Nullable String priceText) {
+    this.tdlib = tdlib;
+    this.resaleGift = resaleGift;
+    this.gift = null;
+    this.availableGift = null;
+    this.animated = false;
+    this.gifFile = null;
+    this.imageFile = null;
+    this.starText = priceText;
+    this.isPinned = false;
+    this.isDimmed = false;
+
+    if (resaleGift != null && resaleGift.gift != null && resaleGift.gift.model != null && tdlib != null) {
+      TdApi.Sticker sticker = resaleGift.gift.model.sticker;
+      if (sticker != null) {
+        this.animated = Td.isAnimated(sticker.format);
+        if (animated) {
+          GifFile gif = new GifFile(tdlib, sticker);
+          gif.setScaleType(GifFile.FIT_CENTER);
+          gif.setPlayOnce();
+          this.gifFile = gif;
+        } else {
+          ImageFile img = new ImageFile(tdlib, sticker.sticker);
+          img.setScaleType(ImageFile.FIT_CENTER);
+          this.imageFile = img;
+        }
+      }
+    }
+    requestFiles();
+    invalidate();
+  }
+
+  public @Nullable TdApi.GiftForResale getResaleGift () {
+    return resaleGift;
   }
 
   private static @Nullable TdApi.Sticker stickerOf (@Nullable TdApi.SentGift sentGift) {

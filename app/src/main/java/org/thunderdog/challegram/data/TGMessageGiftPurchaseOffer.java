@@ -15,6 +15,7 @@
 package org.thunderdog.challegram.data;
 
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
@@ -22,7 +23,9 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
 
 /**
  * Renders {@link TdApi.MessageUpgradedGiftPurchaseOffer} — an offer to purchase
@@ -67,11 +70,18 @@ public class TGMessageGiftPurchaseOffer extends TGMessageGiveawayBase {
       content.add(Lang.getString(stateRes), getTextColorSet(), currentViews);
     }
 
-    // TODO(Slice 5): if the offer is pending and incoming, render Accept/Reject buttons
-    //   wired to ProcessGiftPurchaseOffer.
-
     invalidateGiveawayReceiver();
     return content.getHeight();
+  }
+
+  /**
+   * Whether this offer is incoming and still pending — i.e. the current user
+   * received it and can accept/reject it via {@link TdApi.ProcessGiftPurchaseOffer}.
+   */
+  private boolean isActionable () {
+    return !msg.isOutgoing
+      && offer.state != null
+      && offer.state.getConstructor() == TdApi.GiftPurchaseOfferStatePending.CONSTRUCTOR;
   }
 
   private static int stateStringRes (TdApi.GiftPurchaseOfferState state) {
@@ -92,11 +102,49 @@ public class TGMessageGiftPurchaseOffer extends TGMessageGiveawayBase {
 
   @Override
   protected String getButtonText () {
-    return null;
+    return isActionable() ? Lang.getString(R.string.GiftOfferRespond) : null;
   }
 
+  private boolean processing;
+
   @Override
-  public void onClick (View view, TGInlineKeyboard keyboard, TGInlineKeyboard.Button button) { }
+  public void onClick (View view, TGInlineKeyboard keyboard, TGInlineKeyboard.Button button) {
+    if (!isActionable() || processing) {
+      return;
+    }
+    ViewController<?> c = controller();
+    if (c == null) {
+      return;
+    }
+    c.showOptions(Lang.getString(R.string.GiftOfferRespond),
+      new int[] {R.id.btn_giftOfferAccept, R.id.btn_giftOfferReject, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.GiftOfferAccept), Lang.getString(R.string.GiftOfferReject), Lang.getString(R.string.Cancel)},
+      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_check_24, R.drawable.baseline_cancel_24, R.drawable.baseline_cancel_24},
+      (itemView, optionId) -> {
+        if (optionId == R.id.btn_giftOfferAccept) {
+          processOffer(true);
+        } else if (optionId == R.id.btn_giftOfferReject) {
+          processOffer(false);
+        }
+        return true;
+      });
+  }
+
+  private void processOffer (boolean accept) {
+    if (processing) {
+      return;
+    }
+    processing = true;
+    tdlib.send(new TdApi.ProcessGiftPurchaseOffer(msg.id, accept), (ok, error) -> UI.post(() -> {
+      processing = false;
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      UI.showToast(accept ? R.string.GiftOfferAccepted_done : R.string.GiftOfferRejected_done, Toast.LENGTH_SHORT);
+    }));
+  }
 
   @Override
   public boolean onLongClick (View view, TGInlineKeyboard keyboard, TGInlineKeyboard.Button button) {

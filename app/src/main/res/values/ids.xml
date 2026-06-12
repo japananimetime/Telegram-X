@@ -235,6 +235,7 @@
   <item type="id" name="controller_giftPicker" />
   <item type="id" name="controller_giftSettings" />
   <item type="id" name="controller_upgradedGift" />
+  <item type="id" name="controller_giftResale" />
   <item type="id" name="controller_storyView" />
   <item type="id" name="controller_storyCompose" />
   <item type="id" name="controller_storyViewers" />
@@ -472,6 +473,17 @@
   <item type="id" name="btn_giftExport" />
   <item type="id" name="btn_giftDropDetails" />
   <item type="id" name="btn_giftKeepOriginalDetails" />
+  <item type="id" name="btn_giftResaleBrowse" />
+  <item type="id" name="btn_giftResaleList" />
+  <item type="id" name="btn_giftResaleChangePrice" />
+  <item type="id" name="btn_giftResaleUnlist" />
+  <item type="id" name="btn_giftResaleBuy" />
+  <item type="id" name="btn_giftMakeOffer" />
+  <item type="id" name="btn_giftOfferRespond" />
+  <item type="id" name="btn_giftOfferAccept" />
+  <item type="id" name="btn_giftOfferReject" />
+  <item type="id" name="btn_giftPriceStars" />
+  <item type="id" name="btn_giftPriceTon" />
   <item type="id" name="btn_peer_id" />
   <item type="id" name="btn_peer_id_copy" />
   <item type="id" name="btn_contactsRegistered" />

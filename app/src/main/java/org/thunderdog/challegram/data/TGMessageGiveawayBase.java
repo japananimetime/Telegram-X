@@ -78,6 +78,8 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
     super(manager, msg);
   }
 
+  private boolean hasButton;
+
   @Override
   protected final void buildContent (int maxWidth) {
     useFullWidthParticles = !useBubbles() && !useForward();
@@ -86,16 +88,23 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
       rippleButton = new TGInlineKeyboard(this, false);
       rippleButton.setViewProvider(currentViews);
     }
-    onBuildButton(maxWidth);
+    // A card may have no action button (e.g. an informational gift card); only
+    // build and reserve room for the ripple button when the card declares one.
+    hasButton = hasButton();
+    if (hasButton) {
+      onBuildButton(maxWidth);
+    }
 
     contentHeight = onBuildContent(maxWidth);
 
-    contentHeight += Screen.dp(BLOCK_MARGIN);
-
-    rippleButtonY = contentHeight;
-
-    contentHeight += TGInlineKeyboard.getButtonHeight();
-    contentHeight += Screen.dp(BLOCK_MARGIN) / 2;
+    if (hasButton) {
+      contentHeight += Screen.dp(BLOCK_MARGIN);
+      rippleButtonY = contentHeight;
+      contentHeight += TGInlineKeyboard.getButtonHeight();
+      contentHeight += Screen.dp(BLOCK_MARGIN) / 2;
+    } else {
+      contentHeight += Screen.dp(BLOCK_MARGIN) / 2;
+    }
 
     if (particlesDrawable == null) {
       particlesDrawable = new GiftParticlesDrawable(this);
@@ -120,6 +129,13 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
     return null;
   }
 
+  // Whether this card shows an action button. Default: only when getButtonText()
+  // supplies text. Subclasses that build their button entirely in onBuildButton()
+  // (e.g. the giveaway card, whose label is dynamic) override this to return true.
+  protected boolean hasButton () {
+    return getButtonText() != null;
+  }
+
   @Override
   protected void drawContent (MessageView view, Canvas c, int startX, int startY, int maxWidth) {
     if (particlesDrawable != null) {
@@ -131,7 +147,7 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
 
     content.draw(c, view, startX + Screen.dp(CONTENT_PADDING_DP), startY);
 
-    if (rippleButton != null) {
+    if (hasButton && rippleButton != null) {
       rippleButton.draw(view, c, startX, startY + rippleButtonY);
     }
   }
@@ -145,7 +161,7 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
   public boolean performLongPress (View view, float x, float y) {
     boolean res = super.performLongPress(view, x, y);
 
-    boolean a = rippleButton != null && rippleButton.performLongPress(view);
+    boolean a = hasButton && rippleButton != null && rippleButton.performLongPress(view);
     boolean b = content != null && content.performLongPress(view, x, y);
 
     return a || b || res;
@@ -153,7 +169,7 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
 
   @Override
   public boolean onTouchEvent (MessageView view, MotionEvent e) {
-    if (rippleButton != null && rippleButton.onTouchEvent(view, e)) {
+    if (hasButton && rippleButton != null && rippleButton.onTouchEvent(view, e)) {
       return true;
     }
     if (content != null && content.onTouchEvent(view, e)) {

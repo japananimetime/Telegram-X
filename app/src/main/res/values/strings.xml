@@ -5800,6 +5800,33 @@
   <string name="UpgradedGiftTransferred">Gift transferred.</string>
   <string name="UpgradedGiftTransferNoUser">User not found.</string>
   <string name="UpgradedGiftExportUnavailable">NFT export requires 2-step verification and isn\'t available here yet.</string>
+  <!-- Resale + purchase offers (Slice 5) -->
+  <string name="GiftResale">Resale Market</string>
+  <string name="GiftResaleEmpty">No gifts are listed for resale right now.</string>
+  <string name="GiftResaleBrowse">Buy from Resale Market</string>
+  <string name="GiftResaleBuy">Buy Gift</string>
+  <string name="GiftResaleBuyConfirm">Buy %1$s for %2$s?</string>
+  <string name="GiftResaleBought">Gift purchased.</string>
+  <string name="UpgradedGiftSell">Sell Gift</string>
+  <string name="UpgradedGiftListed">Listed for resale</string>
+  <string name="UpgradedGiftListedPrice">Listed for %1$s</string>
+  <string name="UpgradedGiftChangePrice">Change Price</string>
+  <string name="UpgradedGiftUnlist">Remove from Sale</string>
+  <string name="UpgradedGiftListed_done">Gift listed for resale.</string>
+  <string name="UpgradedGiftUnlisted">Gift removed from sale.</string>
+  <string name="UpgradedGiftMakeOffer">Make an Offer</string>
+  <string name="UpgradedGiftOfferSent">Offer sent.</string>
+  <string name="GiftResalePriceTitle">Set Resale Price</string>
+  <string name="GiftResalePriceHintStars">Enter a price in Stars.</string>
+  <string name="GiftResalePriceHintTon">Enter a price in TON (e.g. 1.50).</string>
+  <string name="GiftResalePriceInvalid">Enter a valid price.</string>
+  <string name="GiftPriceStars">Pay in Stars</string>
+  <string name="GiftPriceTon">Pay in TON</string>
+  <string name="GiftOfferRespond">Respond to Offer</string>
+  <string name="GiftOfferAccept">Accept Offer</string>
+  <string name="GiftOfferReject">Reject Offer</string>
+  <string name="GiftOfferAccepted_done">Offer accepted.</string>
+  <string name="GiftOfferRejected_done">Offer rejected.</string>
   <!-- Upgrade a regular gift into a collectible (Slice 4) -->
   <string name="UpgradeGift">Upgrade Gift</string>
   <string name="UpgradeGiftFree">Upgrade this gift into a unique collectible with a model, symbol and backdrop?</string>
