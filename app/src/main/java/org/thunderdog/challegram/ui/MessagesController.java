@@ -7775,10 +7775,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
           chat.id,
           botUserId,
           botUsername,
-          mainWebApp.url.url, // TODO: honor mainWebApp.url.requireSameOrigin
+          mainWebApp.url.url,
           0,
           mainWebApp.mode
-        ));
+        ).setRequireSameOrigin(mainWebApp.url.requireSameOrigin));
         context().navigation().navigateTo(controller);
       });
     });
@@ -8157,10 +8157,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
             getChatId(),
             finalBotUserId,
             botUsername,
-            webAppUrl.url, // TODO: honor webAppUrl.requireSameOrigin
+            webAppUrl.url,
             0, // GetWebAppUrl doesn't return launchId
             null
-          ).setOwnerController(this));
+          ).setOwnerController(this).setRequireSameOrigin(webAppUrl.requireSameOrigin));
           navigateTo(controller);
           if (oneTime) {
             closeCommandsKeyboard(false);

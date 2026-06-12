@@ -92,6 +92,7 @@ import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.camera.CameraController;
 import org.thunderdog.challegram.unsorted.Size;
 import org.thunderdog.challegram.util.OptionDelegate;
+import org.thunderdog.challegram.util.WebAppSecureStorage;
 import org.thunderdog.challegram.v.WebAppProxy;
 import org.thunderdog.challegram.widget.PopupLayout;
 import org.thunderdog.challegram.widget.ProgressComponent;
@@ -113,6 +114,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     public final TdApi.WebAppOpenMode openMode;
     public @Nullable String buttonText;
     public @Nullable MessagesController ownerController;
+    // When true, postEvent calls are only honored from the same origin as the launch URL
+    public boolean requireSameOrigin;
 
     public Args (long chatId, long botUserId, String botUsername, String url, long launchId, @Nullable TdApi.WebAppOpenMode openMode) {
       this.chatId = chatId;
@@ -121,6 +124,11 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       this.url = url;
       this.launchId = launchId;
       this.openMode = openMode;
+    }
+
+    public Args setRequireSameOrigin (boolean requireSameOrigin) {
+      this.requireSameOrigin = requireSameOrigin;
+      return this;
     }
 
     public Args setButtonText (String buttonText) {
@@ -137,6 +145,42 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // UI components
   private WebView webView;
   private WebAppProxy webAppProxy;
+
+  /**
+   * When the launch URL was flagged {@code requireSameOrigin}, events must only be
+   * accepted while the web view is on the same origin (scheme+host+port) as the
+   * launch URL — third-party pages/iframes navigated to inside the view must not be
+   * able to drive the Mini App bridge. Must be called on the UI thread.
+   */
+  public boolean isEventOriginAllowed () {
+    Args args = getArguments();
+    if (args == null || !args.requireSameOrigin || webView == null) {
+      return true;
+    }
+    return isSameOrigin(args.url, webView.getUrl());
+  }
+
+  private static boolean isSameOrigin (@Nullable String a, @Nullable String b) {
+    if (a == null || b == null) {
+      return false;
+    }
+    try {
+      android.net.Uri ua = android.net.Uri.parse(a);
+      android.net.Uri ub = android.net.Uri.parse(b);
+      String schemeA = ua.getScheme();
+      String schemeB = ub.getScheme();
+      String hostA = ua.getHost();
+      String hostB = ub.getHost();
+      if (schemeA == null || hostA == null) {
+        return false;
+      }
+      return schemeA.equalsIgnoreCase(schemeB)
+        && hostA.equalsIgnoreCase(hostB)
+        && ua.getPort() == ub.getPort();
+    } catch (Throwable t) {
+      return false;
+    }
+  }
   private FrameLayoutFix contentView;
   private DoubleHeaderView headerCell;
   private MainButtonView mainButtonView;
@@ -523,8 +567,9 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   public void onWebAppRequestPhone () {
+    Args args = getArguments();
     TdApi.User user = tdlib.myUser();
-    if (user == null) {
+    if (user == null || args == null || args.botUserId == 0) {
       sendEventToWebApp("phone_requested", "{\"status\":\"cancelled\"}");
       return;
     }
@@ -535,8 +580,14 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       new String[] {Lang.getString(R.string.Share), Lang.getString(R.string.Cancel)},
       (itemView, id) -> {
         if (id == R.id.btn_done) {
-          String phone = user.phoneNumber;
-          sendEventToWebApp("phone_requested", "{\"status\":\"sent\",\"phone_number\":\"" + escapeJsonString(phone) + "\"}");
+          // Share the contact with the bot server-side; never expose the raw number to the web view
+          tdlib.send(new TdApi.SharePhoneNumber(args.botUserId), (result, error) -> runOnUiThreadOptional(() -> {
+            if (error != null) {
+              sendEventToWebApp("phone_requested", "{\"status\":\"cancelled\"}");
+            } else {
+              sendEventToWebApp("phone_requested", "{\"status\":\"sent\"}");
+            }
+          }));
         } else {
           sendEventToWebApp("phone_requested", "{\"status\":\"cancelled\"}");
         }
@@ -1274,6 +1325,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   // ==================== Clipboard Access ====================
 
   public void onWebAppReadClipboard (String requestId) {
+    Args args = getArguments();
+    // Only trusted (e.g. attachment-menu) bots may read the clipboard
+    if (args == null || !tdlib.isTrustedMiniAppBot(args.botUserId)) {
+      sendEventToWebApp("clipboard_text_received",
+        "{\"req_id\":\"" + escapeJsonString(requestId) + "\"}");
+      return;
+    }
     CharSequence clipText = U.getPasteText(context());
     String data = clipText != null ? clipText.toString() : null;
 
@@ -1672,7 +1730,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private SharedPreferences getDeviceStoragePrefs () {
     Args args = getArguments();
     long botId = args != null ? args.botUserId : 0;
-    return context().getSharedPreferences("webapp_device_storage_" + botId, Context.MODE_PRIVATE);
+    // Namespace by account so different logged-in accounts can't read each other's data
+    return context().getSharedPreferences("webapp_device_storage_" + tdlib.id() + "_" + botId, Context.MODE_PRIVATE);
   }
 
   public void onDeviceStorageSaveKey (String reqId, String key, @Nullable String value) {
@@ -1717,7 +1776,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   private SharedPreferences getSecureStoragePrefs () {
     Args args = getArguments();
     long botId = args != null ? args.botUserId : 0;
-    return context().getSharedPreferences("webapp_secure_storage_" + botId, Context.MODE_PRIVATE);
+    // Namespace by account so different logged-in accounts can't read each other's data
+    return context().getSharedPreferences("webapp_secure_storage_" + tdlib.id() + "_" + botId, Context.MODE_PRIVATE);
   }
 
   public void onSecureStorageSaveKey (String reqId, String key, @Nullable String value) {
@@ -1726,7 +1786,8 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       if (value == null) {
         prefs.edit().remove(key).apply();
       } else {
-        prefs.edit().putString(key, value).apply();
+        // Encrypt at rest with a Keystore-held key (plaintext fallback on API < 23)
+        prefs.edit().putString(key, WebAppSecureStorage.encrypt(value)).apply();
       }
       sendEventToWebApp("secure_storage_key_saved", "{\"req_id\":\"" + escapeJsonString(reqId) + "\"}");
     } catch (Exception e) {
@@ -1737,7 +1798,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   public void onSecureStorageGetKey (String reqId, String key) {
     try {
       SharedPreferences prefs = getSecureStoragePrefs();
-      String value = prefs.getString(key, null);
+      String value = WebAppSecureStorage.decrypt(prefs.getString(key, null));
       if (value != null) {
         sendEventToWebApp("secure_storage_key_received", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\",\"can_restore\":" + biometryAccessGranted + "}");
       } else {
@@ -1765,7 +1826,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     }
     try {
       SharedPreferences prefs = getSecureStoragePrefs();
-      String value = prefs.getString(key, null);
+      String value = WebAppSecureStorage.decrypt(prefs.getString(key, null));
       if (value != null) {
         sendEventToWebApp("secure_storage_key_restored", "{\"req_id\":\"" + escapeJsonString(reqId) + "\",\"value\":\"" + escapeJsonString(value) + "\",\"can_restore\":true}");
       } else {
