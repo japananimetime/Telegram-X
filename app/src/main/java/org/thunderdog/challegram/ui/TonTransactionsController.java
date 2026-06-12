@@ -22,6 +22,7 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.GiftRarityUtil;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibOptionListener;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
 import java.util.ArrayList;
@@ -33,7 +34,7 @@ import java.util.concurrent.TimeUnit;
  * {@link TdApi.GetTonTransactions} and labels each {@link TdApi.TonTransactionType},
  * including the gift-economy types (gift purchase offer, upgraded gift purchase/sale).
  */
-public class TonTransactionsController extends RecyclerViewController<Void> implements View.OnClickListener {
+public class TonTransactionsController extends RecyclerViewController<Void> implements View.OnClickListener, TdlibOptionListener {
 
   private SettingsAdapter adapter;
   private TdApi.TonTransactions transactions;
@@ -61,9 +62,26 @@ public class TonTransactionsController extends RecyclerViewController<Void> impl
       }
     };
     recyclerView.setAdapter(adapter);
+    tdlib.listeners().addOptionsListener(this);
 
     buildLoadingCells();
     fetchTransactions(null);
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    tdlib.listeners().removeOptionListener(this);
+  }
+
+  @Override
+  public void onOwnedTonCountChanged (long tonAmount) {
+    runOnUiThreadOptional(() -> {
+      if (transactions != null) {
+        transactions.tonAmount = tonAmount;
+        buildCells();
+      }
+    });
   }
 
   private void buildLoadingCells () {

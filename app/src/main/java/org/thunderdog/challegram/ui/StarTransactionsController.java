@@ -21,6 +21,7 @@ import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibOptionListener;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Controller for viewing Star transaction history.
  */
-public class StarTransactionsController extends RecyclerViewController<Void> implements View.OnClickListener {
+public class StarTransactionsController extends RecyclerViewController<Void> implements View.OnClickListener, TdlibOptionListener {
 
   private SettingsAdapter adapter;
   private TdApi.StarTransactions transactions;
@@ -59,12 +60,29 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
     };
 
     recyclerView.setAdapter(adapter);
+    tdlib.listeners().addOptionsListener(this);
 
     // Show loading state
     buildLoadingCells();
 
     // Fetch transactions
     fetchTransactions(null);
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    tdlib.listeners().removeOptionListener(this);
+  }
+
+  @Override
+  public void onOwnedStarCountChanged (TdApi.StarAmount starAmount) {
+    runOnUiThreadOptional(() -> {
+      if (transactions != null) {
+        transactions.starAmount = starAmount;
+        buildCells();
+      }
+    });
   }
 
   private void buildLoadingCells() {

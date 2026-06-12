@@ -1750,6 +1750,18 @@ public class TdlibListeners {
     );
   }
 
+  void updateOwnedStarCount (TdApi.UpdateOwnedStarCount update) {
+    runUpdate(optionListeners, listener ->
+      listener.onOwnedStarCountChanged(update.starAmount)
+    );
+  }
+
+  void updateOwnedTonCount (TdApi.UpdateOwnedTonCount update) {
+    runUpdate(optionListeners, listener ->
+      listener.onOwnedTonCountChanged(update.tonAmount)
+    );
+  }
+
   void updateSpeedLimitNotification (TdApi.UpdateSpeedLimitNotification update) {
     runUpdate(optionListeners, listener ->
       listener.onSpeedLimitNotification(update.isUpload)

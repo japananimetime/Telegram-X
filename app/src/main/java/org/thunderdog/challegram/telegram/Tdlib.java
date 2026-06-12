@@ -471,6 +471,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private TdApi.PaidReactionType defaultPaidReactionType;
   private final Map<String, TGReaction> cachedReactions = new HashMap<>();
 
+  private TdApi.StarAmount ownedStarCount;
+  private long ownedTonCount;
+
   private int storyStealthModeActiveUntilDate, storyStealthModeCooldownUntilDate;
 
   private @Nullable TdApi.SavedMessagesTags savedMessagesTags;
@@ -4579,6 +4582,21 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   public TdApi.PaidReactionType defaultPaidReaction () {
     synchronized (dataLock) {
       return defaultPaidReactionType;
+    }
+  }
+
+  /** Live Telegram Stars balance, updated via UpdateOwnedStarCount. May be null until first update. */
+  @Nullable
+  public TdApi.StarAmount getOwnedStarCount () {
+    synchronized (dataLock) {
+      return ownedStarCount;
+    }
+  }
+
+  /** Live TON balance (in nanotons), updated via UpdateOwnedTonCount. */
+  public long getOwnedTonCount () {
+    synchronized (dataLock) {
+      return ownedTonCount;
     }
   }
 
@@ -9835,12 +9853,18 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateOwnedStarCount (TdApi.UpdateOwnedStarCount update) {
-    // TODO(stars)
+    synchronized (dataLock) {
+      this.ownedStarCount = update.starAmount;
+    }
+    listeners.updateOwnedStarCount(update);
   }
 
   @TdlibThread
   private void updateOwnedTonCount (TdApi.UpdateOwnedTonCount update) {
-    // TODO(ton)
+    synchronized (dataLock) {
+      this.ownedTonCount = update.tonAmount;
+    }
+    listeners.updateOwnedTonCount(update);
   }
 
   @TdlibThread

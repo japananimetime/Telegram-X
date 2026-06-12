@@ -25,6 +25,8 @@ public interface TdlibOptionListener {
   default void onChatRevenueUpdated (long chatId, TdApi.ChatRevenueAmount revenueAmount)                { }
   default void onStarRevenueStatusUpdated (TdApi.MessageSender ownerId, TdApi.StarRevenueStatus status) { }
   default void onTonRevenueStatusUpdated (TdApi.TonRevenueStatus status) { }
+  default void onOwnedStarCountChanged (TdApi.StarAmount starAmount) { }
+  default void onOwnedTonCountChanged (long tonAmount) { }
   default void onSpeedLimitNotification (boolean isUpload)                                              { }
   default void onContactCloseBirthdayUsersChanged (TdApi.CloseBirthdayUser[] birthdayUsers) { }
   default void onArchiveAndMuteChatsFromUnknownUsersEnabled (boolean enabled) { }

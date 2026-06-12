@@ -22,6 +22,7 @@ import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibOptionListener;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
@@ -34,7 +35,7 @@ import me.vkryl.core.StringUtils;
 /**
  * Controller for Telegram Stars - buy stars and view balance.
  */
-public class SettingsStarsController extends RecyclerViewController<SettingsStarsController.Args> implements View.OnClickListener {
+public class SettingsStarsController extends RecyclerViewController<SettingsStarsController.Args> implements View.OnClickListener, TdlibOptionListener {
 
   public static class Args {
     public final long requiredStarCount;
@@ -87,11 +88,36 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
 
     recyclerView.setAdapter(adapter);
 
+    // Seed from the live balance if TDLib has already pushed it
+    TdApi.StarAmount owned = tdlib.getOwnedStarCount();
+    if (owned != null) {
+      starBalance = owned.starCount;
+    }
+    tdlib.listeners().addOptionsListener(this);
+
     // Show loading state
     buildLoadingCells();
 
     // Fetch data
     fetchData();
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    tdlib.listeners().removeOptionListener(this);
+  }
+
+  @Override
+  public void onOwnedStarCountChanged (TdApi.StarAmount starAmount) {
+    runOnUiThreadOptional(() -> {
+      starBalance = starAmount.starCount;
+      // Only rebuild once the payment options have loaded (otherwise we'd wipe the
+      // loading/error state). fetchData() will pick up the seeded balance anyway.
+      if (paymentOptions != null) {
+        buildCells();
+      }
+    });
   }
 
   private void buildLoadingCells() {
