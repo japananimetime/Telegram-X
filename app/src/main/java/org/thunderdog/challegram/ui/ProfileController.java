@@ -720,6 +720,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.Stats);
     }
 
+    if (supergroupFull != null && supergroupFull.canGetStarRevenueStatistics) {
+      ids.append(R.id.more_btn_monetization);
+      strings.append(R.string.Monetization);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -815,6 +820,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           openStats();
         } else if (id == R.id.more_btn_boost) {
           openChatBoost();
+        } else if (id == R.id.more_btn_monetization) {
+          openMonetization();
         } else if (id == R.id.more_btn_createStory) {
           openStoryCompose();
         } else if (id == R.id.more_btn_editDescription) {
@@ -3760,6 +3767,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private void openChatBoost () {
     ChatBoostController c = new ChatBoostController(context, tdlib);
     c.setArguments(new ChatBoostController.Args(chat.id));
+    navigateTo(c);
+  }
+
+  private void openMonetization () {
+    StarRevenueController c = new StarRevenueController(context, tdlib);
+    c.setArguments(new StarRevenueController.Args(new TdApi.MessageSenderChat(chat.id)));
     navigateTo(c);
   }
 

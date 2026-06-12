@@ -6177,6 +6177,16 @@
   <string name="ReplyInOtherChat">Reply in other chat</string>
   <string name="QuoteInOtherChat">Quote in other chat</string>
 
+  <!-- Monetization -->
+  <string name="Monetization">Monetization</string>
+  <string name="MonetizationBalance">Star balance</string>
+  <string name="MonetizationAvailable">Available to withdraw</string>
+  <string name="MonetizationCurrent">Current balance</string>
+  <string name="MonetizationTotal">Total earned</string>
+  <string name="MonetizationWithdraw">Withdraw Stars</string>
+  <string name="MonetizationWithdrawUnavailable">Withdrawal isn\'t available yet.</string>
+  <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
+
   <!-- Downloads -->
   <string name="DownloadsEmpty">You have no downloads.</string>
   <string name="DownloadComplete">Completed</string>

@@ -664,6 +664,9 @@
   <item type="id" name="btn_pauseDownload" />
   <item type="id" name="btn_removeDownload" />
   <item type="id" name="btn_downloadsSettings" />
+  <item type="id" name="controller_starRevenue" />
+  <item type="id" name="btn_withdrawStars" />
+  <item type="id" name="more_btn_monetization" />
   <item type="id" name="btn_boost" />
   <item type="id" name="btn_boostLink" />
   <item type="id" name="controller_tonTransactions" />
