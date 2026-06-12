@@ -597,7 +597,7 @@ public class PageBlockRichText extends PageBlock {
   @Override
   public void drawInternal (View view, Canvas c, Receiver preview, Receiver receiver, @Nullable ComplexReceiver iconReceiver) {
     if (text != null) {
-      int viewWidth = view.getMeasuredWidth();
+      int viewWidth = getViewWidth(view);
       int textLeft = getTextPaddingLeft();
       int textTop = getContentTop();
 
@@ -645,7 +645,7 @@ public class PageBlockRichText extends PageBlock {
           c.drawRect(rectF.left, 0, rectF.right, rectF.top + lineWidth, Paints.fillingPaint(lineColor));
         }
         if (mergeBottom) {
-          c.drawRect(rectF.left, rectF.bottom - lineWidth, rectF.right, view.getMeasuredHeight(), Paints.fillingPaint(lineColor));
+          c.drawRect(rectF.left, rectF.bottom - lineWidth, rectF.right, getViewHeight(view), Paints.fillingPaint(lineColor));
         }
       }
 
@@ -669,7 +669,7 @@ public class PageBlockRichText extends PageBlock {
         int iconLeft = textLeft - Screen.dp(18f);
         int iconTop = textTop + text.getLineCenterY();
         DrawAlgorithms.drawCollapse(c, iconLeft, iconTop, Theme.getColor(ColorId.iv_icon), detailsOpened.getFloatValue(), 0f);
-        c.drawRect(0, view.getMeasuredHeight() - Screen.separatorSize(), viewWidth, view.getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.iv_separator)));
+        c.drawRect(0, getViewHeight(view) - Screen.separatorSize(), viewWidth, getViewHeight(view), Paints.fillingPaint(Theme.getColor(ColorId.iv_separator)));
       }
 
       if (subtitle != null) {

@@ -23,6 +23,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.loader.DoubleImageReceiver;
 import org.thunderdog.challegram.loader.ImageReceiver;
@@ -48,6 +50,7 @@ import java.util.Locale;
 import me.vkryl.android.util.MultipleViewProvider;
 import me.vkryl.android.util.ViewProvider;
 import me.vkryl.android.widget.FrameLayoutFix;
+import me.vkryl.core.StringUtils;
 import tgx.td.Td;
 
 public abstract class PageBlock {
@@ -176,6 +179,25 @@ public abstract class PageBlock {
 
   private int maxWidth;
   private int computedHeight;
+  private int viewWidthOverride;
+
+  /**
+   * When a block is rendered inside a host that is wider than the block itself
+   * (e.g. a chat bubble in {@link TGMessageRich}), the measured width of the view
+   * no longer matches the width the block was built for.
+   * Sets the width to be used instead of {@code view.getMeasuredWidth()} during drawing.
+   */
+  public final void setViewWidthOverride (int width) {
+    this.viewWidthOverride = width;
+  }
+
+  protected final int getViewWidth (View view) {
+    return viewWidthOverride > 0 ? viewWidthOverride : view.getMeasuredWidth();
+  }
+
+  protected final int getViewHeight (View view) {
+    return viewWidthOverride > 0 ? getComputedHeight() : view.getMeasuredHeight();
+  }
 
   protected int getMaxWidth () {
     return maxWidth;
@@ -301,7 +323,7 @@ public abstract class PageBlock {
         c.drawRect(rectF.left, 0, rectF.right, rectF.top + lineWidth, Paints.fillingPaint(lineColor));
       }
       if (mergeBottom) {
-        c.drawRect(rectF.left, rectF.bottom - lineWidth, rectF.right, view.getMeasuredHeight(), Paints.fillingPaint(lineColor));
+        c.drawRect(rectF.left, rectF.bottom - lineWidth, rectF.right, getViewHeight(view), Paints.fillingPaint(lineColor));
       }
       drawInternal(view, c, preview, receiver, iconReceiver);
     } else {
@@ -466,6 +488,84 @@ public abstract class PageBlock {
       }
     }
     return out;
+  }
+
+  /**
+   * Parses {@link TdApi.RichMessage} blocks for display inside a chat bubble ({@link TGMessageRich}).
+   * Unlike {@link #parse(ViewController, String, TdApi.WebPageInstantView, PageBlock, TGPlayerController.PlayListBuilder, TdlibUi.UrlOpenParameters)},
+   * it does not emit RecyclerView-specific decoration blocks (shadows, offsets)
+   * and replaces blocks that require dedicated views with canvas-drawable substitutes.
+   */
+  public static ArrayList<PageBlock> parseRichMessage (ViewController<?> parent, @NonNull TdApi.RichMessage richMessage, @Nullable TdlibUi.UrlOpenParameters urlOpenParameters) throws UnsupportedPageBlockException {
+    TdApi.WebPageInstantView fakeInstantView = new TdApi.WebPageInstantView(richMessage.blocks, 0, 2, richMessage.isRtl, true, null);
+    ParseContext context = new ParseContext(null, fakeInstantView, null);
+    ArrayList<PageBlock> out = new ArrayList<>(richMessage.blocks.length);
+    for (TdApi.PageBlock rawPageBlock : richMessage.blocks) {
+      parseForChat(parent, out, context, rawPageBlock, urlOpenParameters);
+    }
+    // Strip helper blocks meant for RecyclerView decorations (shadows, empty offsets)
+    for (int i = out.size() - 1; i >= 0; i--) {
+      if (out.get(i) instanceof PageBlockSimple) {
+        out.remove(i);
+      }
+    }
+    return out;
+  }
+
+  private static void parseForChat (ViewController<?> parent, ArrayList<PageBlock> out, ParseContext context, TdApi.PageBlock block, @Nullable TdlibUi.UrlOpenParameters openParameters) throws UnsupportedPageBlockException {
+    switch (block.getConstructor()) {
+      // TODO(rich-media): proper collage grid & slideshow pager; rendered as vertically stacked media for now
+      case TdApi.PageBlockCollage.CONSTRUCTOR: {
+        TdApi.PageBlockCollage collage = (TdApi.PageBlockCollage) block;
+        for (TdApi.PageBlock child : collage.blocks) {
+          parseForChat(parent, out, context, child, openParameters);
+        }
+        context.processCaption(parent, collage, collage.caption, openParameters, out);
+        break;
+      }
+      case TdApi.PageBlockSlideshow.CONSTRUCTOR: {
+        TdApi.PageBlockSlideshow slideshow = (TdApi.PageBlockSlideshow) block;
+        for (TdApi.PageBlock child : slideshow.blocks) {
+          parseForChat(parent, out, context, child, openParameters);
+        }
+        context.processCaption(parent, slideshow, slideshow.caption, openParameters, out);
+        break;
+      }
+      // TODO(rich-media): PageBlockFile requires a dedicated inline view (TYPE_CUSTOM_INLINE); rendered as a text placeholder for now
+      case TdApi.PageBlockAudio.CONSTRUCTOR: {
+        TdApi.PageBlockAudio audio = (TdApi.PageBlockAudio) block;
+        parse(parent, out, context, placeholderParagraph(Lang.getString(R.string.Audio)), openParameters);
+        context.processCaption(parent, audio, audio.caption, openParameters, out);
+        break;
+      }
+      case TdApi.PageBlockVoiceNote.CONSTRUCTOR: {
+        TdApi.PageBlockVoiceNote voiceNote = (TdApi.PageBlockVoiceNote) block;
+        parse(parent, out, context, placeholderParagraph(Lang.getString(R.string.ChatContentVoice)), openParameters);
+        context.processCaption(parent, voiceNote, voiceNote.caption, openParameters, out);
+        break;
+      }
+      // TODO(rich-media): embedded web content requires a WebView (PageBlockWrapView); rendered as a link placeholder for now
+      case TdApi.PageBlockEmbedded.CONSTRUCTOR: {
+        TdApi.PageBlockEmbedded embedded = (TdApi.PageBlockEmbedded) block;
+        TdApi.RichText placeholderText;
+        if (!StringUtils.isEmpty(embedded.url)) {
+          placeholderText = new TdApi.RichTextUrl(new TdApi.RichTextPlain(embedded.url), embedded.url, false);
+        } else {
+          placeholderText = new TdApi.RichTextItalic(new TdApi.RichTextPlain(Lang.getString(R.string.Link)));
+        }
+        parse(parent, out, context, new TdApi.PageBlockParagraph(placeholderText), openParameters);
+        context.processCaption(parent, embedded, embedded.caption, openParameters, out);
+        break;
+      }
+      default: {
+        parse(parent, out, context, block, openParameters);
+        break;
+      }
+    }
+  }
+
+  private static TdApi.PageBlock placeholderParagraph (String text) {
+    return new TdApi.PageBlockParagraph(new TdApi.RichTextItalic(new TdApi.RichTextPlain(text)));
   }
 
   public static class UnsupportedPageBlockException extends Exception { }

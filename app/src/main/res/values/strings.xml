@@ -318,6 +318,7 @@
   <string name="DeletedMessage">Deleted message</string>
   <string name="UnsupportedMessage">Unsupported message</string>
   <string name="UnsupportedMessageType">Unsupported message</string>
+  <string name="RichMessageShowMore">Show more</string>
   <string name="YouHaveNewMessage">You have a new message</string>
   <string name="ChatContentVoice">Voice Message</string>
   <string name="ChatContentVoiceDuration">%1$s (%2$s)</string>

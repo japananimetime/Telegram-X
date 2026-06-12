@@ -435,7 +435,7 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
   @Override
   protected <T extends View & DrawableProvider> void drawInternal (T view, Canvas c, Receiver preview, Receiver receiver, ComplexReceiver iconReceiver) {
     if (embedded != null || map != null) {
-      preview.setBounds(getMinimumContentPadding(true), getContentTop(), view.getMeasuredWidth() - getMinimumContentPadding(false), getComputedHeight() - (!isCover && !ignoreBottomPadding ? getContentTop() : 0));
+      preview.setBounds(getMinimumContentPadding(true), getContentTop(), getViewWidth(view) - getMinimumContentPadding(false), getComputedHeight() - (!isCover && !ignoreBottomPadding ? getContentTop() : 0));
       receiver.setBounds(preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom());
       if (receiver.needPlaceholder()) {
         if (preview.needPlaceholder()) {
@@ -445,12 +445,12 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
       }
       receiver.draw(c);
     } else if (collageContext != null && view instanceof PageBlockView) {
-      int maxWidth = view.getMeasuredWidth() - getMinimumContentPadding(true) - getMinimumContentPadding(false);
+      int maxWidth = getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false);
       int collageWidth = collageContext.getWidth();
       int x = !isIndependent() ? getMinimumContentPadding(true) : collageWidth < maxWidth ? (maxWidth - collageWidth) / 2 : 0;
       collageContext.draw(view, c, x, getContentTop(), ((PageBlockView) view).getMultipleReceiver());
     } else if (wrapper != null) {
-      final int x = ((view.getMeasuredWidth() - getMinimumContentPadding(true) - getMinimumContentPadding(false)) / 2 - wrapper.getCellWidth() / 2) + getMinimumContentPadding(true);
+      final int x = ((getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false)) / 2 - wrapper.getCellWidth() / 2) + getMinimumContentPadding(true);
       wrapper.draw(view, c, x, getContentTop(), preview, receiver, 1f);
       if (!StringUtils.isEmpty(url)) {
         Drawables.draw(c, linkIcon, receiver.getRight() - linkIcon.getMinimumWidth() - Screen.dp(9f), receiver.getTop() + Screen.dp(9f), Paints.whitePorterDuffPaint());
