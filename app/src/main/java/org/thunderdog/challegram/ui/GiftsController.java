@@ -201,7 +201,21 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         titles.add(Lang.getString(R.string.ConvertGiftToStars));
         icons.add(R.drawable.baseline_star_24);
       }
-      // TODO(Slice 4/5): Upgrade / Transfer / Resale actions.
+
+      // Upgrade a regular gift into a unique collectible (Slice 4).
+      if (!isUpgraded && gift.canBeUpgraded && !gift.wasRefunded) {
+        ids.add(R.id.btn_giftUpgrade);
+        titles.add(Lang.getString(R.string.UpgradeGift));
+        icons.add(R.drawable.baseline_premium_star_24);
+      }
+
+      // Open the collectible detail screen (which itself offers Transfer / Wear /
+      // Export / Drop-details) for upgraded gifts (Slice 4).
+      if (isUpgraded) {
+        ids.add(R.id.btn_giftTransfer);
+        titles.add(Lang.getString(R.string.ViewGift));
+        icons.add(R.drawable.baseline_visibility_24);
+      }
     }
 
     if (ids.isEmpty()) {
@@ -225,6 +239,10 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         togglePinned(gift);
       } else if (id == R.id.btn_giftSell) {
         confirmSell(gift);
+      } else if (id == R.id.btn_giftUpgrade) {
+        confirmUpgrade(gift);
+      } else if (id == R.id.btn_giftTransfer) {
+        openUpgradedDetail(gift);
       }
       return true;
     };
@@ -357,6 +375,109 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
       }
       UI.showToast(R.string.GiftConvertedToStars, android.widget.Toast.LENGTH_SHORT);
     }));
+  }
+
+  // Upgrade a regular gift into a unique collectible (Slice 4).
+
+  private void confirmUpgrade (TdApi.ReceivedGift gift) {
+    if (gift == null || StringUtils.isEmpty(gift.receivedGiftId) || gift.gift == null
+      || gift.gift.getConstructor() != TdApi.SentGiftRegular.CONSTRUCTOR) {
+      return;
+    }
+    final TdApi.Gift regularGift = ((TdApi.SentGiftRegular) gift.gift).gift;
+    final long regularGiftId = regularGift != null ? regularGift.id : 0;
+    if (regularGiftId == 0) {
+      return;
+    }
+    // Fetch the upgrade preview to confirm the gift is upgradeable and to get a
+    // star-cost fallback when nothing was prepaid.
+    tdlib.send(new TdApi.GetGiftUpgradePreview(regularGiftId), (preview, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      // If the sender prepaid the upgrade, pass 0; otherwise pay the current price.
+      final long starCount;
+      if (gift.prepaidUpgradeStarCount > 0) {
+        starCount = 0;
+      } else {
+        long price = 0;
+        if (preview != null && preview.prices != null && preview.prices.length > 0) {
+          // prices run from the maximum price to the minimum price; take the lowest.
+          price = preview.prices[preview.prices.length - 1].starCount;
+        }
+        if (price == 0 && regularGift.upgradeStarCount > 0) {
+          price = regularGift.upgradeStarCount;
+        }
+        starCount = price;
+      }
+      showUpgradeConfirm(gift, starCount);
+    }));
+  }
+
+  private void showUpgradeConfirm (TdApi.ReceivedGift gift, long starCount) {
+    final CharSequence message;
+    if (starCount > 0) {
+      message = Lang.getString(R.string.UpgradeGiftConfirm, Lang.plural(R.string.xStars, starCount));
+    } else {
+      message = Lang.getString(R.string.UpgradeGiftFree);
+    }
+    // The "keep original details" toggle is captured via two distinct options
+    // rather than a custom checkbox widget.
+    showOptions(message,
+      new int[] {R.id.btn_giftUpgrade, R.id.btn_giftKeepOriginalDetails, R.id.btn_cancel},
+      new String[] {
+        Lang.getString(R.string.UpgradeGift),
+        Lang.getString(R.string.UpgradeGiftKeepDetails),
+        Lang.getString(R.string.Cancel)
+      },
+      new int[] {OptionColor.NORMAL, OptionColor.NORMAL, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_premium_star_24, R.drawable.baseline_visibility_24, R.drawable.baseline_cancel_24},
+      (itemView, id) -> {
+        if (id == R.id.btn_giftUpgrade) {
+          performUpgrade(gift, false, starCount);
+        } else if (id == R.id.btn_giftKeepOriginalDetails) {
+          performUpgrade(gift, true, starCount);
+        }
+        return true;
+      });
+  }
+
+  private void performUpgrade (TdApi.ReceivedGift gift, boolean keepOriginalDetails, long starCount) {
+    final String id = gift.receivedGiftId;
+    tdlib.send(new TdApi.UpgradeGift(null, id, keepOriginalDetails, starCount), (result, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      UI.showToast(R.string.UpgradeGiftDone, android.widget.Toast.LENGTH_SHORT);
+      // Remove the old (regular) gift entry; the upgraded gift lives under a new id.
+      int index = indexOfGift(id);
+      if (index != -1) {
+        gifts.remove(index);
+        adapter.notifyItemRemoved(index);
+      }
+      if (result != null && result.gift != null) {
+        UpgradedGiftController.Args args = new UpgradedGiftController.Args(
+          result.gift, result.receivedGiftId, result.canBeTransferred,
+          result.transferStarCount, result.dropOriginalDetailsStarCount, result.exportDate);
+        UpgradedGiftController.open(this, tdlib, args);
+      }
+    }));
+  }
+
+  private void openUpgradedDetail (TdApi.ReceivedGift gift) {
+    if (gift == null || gift.gift == null || gift.gift.getConstructor() != TdApi.SentGiftUpgraded.CONSTRUCTOR) {
+      return;
+    }
+    final TdApi.UpgradedGift upgraded = ((TdApi.SentGiftUpgraded) gift.gift).gift;
+    if (upgraded == null) {
+      return;
+    }
+    UpgradedGiftController.Args args = new UpgradedGiftController.Args(
+      upgraded, gift.receivedGiftId, gift.canBeTransferred,
+      gift.transferStarCount, gift.dropOriginalDetailsStarCount, gift.exportDate);
+    UpgradedGiftController.open(this, tdlib, args);
   }
 
   private static long giftStarCount (@Nullable TdApi.SentGift sentGift) {

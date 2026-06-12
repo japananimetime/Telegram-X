@@ -97,8 +97,22 @@ public class TGMessageGiftUpgraded extends TGMessageGiveawayBase {
 
   @Override
   public void onClick (View view, TGInlineKeyboard keyboard, TGInlineKeyboard.Button button) {
-    // TODO(gift-detail / Slice 4): open the upgraded gift detail screen via GetUpgradedGift
-    // using upgradedGift.gift.name / receivedGiftId. For now this is a no-op.
+    final TdApi.UpgradedGift gift = upgradedGift.gift;
+    if (gift == null) {
+      return;
+    }
+    // The bubble already holds the full UpgradedGift; pass it plus the owner
+    // context (only present for the receiver) so the detail screen can expose
+    // Transfer / Drop-details actions.
+    org.thunderdog.challegram.ui.UpgradedGiftController.Args args = new org.thunderdog.challegram.ui.UpgradedGiftController.Args(
+      gift,
+      upgradedGift.receivedGiftId,
+      upgradedGift.canBeTransferred,
+      upgradedGift.transferStarCount,
+      upgradedGift.dropOriginalDetailsStarCount,
+      upgradedGift.exportDate
+    );
+    org.thunderdog.challegram.ui.UpgradedGiftController.open(controller(), tdlib, args);
   }
 
   @Override
