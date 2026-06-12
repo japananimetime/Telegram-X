@@ -655,6 +655,9 @@
   <item type="id" name="controller_stars" />
   <item type="id" name="controller_starTransactions" />
   <item type="id" name="controller_chatBoost" />
+  <item type="id" name="controller_quickReplies" />
+  <item type="id" name="btn_quickReply" />
+  <item type="id" name="btn_quickRepliesSettings" />
   <item type="id" name="btn_boost" />
   <item type="id" name="btn_boostLink" />
   <item type="id" name="controller_tonTransactions" />

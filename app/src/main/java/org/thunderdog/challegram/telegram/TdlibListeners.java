@@ -62,6 +62,7 @@ public class TdlibListeners {
 
   final ReferenceList<AnimatedEmojiListener> animatedEmojiListeners;
   final ReferenceList<SavedMessagesTagsListener> savedMessagesTagsListeners;
+  final ReferenceList<QuickReplyListener> quickReplyListeners;
 
   final ReferenceLongMap<MessageListener> messageChatListeners;
   final ReferenceLongMap<MessageEditListener> messageEditChatListeners;
@@ -104,6 +105,7 @@ public class TdlibListeners {
 
     this.animatedEmojiListeners = new ReferenceList<>(true);
     this.savedMessagesTagsListeners = new ReferenceList<>(true);
+    this.quickReplyListeners = new ReferenceList<>(true);
 
     this.reactionLoadListeners = new ReferenceMap<>(true);
 
@@ -248,6 +250,20 @@ public class TdlibListeners {
   }
 
   @AnyThread
+  public void subscribeToQuickReplyUpdates (QuickReplyListener listener) {
+    quickReplyListeners.add(listener);
+  }
+
+  public void unsubscribeFromQuickReplyUpdates (QuickReplyListener listener) {
+    quickReplyListeners.remove(listener);
+  }
+
+  void updateQuickReplyShortcuts () {
+    for (QuickReplyListener listener : quickReplyListeners) {
+      listener.onQuickReplyShortcutsChanged();
+    }
+  }
+
   public void subscribeToSessionUpdates (SessionListener listener) {
     sessionListeners.add(listener);
   }

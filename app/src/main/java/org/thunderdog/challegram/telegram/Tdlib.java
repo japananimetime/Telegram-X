@@ -7907,24 +7907,64 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   // Updates: SHORTCUTS
 
+  private final java.util.LinkedHashMap<Integer, TdApi.QuickReplyShortcut> quickReplyShortcuts = new java.util.LinkedHashMap<>();
+  private int[] quickReplyShortcutOrder = new int[0];
+
   @TdlibThread
   private void updateQuickReplyShortcuts (TdApi.UpdateQuickReplyShortcuts update) {
-
+    synchronized (dataLock) {
+      this.quickReplyShortcutOrder = update.shortcutIds != null ? update.shortcutIds : new int[0];
+    }
+    listeners.updateQuickReplyShortcuts();
   }
 
   @TdlibThread
   private void updateQuickReplyShortcut (TdApi.UpdateQuickReplyShortcut update) {
-
+    synchronized (dataLock) {
+      quickReplyShortcuts.put(update.shortcut.id, update.shortcut);
+    }
+    listeners.updateQuickReplyShortcuts();
   }
 
   @TdlibThread
   private void updateQuickReplyShortcutMessages (TdApi.UpdateQuickReplyShortcutMessages update) {
-
+    synchronized (dataLock) {
+      TdApi.QuickReplyShortcut shortcut = quickReplyShortcuts.get(update.shortcutId);
+      if (shortcut != null && update.messages != null) {
+        shortcut.messageCount = update.messages.length;
+      }
+    }
+    listeners.updateQuickReplyShortcuts();
   }
 
   @TdlibThread
   private void updateQuickReplyShortcutDeleted (TdApi.UpdateQuickReplyShortcutDeleted update) {
+    synchronized (dataLock) {
+      quickReplyShortcuts.remove(update.shortcutId);
+    }
+    listeners.updateQuickReplyShortcuts();
+  }
 
+  /** Quick-reply shortcuts in server order (populated after LoadQuickReplyShortcuts). */
+  public List<TdApi.QuickReplyShortcut> getQuickReplyShortcuts () {
+    synchronized (dataLock) {
+      List<TdApi.QuickReplyShortcut> result = new ArrayList<>(quickReplyShortcuts.size());
+      for (int id : quickReplyShortcutOrder) {
+        TdApi.QuickReplyShortcut shortcut = quickReplyShortcuts.get(id);
+        if (shortcut != null) {
+          result.add(shortcut);
+        }
+      }
+      // Include any not yet present in the order array.
+      if (result.size() != quickReplyShortcuts.size()) {
+        for (TdApi.QuickReplyShortcut shortcut : quickReplyShortcuts.values()) {
+          if (!result.contains(shortcut)) {
+            result.add(shortcut);
+          }
+        }
+      }
+      return result;
+    }
   }
 
   // Updates: CHATS

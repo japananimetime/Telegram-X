@@ -6177,6 +6177,12 @@
   <string name="ReplyInOtherChat">Reply in other chat</string>
   <string name="QuoteInOtherChat">Quote in other chat</string>
 
+  <!-- Quick replies -->
+  <string name="QuickReplies">Quick Replies</string>
+  <string name="QuickRepliesHint">Set up shortcuts to quickly send messages you use often.</string>
+  <string name="QuickRepliesEmpty">You have no quick replies yet.</string>
+  <string name="QuickReplyDelete">Delete shortcut</string>
+
   <!-- Chat boosts -->
   <string name="Boost">Boost</string>
   <string name="BoostLevel">Boost level</string>

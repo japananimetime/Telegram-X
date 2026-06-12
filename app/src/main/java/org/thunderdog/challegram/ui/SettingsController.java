@@ -661,6 +661,8 @@ public class SettingsController extends ViewController<Void> implements
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatFolders, R.drawable.baseline_folder_copy_24, R.string.ChatFolders));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     }
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_quickRepliesSettings, R.drawable.baseline_flash_on_24, R.string.QuickReplies));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_languageSettings, R.drawable.baseline_language_24, R.string.Language));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
@@ -1162,6 +1164,8 @@ public class SettingsController extends ViewController<Void> implements
         }
         return true;
       });
+    } else if (viewId == R.id.btn_quickRepliesSettings) {
+      navigateTo(new QuickRepliesController(context, tdlib));
     } else if (viewId == R.id.btn_languageSettings) {
       navigateTo(new SettingsLanguageController(context, tdlib));
     } else if (viewId == R.id.btn_notificationSettings) {
