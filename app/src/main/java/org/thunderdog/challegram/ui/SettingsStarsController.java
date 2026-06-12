@@ -160,6 +160,9 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     // Gift auctions the user is participating in (Slice 6)
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.controller_giftAuctions, R.drawable.baseline_gavel_24, R.string.GiftAuctions));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    // TON transaction history (Slice 9)
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.controller_tonTransactions, R.drawable.baseline_history_24, R.string.TonTransactions));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     // Payment options
@@ -207,6 +210,8 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
       openTransactionHistory();
     } else if (viewId == R.id.controller_giftAuctions) {
       GiftAuctionsController.open(this, tdlib);
+    } else if (viewId == R.id.controller_tonTransactions) {
+      navigateTo(new TonTransactionsController(context(), tdlib));
     }
   }
 

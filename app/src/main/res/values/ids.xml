@@ -628,6 +628,7 @@
   <item type="id" name="controller_premium" />
   <item type="id" name="controller_stars" />
   <item type="id" name="controller_starTransactions" />
+  <item type="id" name="controller_tonTransactions" />
   <item type="id" name="btn_buyStars" />
   <item type="id" name="btn_starOption" />
   <item type="id" name="btn_starTransactions" />
