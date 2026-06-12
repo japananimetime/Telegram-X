@@ -1580,8 +1580,10 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
       (itemView, id) -> {
         if (id == R.id.btn_done) {
+          setEmojiStatusAccessGranted(true);
           sendEventToWebApp("emoji_status_access_requested", "{\"status\":\"allowed\"}");
         } else {
+          setEmojiStatusAccessGranted(false);
           sendEventToWebApp("emoji_status_access_requested", "{\"status\":\"cancelled\"}");
         }
         return true;
@@ -1589,7 +1591,33 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     );
   }
 
+  // Per-bot consent for setting the user's emoji status (persisted like location).
+  private boolean isEmojiStatusAccessGranted () {
+    try {
+      Args args = getArguments();
+      long botId = args != null ? args.botUserId : 0;
+      return context().getSharedPreferences("webapp_emoji_status_grants", Context.MODE_PRIVATE)
+        .getBoolean("emoji_grant_" + tdlib.id() + "_" + botId, false);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private void setEmojiStatusAccessGranted (boolean granted) {
+    try {
+      Args args = getArguments();
+      long botId = args != null ? args.botUserId : 0;
+      context().getSharedPreferences("webapp_emoji_status_grants", Context.MODE_PRIVATE)
+        .edit().putBoolean("emoji_grant_" + tdlib.id() + "_" + botId, granted).apply();
+    } catch (Exception ignored) { }
+  }
+
   public void onWebAppSetEmojiStatus (long customEmojiId, int duration) {
+    // A mini app must not change the user's emoji status without the access prompt.
+    if (!isEmojiStatusAccessGranted()) {
+      sendEventToWebApp("emoji_status_failed", "{\"error\":\"NOT_ALLOWED\"}");
+      return;
+    }
     int expirationDate = duration > 0 ? (int) (System.currentTimeMillis() / 1000) + duration : 0;
     TdApi.EmojiStatusTypeCustomEmoji emojiType = new TdApi.EmojiStatusTypeCustomEmoji(customEmojiId);
     TdApi.EmojiStatus emojiStatus = new TdApi.EmojiStatus(emojiType, expirationDate);
@@ -2136,12 +2164,17 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
           locationEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
         }
       } catch (Exception ignored) { }
-      boolean granted = false;
+      boolean osGranted = false;
       try {
-        granted = context().checkLocationPermissions(false) == PackageManager.PERMISSION_GRANTED;
+        osGranted = context().checkLocationPermissions(false) == PackageManager.PERMISSION_GRANTED;
       } catch (Exception ignored) { }
+      // Mirror onWebAppCheckLocation: the per-bot grant gates access, not the OS
+      // permission alone — a bot the user denied must not see access_granted:true.
+      Boolean botGrant = getBotLocationGrant();
+      boolean accessRequested = botGrant != null;
+      boolean accessGranted = osGranted && Boolean.TRUE.equals(botGrant);
       sendEventToWebApp("location_checked",
-        String.format("{\"available\":%b,\"access_requested\":%b,\"access_granted\":%b}", locationEnabled, granted, granted));
+        String.format("{\"available\":%b,\"access_requested\":%b,\"access_granted\":%b}", locationEnabled, accessRequested, accessGranted));
     }
   }
 
