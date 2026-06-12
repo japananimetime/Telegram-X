@@ -60,7 +60,9 @@ import java.util.Locale;
 
 import org.drinkless.tdlib.TdApi;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
@@ -1341,13 +1343,29 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
   }
 
   private void sendCustomMethodResult (String requestId, String result) {
-    sendEventToWebApp("custom_method_invoked",
-      "{\"req_id\":\"" + escapeJsonString(requestId) + "\",\"result\":" + (result != null ? result : "null") + "}");
+    // `result` is raw JSON returned by the bot's backend (fully attacker-controlled).
+    // Never interpolate it directly into the injected script — re-parse it and let
+    // org.json re-serialize, which guarantees a well-formed, escaped payload. If it
+    // isn't valid JSON, surface an error instead of injecting garbage.
+    try {
+      JSONObject payload = new JSONObject();
+      payload.put("req_id", requestId);
+      payload.put("result", result != null ? new JSONTokener(result).nextValue() : JSONObject.NULL);
+      sendEventToWebApp("custom_method_invoked", payload.toString());
+    } catch (JSONException e) {
+      sendCustomMethodError(requestId, "Invalid result");
+    }
   }
 
   private void sendCustomMethodError (String requestId, String error) {
-    sendEventToWebApp("custom_method_invoked",
-      "{\"req_id\":\"" + escapeJsonString(requestId) + "\",\"error\":\"" + escapeJsonString(error) + "\"}");
+    try {
+      JSONObject payload = new JSONObject();
+      payload.put("req_id", requestId);
+      payload.put("error", error != null ? error : "");
+      sendEventToWebApp("custom_method_invoked", payload.toString());
+    } catch (JSONException e) {
+      // ignore: cannot build even a trivial error payload
+    }
   }
 
   // ==================== Clipboard Access ====================
@@ -2315,12 +2333,15 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void sendEventToWebApp (String eventName, String eventData) {
     if (webView == null || isDestroyed()) return;
-    String js = String.format(
+    // Event name is always a hardcoded literal, but escape it anyway (defense in
+    // depth). eventData is a JSON payload that may carry attacker-influenced values
+    // (clipboard, QR, custom-method result, secure/device storage); run a final
+    // line-terminator sanitization pass so raw U+2028/U+2029 (valid in JSON, but JS
+    // line terminators) can never break out of the injected script and run as code.
+    String js =
       "if (window.Telegram && window.Telegram.WebView && window.Telegram.WebView.receiveEvent) {" +
-      "  Telegram.WebView.receiveEvent('%s', %s);" +
-      "}",
-      eventName, eventData
-    );
+      "  Telegram.WebView.receiveEvent('" + escapeJsonString(eventName) + "', " + sanitizeJsLineTerminators(eventData) + ");" +
+      "}";
     webView.post(() -> {
       if (webView != null && !isDestroyed()) {
         webView.evaluateJavascript(js, null);
@@ -2328,13 +2349,56 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     });
   }
 
+  /**
+   * Replaces raw JS line terminators (U+2028 LINE SEPARATOR, U+2029 PARAGRAPH
+   * SEPARATOR) with their escaped forms. These are legal JSON whitespace but are
+   * statement terminators in JavaScript, so a raw one slipping through any of the
+   * string-concatenated payloads could end the receiveEvent(...) call and let the
+   * remainder execute as script.
+   */
+  private static String sanitizeJsLineTerminators (String json) {
+    if (json == null) return "null";
+    final char LS = 0x2028, PS = 0x2029;
+    if (json.indexOf(LS) < 0 && json.indexOf(PS) < 0) {
+      return json;
+    }
+    StringBuilder sb = new StringBuilder(json.length());
+    for (int i = 0; i < json.length(); i++) {
+      char c = json.charAt(i);
+      if (c == LS) {
+        sb.append("\\u2028");
+      } else if (c == PS) {
+        sb.append("\\u2029");
+      } else {
+        sb.append(c);
+      }
+    }
+    return sb.toString();
+  }
+
   private String escapeJsonString (String str) {
     if (str == null) return "";
-    return str.replace("\\", "\\\\")
-              .replace("\"", "\\\"")
-              .replace("\n", "\\n")
-              .replace("\r", "\\r")
-              .replace("\t", "\\t");
+    StringBuilder sb = new StringBuilder(str.length() + 16);
+    for (int i = 0; i < str.length(); i++) {
+      char c = str.charAt(i);
+      switch (c) {
+        case '\\': sb.append("\\\\"); break;
+        case '"': sb.append("\\\""); break;
+        case '\n': sb.append("\\n"); break;
+        case '\r': sb.append("\\r"); break;
+        case '\t': sb.append("\\t"); break;
+        case '\b': sb.append("\\b"); break;
+        case '\f': sb.append("\\f"); break;
+        default:
+          if (c < 0x20 || c == 0x2028 || c == 0x2029) {
+            sb.append(String.format("\\u%04x", (int) c));
+          } else {
+            sb.append(c);
+          }
+          break;
+      }
+    }
+    return sb.toString();
   }
 
   public TdApi.ThemeParameters getThemeParameters () {
