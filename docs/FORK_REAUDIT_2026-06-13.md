@@ -26,35 +26,39 @@ the code added since, plus a fresh parity sweep.
 
 ---
 
+## P1 cluster — fixed (follow-up pass)
+
+| Issue | Commit |
+|-------|--------|
+| Effects silently dropped on attach-menu/media/sticker sends + pendingId leak — stamped in both send wrappers | `ac145e7ea` |
+| Stars payment ignored `PaymentResult.success`/`verificationUrl` | `b3ded68ac` |
+| Star/TON transaction history capped at 50 — added accumulation + "Show more" pagination | `b3ded68ac` |
+| `formatPrice` wrong for JPY/3-decimal/locale → `CurrencyUtils.buildAmount` | `45d7ab928` |
+| Mini-app `location_checked` on settings-return ignored per-bot grant (denied bot saw granted) | `aae3e2bd8` |
+| Mini-app `set_emoji_status` without access check — gated on persisted per-bot grant | `aae3e2bd8` |
+| Forum pagination terminator (`length >= 100` not `nextOffset != 0`) | `987fe1fd9` |
+| Forum `unreadCount++` double-count — gated on lastMessage advancing | `987fe1fd9` |
+| Forum row showed stale draft over newer message | `987fe1fd9` |
+| Forum new-message-in-unknown-topic full reload → targeted `GetForumTopic` insert | `987fe1fd9` |
+| Story caption entities dropped (display/compose/edit) | `94c887197` |
+| `StarAmount` aliased Tdlib's cached object → copy | `069c9b00a` |
+
 ## P1 — correctness, still open
 
-**Message effects**
-- **Effect silently dropped on attach-menu / media / sticker sends.** The choke layer only covers `send()`; `sendPhotosAndVideosCompressed` (MediaLayout/CameraController/MediaViewController) and `sendContent` (stickers/GIFs/dice/files/contacts/audio) bypass `applyPendingMessageEffect`, and the unused `pendingMessageEffectId` then **leaks into the next text send**. *Fix:* stamp the effect at the lowest common send point (thread it into `sendPhotosAndVideosCompressed`/`sendContent` `MessageSendOptions`, or apply centrally in the chat's `sendMessage` options for albums/photos — `effectId` is valid on `sendMessage`/`sendMessageAlbum`). At minimum clear `pendingMessageEffectId` after any send to stop the leak. `MessagesController.java:~2405`.
-
-**Forum topics** (all carried over from pass 1, re-verified present)
-- Unread count inferred locally; `unreadCount++` double-counts and is only ever zeroed, never decremented on partial read. `ForumTopicsController.java:1796`, `Tdlib.java:8624`.
-- Pagination terminator should be "full page (`length >= 100`)", not `nextOffset != 0`. `ForumTopicsController.java:820,886`.
-- New message in unknown topic → full 100-topic reload instead of one `GetForumTopic`. `:1742`.
-- Row shows draft even when `lastMessage.date` is newer. `ForumTopicView.java:225`.
+**Forum topics** (remaining)
+- Unread count never decremented on *partial* read (only zeroed on full read) — the double-count is fixed, but partial-read drift needs per-topic `UpdateChatReadInbox` handling. `Tdlib.java:8624`.
 - `onForumTopicFullyUpdated` override is dead code (never dispatched). `:1629`.
 - `resortAndRefresh` uses `notifyDataSetChanged()` (flicker); should diff/range-notify. `:1622`.
 - `copyForumTopics` shares nested `lastMessage`/`info` refs; `onMessageContentChanged` mutates `lastMessage.content` in place across threads. `Tdlib.java:3599`.
 
-**Payments**
-- Order info / shipping never collected (`orderInfoId`/`shippingOptionId` always `""`); `ValidateOrderInfo` unused. `PaymentFormController.java:581`.
-- Tips ignored (`tipAmount=0` hardcoded; `suggestedTipAmounts` never rendered). `:584`.
-- Star/TON transaction history capped at 50, `nextOffset` never used (no load-more). `StarTransactionsController.java:97`, `TonTransactionsController.java:96`.
-- Stars payment treats any non-error as success; ignores `PaymentResult.success`/`verificationUrl`. `TdlibUi.java:8146`.
-- Paid-reaction amount hardcoded to 1 Star — no amount slider. `TGMessage.java:9819`.
+**Payments** (remaining — UI-heavy)
+- Order info / shipping never collected (`orderInfoId`/`shippingOptionId` always `""`); `ValidateOrderInfo` unused — needs an address form. `PaymentFormController.java:581`.
+- Tips ignored (`tipAmount=0` hardcoded; `suggestedTipAmounts` never rendered) — needs tip UI. `:584`.
+- Paid-reaction amount hardcoded to 1 Star — needs an amount slider. `TGMessage.java:9819`.
 
-**Mini Apps**
-- `location_checked` on return from settings (`onFocus`) reports `access_granted` from OS permission only, ignoring the per-bot grant — contradicts `onWebAppCheckLocation`; a **denied** bot can see `granted:true`. `WebAppController.java:2143`.
-- `onWebAppSetEmojiStatus` sets the status without verifying the `emoji_status_access` prompt was granted. `:1592`.
+**Mini Apps** (remaining)
 - Biometry access flags (`biometryAccessRequested/Granted`) are ephemeral per-session while the token is persisted → inconsistent `biometry_info_received`. `:1411`.
 - `postEvent` origin check is TOCTOU and `requireSameOrigin` defaults `false`; capture origin synchronously + default `true`. `WebAppProxy.java:42`.
-
-**Stories**
-- Caption **entities dropped** on display (`captionView.setText(story.caption.text)`), compose, and edit (`new TextEntity[0]`). Links/bold/mentions/custom-emoji lost. `StoryViewController.java:684`, `StoryPreviewController.java:467`.
 
 ---
 
