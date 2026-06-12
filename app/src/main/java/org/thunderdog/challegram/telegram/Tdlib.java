@@ -7859,7 +7859,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateMessageFactCheck (TdApi.UpdateMessageFactCheck update) {
-    // TODO
+    listeners.updateMessageFactCheck(update);
   }
   
   @TdlibThread

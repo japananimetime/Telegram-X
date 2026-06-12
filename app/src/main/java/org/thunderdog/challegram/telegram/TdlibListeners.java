@@ -890,6 +890,20 @@ public class TdlibListeners {
     );
   }
 
+  // updateMessageFactCheck
+
+  void updateMessageFactCheck (TdApi.UpdateMessageFactCheck update) {
+    List<TdApi.Message> messages = pendingMessages.get(update.chatId + "_" + update.messageId);
+    if (messages != null) {
+      for (TdApi.Message message : messages) {
+        message.factCheck = update.factCheck;
+      }
+    }
+    runMessageUpdate(update.chatId, listener ->
+      listener.onMessageFactCheckChanged(update.chatId, update.messageId, update.factCheck)
+    );
+  }
+
   // updateMessageUnreadReactions
 
   void updateMessageUnreadReactions (TdApi.UpdateMessageUnreadReactions update, boolean counterChanged, boolean availabilityChanged, TdApi.Chat chat, @Nullable TdlibChatList[] chatLists) {

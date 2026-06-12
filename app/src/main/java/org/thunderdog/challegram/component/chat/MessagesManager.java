@@ -3576,6 +3576,23 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   @Override
+  public void onMessageFactCheckChanged (long chatId, long messageId, @Nullable TdApi.FactCheck factCheck) {
+    int sentMessageIndex = indexOfSentMessage(chatId, messageId);
+    if (sentMessageIndex != -1) {
+      sentMessages.get(sentMessageIndex).factCheck = factCheck;
+      return;
+    }
+    tdlib.ui().post(() -> {
+      if (loader.getChatId() == chatId) {
+        int index = adapter.indexOfMessageContainer(messageId);
+        if (index != -1) {
+          adapter.getItem(index).updateMessageFactCheck(factCheck);
+        }
+      }
+    });
+  }
+
+  @Override
   public void onMessagePinned (long chatId, long messageId, boolean isPinned) {
     int sentMessageIndex = indexOfSentMessage(chatId, messageId);
     if (sentMessageIndex != -1) {

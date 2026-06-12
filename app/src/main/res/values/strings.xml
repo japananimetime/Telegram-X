@@ -6153,6 +6153,8 @@
   <string name="ReplyInOtherChat">Reply in other chat</string>
   <string name="QuoteInOtherChat">Quote in other chat</string>
 
+  <string name="FactCheck">Fact Check</string>
+
   <!-- Service messages -->
   <string name="YouChangedWallpaper">You changed the wallpaper</string>
   <string name="XChangedWallpaper">%1$s changed the wallpaper</string>

@@ -580,6 +580,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     computeQuickButtons();
     checkHighlightedText();
+    checkFactCheck();
 
     UI.post(() -> updateReactionAvatars(false));
 
@@ -7334,6 +7335,35 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     footerWrapper.setViewProvider(currentViews);
 
     this.footerText = footerWrapper;
+  }
+
+  // Fact-check: rendered as a titled footer block below the message content,
+  // mirroring the official client. The footer slot is otherwise only used by the
+  // chat event log, so regular messages are free to use it for the fact-check.
+  private boolean factCheckFooterShown;
+
+  protected final void checkFactCheck () {
+    boolean shouldShow = msg.factCheck != null && msg.factCheck.text != null && !Td.isEmpty(msg.factCheck.text);
+    if (!shouldShow) {
+      if (factCheckFooterShown) {
+        factCheckFooterShown = false;
+        this.footerTitle = null;
+        this.footerText = null;
+      }
+      return;
+    }
+    setFooter(Lang.getString(R.string.FactCheck), msg.factCheck.text.text, msg.factCheck.text.entities);
+    factCheckFooterShown = true;
+  }
+
+  public final void updateMessageFactCheck (TdApi.FactCheck factCheck) {
+    msg.factCheck = factCheck;
+    runOnUiThreadOptional(() -> {
+      checkFactCheck();
+      if (isLayoutBuilt()) {
+        rebuildAndUpdateContent();
+      }
+    });
   }
 
   protected final int getFooterTop () {
