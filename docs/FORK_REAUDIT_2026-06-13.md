@@ -68,7 +68,7 @@ the code added since, plus a fresh parity sweep.
 - `StarAmount` from the listener is aliased into Tdlib's cached object (`StarTransactionsController.java:82`) — copy it; balance display ignores `nanostarCount`.
 - `ChatsController` story-list listener added from two sites, never removed (soft leak via weak ref); `storyBarView` not nulled in `destroy()`. `ChatsController.java:3253`.
 - Gift auctions empty-state **toast spam** on every live update (`GiftAuctionsController.java:96,165`) — use inline empty state.
-- "View receipt" is a stub (`GetPaymentReceipt` unused); payment-open logic duplicated between `TGMessageInvoice` and `TdlibUi.openPaymentForm`.
+- ~~"View receipt" is a stub (`GetPaymentReceipt` unused)~~ — ✅ DONE (`3e04bd96c`): tapping the payment-successful service message opens `PaymentReceiptController`. (Payment-open logic is still duplicated between `TGMessageInvoice` and `TdlibUi.openPaymentForm` — minor.)
 - Mini-app `share_to_story` fetches an arbitrary bot-supplied `media_url` over HTTP with redirects, no scheme/host/size limit (SSRF-ish); `startFileDownload` passes raw `fileName` to a public dir. `WebAppController.java:1785,1560`.
 - `appendFormatted`/`ContentPreview.java:660` lack the null guards their siblings have (low risk).
 
@@ -102,7 +102,7 @@ Ranked by visibility ÷ effort. None of these are bugs — they're missing featu
 | 7 | ~~**Sticker-pack authoring**~~ — ✅ DONE (`c5e333be0`): `StickerSetsController` — owned-set list (`GetOwnedStickerSets`), create pack (`CreateNewStickerSet`), add sticker (`AddStickerToSet`), rename (`SetStickerSetTitle`), open/share. Image picked via `ACTION_GET_CONTENT`. Emoji-edit/reorder/remove are follow-ups. | Med | L |
 | 8 | **Saved Messages topics** | `LoadSavedMessagesTopics`, `GetSavedMessagesTopicHistory`, `ToggleSavedMessagesTopicIsPinned` | Med | L |
 | 9 | **Group calls / video chats / live streams** | `JoinGroupCall`, `CreateVideoChat`, `GetGroupCall*` — `GroupCallListener` has zero implementers; gates the call card + `StoryContentLive` | High | XL |
-| 10 | **Refunds / receipts / star withdrawal** | `RefundStarPayment`, `GetPaymentReceipt`, `GetStarWithdrawalUrl` | Low-Med | S–M |
+| 10 | ~~**Refunds / receipts / star withdrawal**~~ — ✅ DONE (`3e04bd96c`): `PaymentReceiptController` (`GetPaymentReceipt`) opened from the payment-successful service message; real Star withdrawal in `StarRevenueController` (2FA confirm → `GetStarWithdrawalUrl` → open URL). `RefundStarPayment` left out — bots-only, no user-client entry point. | Low-Med | S–M |
 
 **Empty/stubbed update handlers** (no-op `// TODO`): `updateSpeechRecognitionTrial` (voice-to-text trial quota), `updateDefaultBackground`, `UpdateNewOauthRequest` (login approval), `UpdateStakeDiceState`, `UpdateTextCompositionStyles`, `UpdateWebBrowserSettings`, `UpdatePendingMessage`, `UpdateLiveStoryTopDonors`, `UpdateChatJoinResult`.
 
