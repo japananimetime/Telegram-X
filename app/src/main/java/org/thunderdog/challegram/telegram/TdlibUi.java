@@ -3857,9 +3857,14 @@ public class TdlibUi extends Handler {
         break;
       }
 
+      case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeGiftCollection giftCollectionLink = (TdApi.InternalLinkTypeGiftCollection) linkType;
+        openGiftCollectionLink(context, giftCollectionLink, openParameters, after);
+        break;
+      }
+
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:
       case TdApi.InternalLinkTypePremiumGiftPurchase.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatAffiliateProgram.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePassportDataRequest.CONSTRUCTOR: {
@@ -4004,6 +4009,53 @@ public class TdlibUi extends Handler {
     if (after != null) {
       after.runWithBool(ok);
     }
+  }
+
+  // Slice 7: resolve internalLinkTypeGiftCollection by searching the owner's
+  // public username, then open the received-gifts surface pre-filtered to the
+  // collection id. Mirrors the SearchPublicChat resolution used by slices 4/5.
+  private void openGiftCollectionLink (TdlibDelegate context, TdApi.InternalLinkTypeGiftCollection link, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
+    String username = link.giftOwnerUsername;
+    if (username != null) {
+      username = username.trim();
+      if (username.startsWith("@")) {
+        username = username.substring(1);
+      }
+    }
+    if (StringUtils.isEmpty(username)) {
+      showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+      if (after != null) {
+        post(() -> after.runWithBool(false));
+      }
+      return;
+    }
+    final int collectionId = link.collectionId;
+    tdlib.send(new TdApi.SearchPublicChat(username), (chat, error) -> post(() -> {
+      org.thunderdog.challegram.navigation.ViewController<?> current = context.context().navigation() != null ? context.context().navigation().getCurrentStackItem() : null;
+      if (error != null || chat == null || current == null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, error != null ? TD.toErrorString(error) : Lang.getString(R.string.GiftCollectionNotFound), openParameters);
+        if (after != null) {
+          after.runWithBool(false);
+        }
+        return;
+      }
+      final TdApi.MessageSender ownerId;
+      final boolean isSelf;
+      TdApi.User user = tdlib.chatUser(chat);
+      if (user != null) {
+        ownerId = new TdApi.MessageSenderUser(user.id);
+        isSelf = tdlib.isSelfUserId(user.id);
+      } else {
+        ownerId = new TdApi.MessageSenderChat(chat.id);
+        isSelf = false;
+      }
+      org.thunderdog.challegram.ui.GiftsController c = new org.thunderdog.challegram.ui.GiftsController(current.context(), tdlib);
+      c.setArguments(new org.thunderdog.challegram.ui.GiftsController.Args(ownerId, isSelf).setInitialCollectionId(collectionId));
+      current.context().navigation().navigateTo(c);
+      if (after != null) {
+        after.runWithBool(true);
+      }
+    }));
   }
 
   private boolean openSettingsSection (TdlibDelegate context, @Nullable TdApi.SettingsSection section, @Nullable UrlOpenParameters openParameters) {
