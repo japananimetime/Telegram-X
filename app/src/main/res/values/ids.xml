@@ -666,6 +666,9 @@
   <item type="id" name="btn_downloadsSettings" />
   <item type="id" name="controller_starRevenue" />
   <item type="id" name="btn_withdrawStars" />
+  <item type="id" name="controller_stickerSets" />
+  <item type="id" name="btn_stickerSetCreate" />
+  <item type="id" name="btn_stickerSetAdd" />
   <item type="id" name="controller_business" />
   <item type="id" name="controller_businessStartPage" />
   <item type="id" name="controller_businessLocation" />

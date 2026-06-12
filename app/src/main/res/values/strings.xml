@@ -6187,6 +6187,19 @@
   <string name="MonetizationWithdrawUnavailable">Withdrawal isn\'t available yet.</string>
   <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
 
+  <!-- Sticker pack authoring -->
+  <string name="StickerPacksHint">Create and manage your own sticker sets.</string>
+  <string name="StickerPacksMine">My sticker sets</string>
+  <string name="StickerPacksEmpty">You haven\'t created any sticker sets yet.</string>
+  <string name="StickerPackCreate">Create a new set</string>
+  <string name="StickerPackCreated">Sticker set created.</string>
+  <string name="StickerPackTitleHint">Set name</string>
+  <string name="StickerPackAddSticker">Add a sticker</string>
+  <string name="StickerPackRename">Rename set</string>
+  <string name="StickerAdded">Sticker added.</string>
+  <string name="StickerEmojiPrompt">Sticker emoji</string>
+  <string name="StickerEmojiHint">Emoji for this sticker</string>
+
   <!-- Telegram Business -->
   <string name="TelegramBusiness">Telegram Business</string>
   <string name="BusinessHint">Telegram Business lets you set up a business presence: opening hours, location, a custom start page, and automatic greeting and away messages.</string>
