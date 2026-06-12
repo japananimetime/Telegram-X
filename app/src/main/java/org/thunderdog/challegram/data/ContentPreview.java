@@ -1630,6 +1630,7 @@ public class ContentPreview {
       case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
         return new ContentPreview(EMOJI_STARS, R.string.ChatListPaidPriceChanged);
       case TdApi.MessageChecklist.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.Checklist);
       case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
       case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
         return new ContentPreview(EMOJI_POLL, R.string.ChatListChecklistUpdated);

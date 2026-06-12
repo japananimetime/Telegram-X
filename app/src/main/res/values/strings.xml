@@ -6202,6 +6202,7 @@
   <string name="ServiceGroupCallEnded">Video chat ended</string>
   <string name="ServiceGroupCallEndedDuration">Video chat ended · %1$s</string>
   <string name="VideoChat">Video chat</string>
+  <string name="Checklist">Checklist</string>
 
   <!-- Chat-list previews -->
   <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>

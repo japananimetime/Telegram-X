@@ -8615,9 +8615,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGroupCall.CONSTRUCTOR:
           return new TGMessageService(context, msg, (TdApi.MessageGroupCall) content);
 
+        case TdApi.MessageChecklist.CONSTRUCTOR:
+          return new TGMessageText(context, msg, buildChecklistText(((TdApi.MessageChecklist) content).list));
+
         // unsupported / bubble placeholders still pending dedicated renderers
         case TdApi.MessagePaidMedia.CONSTRUCTOR:
-        case TdApi.MessageChecklist.CONSTRUCTOR: // TODO TGMessagePoll
         case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
@@ -8653,6 +8655,49 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } catch (Throwable t) {
       Log.e("Cannot parse message", t);
       return valueOfError(context, msg, t);
+    }
+  }
+
+  // Renders a TdApi.Checklist as a single formatted-text block (bold title + each
+  // task prefixed with a checkbox glyph, completed tasks struck through). Read-only;
+  // interactive mark-as-done would need a dedicated TGMessageChecklist bubble.
+  private static TdApi.FormattedText buildChecklistText (TdApi.Checklist list) {
+    StringBuilder sb = new StringBuilder();
+    List<TdApi.TextEntity> entities = new ArrayList<>();
+    if (list != null && list.title != null && !Td.isEmpty(list.title)) {
+      int start = sb.length();
+      appendFormatted(sb, entities, list.title);
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    }
+    if (list != null && list.tasks != null) {
+      for (TdApi.ChecklistTask task : list.tasks) {
+        if (sb.length() > 0) {
+          sb.append("\n");
+        }
+        boolean done = task.completionDate != 0;
+        sb.append(done ? "☑ " : "☐ "); // ballot box (with/without check) + nbsp
+        if (task.text != null) {
+          int start = sb.length();
+          appendFormatted(sb, entities, task.text);
+          if (done) {
+            entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeStrikethrough()));
+          }
+        }
+      }
+    }
+    if (sb.length() == 0) {
+      sb.append(Lang.getString(R.string.Checklist));
+    }
+    return new TdApi.FormattedText(sb.toString(), entities.toArray(new TdApi.TextEntity[0]));
+  }
+
+  private static void appendFormatted (StringBuilder sb, List<TdApi.TextEntity> out, TdApi.FormattedText text) {
+    final int offset = sb.length();
+    sb.append(text.text);
+    if (text.entities != null) {
+      for (TdApi.TextEntity e : text.entities) {
+        out.add(new TdApi.TextEntity(e.offset + offset, e.length, e.type));
+      }
     }
   }
 
