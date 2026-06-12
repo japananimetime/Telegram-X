@@ -704,6 +704,7 @@
   <item type="id" name="btn_sendPaidReaction" />
   <item type="id" name="btn_messageSummarize" />
   <item type="id" name="btn_messageTranscribe" />
+  <item type="id" name="btn_messageEffect" />
   <item type="id" name="btn_clear" />
   <item type="id" name="btn_removeProxy" />
   <item type="id" name="btn_save" />

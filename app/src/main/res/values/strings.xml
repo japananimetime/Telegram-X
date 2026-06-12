@@ -6154,6 +6154,12 @@
   <string name="QuoteInOtherChat">Quote in other chat</string>
 
   <string name="FactCheck">Fact Check</string>
+  <string name="MessageEffectAdd">Add animated effect</string>
+  <string name="MessageEffectChange">Change effect</string>
+  <string name="MessageEffectChoose">Choose an effect</string>
+  <string name="MessageEffectNone">No effect</string>
+  <string name="MessageEffectAdded">Effect added — it plays when you send</string>
+  <string name="MessageEffectPremium">Premium</string>
   <string name="Transcribe">Transcribe Voice</string>
   <string name="Transcription">Transcript</string>
   <string name="TranscriptionInProgress">Recognizing…</string>
