@@ -5713,6 +5713,23 @@
   <string name="xGiftCanBeSold_one">Can be converted to %1$s Star</string>
   <string name="xGiftCanBeSold_other">Can be converted to %1$s Stars</string>
 
+  <!-- Upgraded (collectible) gifts -->
+  <string name="UpgradedGiftNumber">Gift #%1$d of %2$d</string>
+  <string name="UpgradedGiftRarity">Rarity: %1$s</string>
+  <string name="UpgradedGiftRarityUncommon">Uncommon</string>
+  <string name="UpgradedGiftRarityRare">Rare</string>
+  <string name="UpgradedGiftRarityEpic">Epic</string>
+  <string name="UpgradedGiftRarityLegendary">Legendary</string>
+  <string name="UpgradedGiftPurchaseOffer">Purchase Offer</string>
+  <string name="UpgradedGiftOfferPrice">Price: %1$s</string>
+  <string name="UpgradedGiftOfferPending">Offer pending</string>
+  <string name="UpgradedGiftOfferAccepted">Offer accepted</string>
+  <string name="UpgradedGiftOfferRejected">Offer rejected</string>
+  <string name="UpgradedGiftOfferExpired">Offer expired</string>
+  <string name="RefundedGift">Refunded Gift</string>
+  <string name="RefundedGiftDesc">This gift was refunded.</string>
+  <string name="GiftedTonAmount">%1$s TON</string>
+
   <string name="YouSharedUser">You shared **%1$s**</string>
   <string name="YouSharedUsers_one">You shared **%1$s user**</string>
   <string name="YouSharedUsers_other">You shared **%1$s users**</string>

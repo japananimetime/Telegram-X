@@ -8426,6 +8426,21 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGift.CONSTRUCTOR: {
           return new TGMessageGiftRegular(context, msg, (TdApi.MessageGift) content);
         }
+        case TdApi.MessageUpgradedGift.CONSTRUCTOR: {
+          return new TGMessageGiftUpgraded(context, msg, (TdApi.MessageUpgradedGift) content);
+        }
+        case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR: {
+          return new TGMessageGiftRefunded(context, msg, (TdApi.MessageRefundedUpgradedGift) content);
+        }
+        case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR: {
+          return new TGMessageGiftPurchaseOffer(context, msg, (TdApi.MessageUpgradedGiftPurchaseOffer) content);
+        }
+        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR: {
+          return new TGMessageGiftPurchaseOfferRejected(context, msg, (TdApi.MessageUpgradedGiftPurchaseOfferRejected) content);
+        }
+        case TdApi.MessageGiftedTon.CONSTRUCTOR: {
+          return new TGMessageGiftedTon(context, msg, (TdApi.MessageGiftedTon) content);
+        }
         case TdApi.MessageGiveawayWinners.CONSTRUCTOR: {
           return new TGMessageGiveawayWinners(context, msg, (TdApi.MessageGiveawayWinners) content);
         }
@@ -8445,9 +8460,6 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
         case TdApi.MessagePaidMedia.CONSTRUCTOR:
         case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGift.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-        case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
 
         case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
         case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR: // TODO TGMessageService
@@ -8460,11 +8472,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-        case TdApi.MessageGiftedTon.CONSTRUCTOR:
         case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
 
         // TODO dedicated renderers; routed to the unsupported placeholder for now
-        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
         case TdApi.MessageChatOwnerChanged.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageChatOwnerLeft.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageManagedBotCreated.CONSTRUCTOR: // TODO TGMessageService
