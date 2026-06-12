@@ -98,7 +98,7 @@ Ranked by visibility ÷ effort. None of these are bugs — they're missing featu
 | 3 | ~~**Quick replies**~~ — ✅ DONE (`5db0dc8bf`): cache + `QuickRepliesController` (list/delete) under Settings; create + "/" send-picker are follow-ups | Med | M |
 | 4 | ~~**Downloads manager**~~ — ✅ DONE (`61016ec13`): `DownloadsController` (`SearchFileDownloads` + pause/resume/remove/clear-all) under Settings | Med | M |
 | 5 | ~~**Monetization/revenue dashboard**~~ — ✅ DONE (`67f79c175`): `StarRevenueController` (`GetStarRevenueStatistics` balances + USD); chart + withdrawal are follow-ups | Med | M |
-| 6 | **Telegram Business suite** | `SetBusinessOpeningHours/Location/Greeting/AwayMessage/ConnectedBot/StartPage` | Med | L |
+| 6 | ~~**Telegram Business suite**~~ — ✅ DONE (`c362b772d`): `SettingsBusinessController` hub + full editors for start page (`SetBusinessStartPage`), location (`SetBusinessLocation`), and chat links (`GetBusinessChatLinks`/`Create`/`Delete`); opening-hours/greeting/away show state + turn-off (`Set*(null)`). Rich editors for hours/greeting/away/connected-bot are follow-ups. | Med | L |
 | 7 | **Sticker-pack authoring** | `CreateNewStickerSet`, `AddStickerToSet`, `SetStickerEmojis` | Med | L |
 | 8 | **Saved Messages topics** | `LoadSavedMessagesTopics`, `GetSavedMessagesTopicHistory`, `ToggleSavedMessagesTopicIsPinned` | Med | L |
 | 9 | **Group calls / video chats / live streams** | `JoinGroupCall`, `CreateVideoChat`, `GetGroupCall*` — `GroupCallListener` has zero implementers; gates the call card + `StoryContentLive` | High | XL |
