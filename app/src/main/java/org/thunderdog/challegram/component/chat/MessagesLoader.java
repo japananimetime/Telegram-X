@@ -1010,7 +1010,7 @@ public class MessagesLoader implements Client.ResultHandler {
 
       TdApi.MessageContent content;
       if (photo != null)
-        content = new TdApi.MessagePhoto(photo, text, false, false, false);
+        content = new TdApi.MessagePhoto(photo, null, text, false, false, false);
       else if (sticker != null)
         content = new TdApi.MessageSticker(sticker, false);
       else if (audio != null)
@@ -1282,6 +1282,7 @@ public class MessagesLoader implements Client.ResultHandler {
       false, // isPaidStarSuggestedPost
       false, // isPaidTonSuggestedPost
       false, // containsUnreadMention
+      false, // containsUnreadPollVotes
       event.date, // date
       0, // editDate
       null, // forwardInfo
@@ -1296,13 +1297,16 @@ public class MessagesLoader implements Client.ResultHandler {
       0, // selfDestructIn
       0, // autoDeleteIn
       0, // viaBotUserId
+      null, // guestBotCallerId
       0, // senderBusinessBotUserId
       0, // senderBoostCount
+      null, // senderTag
       0, // paidMessageStarCount
       null, // authorSignature
       0, // mediaAlbumId
       0, // effectId
       null, // restrictionInfo
+      null, // summaryLanguageCode
       null, // content
       null // replyMarkup
     );

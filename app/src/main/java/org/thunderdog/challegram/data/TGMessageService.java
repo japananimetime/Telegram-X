@@ -428,9 +428,10 @@ public final class TGMessageService extends TGMessageServiceImpl {
               staticResId = R.string.ActionPinnedChecklist;
               break;
             case TdApi.MessageLocation.CONSTRUCTOR:
-              staticResId = ((TdApi.MessageLocation) message.content).livePeriod > 0 ?
-                R.string.ActionPinnedGeoLive :
-                R.string.ActionPinnedGeo;
+              staticResId = R.string.ActionPinnedGeo;
+              break;
+            case TdApi.MessageLiveLocation.CONSTRUCTOR:
+              staticResId = R.string.ActionPinnedGeoLive;
               break;
             case TdApi.MessageVenue.CONSTRUCTOR:
               staticResId = R.string.ActionPinnedGeo;
@@ -538,7 +539,7 @@ public final class TGMessageService extends TGMessageServiceImpl {
               staticResId = R.string.ActionPinnedNoText;
               break;
             default:
-              Td.assertMessageContent_e0365d1c();
+              Td.assertMessageContent_bb294b24();
               throw Td.unsupported(message.content);
           }
           if (format == null) {

@@ -206,12 +206,14 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.LinkPreviewTypeWebApp.CONSTRUCTOR:
       case TdApi.LinkPreviewTypeEmbeddedAnimationPlayer.CONSTRUCTOR:
       case TdApi.LinkPreviewTypeExternalAudio.CONSTRUCTOR:
+      case TdApi.LinkPreviewTypeRequestManagedBot.CONSTRUCTOR:
+      case TdApi.LinkPreviewTypeTextCompositionStyle.CONSTRUCTOR:
       case TdApi.LinkPreviewTypeExternalVideo.CONSTRUCTOR: {
         // TODO support more types
         break;
       }
       default:
-        Td.assertLinkPreviewType_a9a3ffcd();
+        Td.assertLinkPreviewType_883de866();
         throw Td.unsupported(linkPreview.type);
     }
     return false;
@@ -297,12 +299,14 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
             case TdApi.LinkPreviewTypeWebApp.CONSTRUCTOR:
             case TdApi.LinkPreviewTypeEmbeddedAnimationPlayer.CONSTRUCTOR:
             case TdApi.LinkPreviewTypeExternalAudio.CONSTRUCTOR:
+            case TdApi.LinkPreviewTypeRequestManagedBot.CONSTRUCTOR:
+            case TdApi.LinkPreviewTypeTextCompositionStyle.CONSTRUCTOR:
             case TdApi.LinkPreviewTypeExternalVideo.CONSTRUCTOR: {
               // TODO support more types
               break;
             }
             default:
-              Td.assertLinkPreviewType_a9a3ffcd();
+              Td.assertLinkPreviewType_883de866();
               throw Td.unsupported(linkPreview.type);
           }
         }
@@ -346,6 +350,10 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessageLocation.CONSTRUCTOR: {
         // map preview
         return valueOf(tdlib, ((TdApi.MessageLocation) message.content).location, null, size, cornerRadius);
+      }
+      case TdApi.MessageLiveLocation.CONSTRUCTOR: {
+        // map preview
+        return valueOf(tdlib, ((TdApi.MessageLiveLocation) message.content).location.location, null, size, cornerRadius);
       }
       case TdApi.MessageVenue.CONSTRUCTOR: {
         // map preview
@@ -500,12 +508,22 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+      case TdApi.MessageRichMessage.CONSTRUCTOR: // TODO(td): dedicated rich message preview
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
       case TdApi.MessageUnsupported.CONSTRUCTOR: {
         // No media preview.
         break;
       }
       default: {
-        Td.assertMessageContent_e0365d1c();
+        Td.assertMessageContent_bb294b24();
         throw Td.unsupported(message.content);
       }
     }

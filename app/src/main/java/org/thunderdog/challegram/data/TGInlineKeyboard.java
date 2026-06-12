@@ -1160,7 +1160,7 @@ public class TGInlineKeyboard {
                   parent.getChatId(),
                   botUserId,
                   botUsername,
-                  webAppInfo.url,
+                  webAppInfo.url.url, // TODO(td): respect webAppInfo.url.requireSameOrigin
                   webAppInfo.launchId,
                   null // openMode
                 ).setOwnerController(context.context.messagesController()));

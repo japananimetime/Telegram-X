@@ -219,21 +219,22 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     // Build title (no emoji prefixes - icons are drawn separately)
     this.titleText = topic.info.name;
 
-    // Check if we should show draft (draft exists with text input)
+    // Check if we should show draft (draft exists with text content)
+    // TODO: preview fallbacks for draftMessageContentRichMessage/VideoNote/VoiceNote (currently fall through to last message preview)
     boolean hasDraft = topic.draftMessage != null &&
-      topic.draftMessage.inputMessageText != null &&
-      topic.draftMessage.inputMessageText.getConstructor() == TdApi.InputMessageText.CONSTRUCTOR;
+      topic.draftMessage.content != null &&
+      topic.draftMessage.content.getConstructor() == TdApi.DraftMessageContentText.CONSTRUCTOR;
 
     if (hasDraft) {
       // Show draft preview
       this.showingDraft = true;
-      TdApi.InputMessageText inputText = (TdApi.InputMessageText) topic.draftMessage.inputMessageText;
-      String draftText = inputText.text != null && !StringUtils.isEmpty(inputText.text.text) ?
-        inputText.text.text : "";
+      TdApi.DraftMessageContentText textDraft = (TdApi.DraftMessageContentText) topic.draftMessage.content;
+      String draftText = textDraft.text != null && !StringUtils.isEmpty(textDraft.text.text) ?
+        textDraft.text.text : "";
       this.senderText = Lang.getString(R.string.Draft);
       this.previewText = draftText;
       // Get FormattedText from draft for custom emoji rendering
-      this.previewFormattedText = inputText.text;
+      this.previewFormattedText = textDraft.text;
       this.timeText = Lang.timeOrDateShort(topic.draftMessage.date, java.util.concurrent.TimeUnit.SECONDS);
       this.isOutgoing = false;
       this.isSending = false;

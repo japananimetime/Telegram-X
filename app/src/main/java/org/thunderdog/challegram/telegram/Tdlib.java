@@ -333,19 +333,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         startup = new TdApi.SetAlarm(0);
       }
       client.send(startup, (result) -> {
-        if (result.getConstructor() == TdApi.Proxies.CONSTRUCTOR) {
-          TdApi.Proxy[] proxies = ((TdApi.Proxies) result).proxies;
+        if (result.getConstructor() == TdApi.AddedProxies.CONSTRUCTOR) {
+          TdApi.AddedProxy[] proxies = ((TdApi.AddedProxies) result).proxies;
           boolean foundEnabledProxy = false;
-          for (TdApi.Proxy proxy : proxies) {
-            TdApi.InternalLinkTypeProxy proxyDetails = new TdApi.InternalLinkTypeProxy(
-              proxy.server,
-              proxy.port,
-              proxy.type
-            );
-            int proxyId = Settings.instance().addOrUpdateProxy(proxyDetails, null, proxy.isEnabled);
-            if (proxy.isEnabled) {
+          for (TdApi.AddedProxy addedProxy : proxies) {
+            int proxyId = Settings.instance().addOrUpdateProxy(addedProxy.proxy, null, addedProxy.isEnabled);
+            if (addedProxy.isEnabled) {
               tdlib.setEffectiveProxyId(proxyId);
-              tdlib.setProxy(proxyId, proxyDetails);
+              tdlib.setProxy(proxyId, new TdApi.InternalLinkTypeProxy(addedProxy.proxy));
               foundEnabledProxy = true;
             }
           }
@@ -355,8 +350,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         } else {
           int proxyId = Settings.instance().getEffectiveProxyId();
           Settings.Proxy proxy = Settings.instance().getProxyConfig(proxyId);
-          if (proxy != null) {
-            tdlib.setProxy(proxyId, proxy.proxy);
+          if (proxy != null && proxy.proxy != null) {
+            tdlib.setProxy(proxyId, new TdApi.InternalLinkTypeProxy(proxy.proxy));
           } else {
             tdlib.disableProxy();
           }
@@ -1934,7 +1929,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public boolean isBadInstantView (TdApi.WebPageInstantView instantView) {
-    return instantView == null || !instantView.isFull || instantView.pageBlocks == null || instantView.pageBlocks.length == 0 || !TD.hasInstantView(instantView.version);
+    return instantView == null || !instantView.isFull || instantView.blocks == null || instantView.blocks.length == 0 || !TD.hasInstantView(instantView.version);
   }
 
   public void fetchInstantView (String url, ResultHandler<TdApi.WebPageInstantView> callback) {
@@ -3597,7 +3592,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private static List<TdApi.ForumTopic> copyForumTopics (List<TdApi.ForumTopic> topics) {
     List<TdApi.ForumTopic> copy = new java.util.ArrayList<>(topics.size());
     for (TdApi.ForumTopic topic : topics) {
-      copy.add(new TdApi.ForumTopic(topic.info, topic.lastMessage, topic.order, topic.isPinned, topic.unreadCount, topic.lastReadInboxMessageId, topic.lastReadOutboxMessageId, topic.unreadMentionCount, topic.unreadReactionCount, topic.notificationSettings, topic.draftMessage));
+      copy.add(new TdApi.ForumTopic(topic.info, topic.lastMessage, topic.order, topic.isPinned, topic.unreadCount, topic.lastReadInboxMessageId, topic.lastReadOutboxMessageId, topic.unreadMentionCount, topic.unreadReactionCount, topic.unreadPollVoteCount, topic.notificationSettings, topic.draftMessage));
     }
     return copy;
   }
@@ -4230,7 +4225,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     } else {
       fallback = null;
     }
-    client().send(new TdApi.GetMessageLink(message.chatId, message.id, 0, forAlbum, forComment), object -> {
+    client().send(new TdApi.GetMessageLink(message.chatId, message.id, 0, 0, null, forAlbum, forComment), object -> {
       switch (object.getConstructor()) {
         case TdApi.MessageLink.CONSTRUCTOR: {
           TdApi.MessageLink link = (TdApi.MessageLink) object;
@@ -4977,12 +4972,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void sendMessage (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, TdApi.Animation animation) {
-    TdApi.InputMessageContent inputMessageContent = new TdApi.InputMessageAnimation(new TdApi.InputFileId(animation.animation.id), null, null, animation.duration, animation.width, animation.height, null, false, false);
+    TdApi.InputMessageContent inputMessageContent = new TdApi.InputMessageAnimation(new TdApi.InputAnimation(new TdApi.InputFileId(animation.animation.id), null, null, animation.duration, animation.width, animation.height), null, false, false);
     sendMessage(chatId, topicId, replyTo, options, inputMessageContent);
   }
 
   public void sendMessage (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, TdApi.Audio audio) {
-    TdApi.InputMessageContent inputMessageContent = new TdApi.InputMessageAudio(new TdApi.InputFileId(audio.audio.id), null, audio.duration, audio.title, audio.performer, null);
+    TdApi.InputMessageContent inputMessageContent = new TdApi.InputMessageAudio(new TdApi.InputAudio(new TdApi.InputFileId(audio.audio.id), null, audio.duration, audio.title, audio.performer), null);
     sendMessage(chatId, topicId, replyTo, options, inputMessageContent);
   }
 
@@ -5031,7 +5026,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       case TdApi.MessageAnimation.CONSTRUCTOR:
         return !photoVideoOnly;
       default:
-        Td.assertMessageContent_e0365d1c();
+        Td.assertMessageContent_bb294b24();
         break;
     }
 
@@ -5114,8 +5109,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
           return ((TdApi.MessageText) messageText).text;
         case TdApi.MessageAnimatedEmoji.CONSTRUCTOR:
           return Td.textOrCaption(messageText);
+        case TdApi.MessageRichMessage.CONSTRUCTOR:
+          // TODO: rich message display phase — no plain formatted text representation yet
+          return null;
       }
-      Td.assertMessageContent_e0365d1c();
+      Td.assertMessageContent_bb294b24();
       throw Td.unsupported(messageText);
     }
     MessageEditMediaPending pendingEditMedia = getPendingMessageMedia(chatId, messageId);
@@ -6410,8 +6408,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   public void setProxy (int proxyId, @Nullable TdApi.InternalLinkTypeProxy proxy) {
     final TdApi.Function<?> function;
-    if (proxy != null) {
-      function = new TdApi.AddProxy(proxy.server, proxy.port, true, proxy.type);
+    if (proxy != null && proxy.proxy != null) {
+      function = new TdApi.AddProxy(proxy.proxy, true, "");
     } else {
       function = new TdApi.DisableProxy();
     }
@@ -6420,7 +6418,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.Ok.CONSTRUCTOR:
           setEffectiveProxyId(Settings.PROXY_ID_NONE);
           break;
-        case TdApi.Proxy.CONSTRUCTOR:
+        case TdApi.AddedProxy.CONSTRUCTOR:
           setEffectiveProxyId(proxyId);
           break;
       }
@@ -6429,9 +6427,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   public void cleanupProxies () {
     client().send(new TdApi.GetProxies(), result -> {
       switch (result.getConstructor()) {
-        case TdApi.Proxies.CONSTRUCTOR: {
-          TdApi.Proxies proxies = (TdApi.Proxies) result;
-          for (TdApi.Proxy proxy : proxies.proxies) {
+        case TdApi.AddedProxies.CONSTRUCTOR: {
+          TdApi.AddedProxies proxies = (TdApi.AddedProxies) result;
+          for (TdApi.AddedProxy proxy : proxies.proxies) {
             if (!proxy.isEnabled) {
               client().send(new TdApi.RemoveProxy(proxy.id), okHandler());
             }
@@ -6444,9 +6442,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   public void removeProxies (int excludeProxyId) {
     client().send(new TdApi.GetProxies(), (result) -> {
       switch (result.getConstructor()) {
-        case TdApi.Proxies.CONSTRUCTOR: {
-          TdApi.Proxy[] proxies = ((TdApi.Proxies) result).proxies;
-          for (TdApi.Proxy proxy : proxies) {
+        case TdApi.AddedProxies.CONSTRUCTOR: {
+          TdApi.AddedProxy[] proxies = ((TdApi.AddedProxies) result).proxies;
+          for (TdApi.AddedProxy proxy : proxies) {
             if (proxy.id != excludeProxyId) {
               client().send(new TdApi.RemoveProxy(proxy.id), okHandler());
             }
@@ -6459,23 +6457,15 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   public void getProxyLink (@NonNull Settings.Proxy proxy, RunnableData<String> callback) {
     if (proxy.proxy == null)
       throw new IllegalArgumentException();
-    send(new TdApi.AddProxy(proxy.proxy.server, proxy.proxy.port, false, proxy.proxy.type), (tdlibProxy, error) -> {
+    send(new TdApi.GetInternalLink(new TdApi.InternalLinkTypeProxy(proxy.proxy), true), (httpUrl, error) -> {
+      String url;
       if (error != null) {
-        UI.showError(error);
-        ui().post(() -> callback.runWithData(null));
+        Log.e("Proxy link unavailable: %s", TD.toErrorString(error));
+        url = null;
       } else {
-        int tdlibProxyId = tdlibProxy.id;
-        send(new TdApi.GetProxyLink(tdlibProxyId), (httpUrl, error1) -> {
-          String url;
-          if (error1 != null) {
-            Log.e("Proxy link unavailable: %s", TD.toErrorString(error1));
-            url = null;
-          } else {
-            url = httpUrl.url;
-          }
-          ui().post(() -> callback.runWithData(url));
-        });
+        url = httpUrl.url;
       }
+      ui().post(() -> callback.runWithData(url));
     });
   }
 
@@ -6492,9 +6482,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     proxy.pingMs = Settings.PROXY_TIME_LOADING;
     proxy.pingErrorCount = 0;
     notifyPingValueChanged(proxy);
-    TdApi.Function<?> function = proxyId != Settings.PROXY_ID_NONE ?
-      new TdApi.AddProxy(proxy.proxy.server, proxy.proxy.port, false, proxy.proxy.type) :
-      new TdApi.PingProxy(0);
+    TdApi.Function<?> function = new TdApi.PingProxy(proxyId != Settings.PROXY_ID_NONE ? proxy.proxy : null);
     AtomicLong uptimeMillis = new AtomicLong(SystemClock.uptimeMillis());
     client().send(function, new Client.ResultHandler() {
       @Override
@@ -6508,11 +6496,6 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         switch (result.getConstructor()) {
           case TdApi.Ok.CONSTRUCTOR: {
             client().send(function, this);
-            return;
-          }
-          case TdApi.Proxy.CONSTRUCTOR: {
-            int tdlibProxyId = ((TdApi.Proxy) result).id;
-            client().send(new TdApi.PingProxy(tdlibProxyId), this);
             return;
           }
           case TdApi.Seconds.CONSTRUCTOR: {
@@ -7775,8 +7758,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     context.global().notifyUpdateMessageContent(this, update);
 
     switch (update.newContent.getConstructor()) {
-      case TdApi.MessageLocation.CONSTRUCTOR: {
-        cache().updateLiveLocation(update.chatId, update.messageId, (TdApi.MessageLocation) update.newContent);
+      case TdApi.MessageLiveLocation.CONSTRUCTOR: {
+        cache().updateLiveLocation(update.chatId, update.messageId, (TdApi.MessageLiveLocation) update.newContent);
         break;
       }
       case TdApi.MessagePoll.CONSTRUCTOR: {
@@ -8510,7 +8493,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       if (TdlibUtils.assertChat(update.chatId, chat, update)) {
         return;
       }
-      chat.replyMarkupMessageId = update.replyMarkupMessageId;
+      chat.replyMarkupMessageId = update.replyMarkupMessage != null ? update.replyMarkupMessage.id : 0;
     }
 
     listeners.updateChatReplyMarkup(update);
@@ -10681,14 +10664,23 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
 
 
-      case TdApi.UpdatePendingTextMessage.CONSTRUCTOR:
+      case TdApi.UpdatePendingMessage.CONSTRUCTOR: // TODO: handle pending message previews (messageText/messageRichMessage)
       case TdApi.UpdateLiveStoryTopDonors.CONSTRUCTOR:
       case TdApi.UpdateGiftAuctionState.CONSTRUCTOR:
       case TdApi.UpdateActiveGiftAuctions.CONSTRUCTOR:
+      case TdApi.UpdateChatJoinResult.CONSTRUCTOR: // TODO: guard bot join result flow
+      case TdApi.UpdateChatUnreadPollVoteCount.CONSTRUCTOR: // TODO: unread poll vote counters
+      case TdApi.UpdateMessageContainsUnreadPollVotes.CONSTRUCTOR: // TODO: unread poll vote counters
+      case TdApi.UpdateNewOauthRequest.CONSTRUCTOR: // TODO: OAuth authorization requests
+      case TdApi.UpdateStakeDiceState.CONSTRUCTOR: // TODO: stake dice
+      case TdApi.UpdateTextCompositionStyles.CONSTRUCTOR: // TODO: text composition styles
+      case TdApi.UpdateWebBrowserSettings.CONSTRUCTOR: // TODO: web browser settings
         break;
 
       // for bots only.
       case TdApi.UpdateNewChatJoinRequest.CONSTRUCTOR:
+      case TdApi.UpdateManagedBot.CONSTRUCTOR:
+      case TdApi.UpdateNewGuestQuery.CONSTRUCTOR:
       case TdApi.UpdateNewCustomEvent.CONSTRUCTOR:
       case TdApi.UpdateNewCustomQuery.CONSTRUCTOR:
       case TdApi.UpdateNewInlineQuery.CONSTRUCTOR:
@@ -10713,7 +10705,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         throw Td.unsupported(update);
       }
       default: {
-        Td.assertUpdate_3a0802b2();
+        Td.assertUpdate_17f693d6();
         throw Td.unsupported(update);
       }
     }
@@ -11615,6 +11607,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
           return getGifRestrictionText(chat);
         case TdApi.MessageSticker.CONSTRUCTOR:
         case TdApi.MessageDice.CONSTRUCTOR:
+        case TdApi.MessageStakeDice.CONSTRUCTOR:
           return getStickerRestrictionText(chat);
         case TdApi.MessagePoll.CONSTRUCTOR:
         case TdApi.MessageChecklist.CONSTRUCTOR:
@@ -11645,6 +11638,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.MessageAnimatedEmoji.CONSTRUCTOR:
         case TdApi.MessageVenue.CONSTRUCTOR:
         case TdApi.MessageLocation.CONSTRUCTOR:
+        case TdApi.MessageLiveLocation.CONSTRUCTOR:
+        case TdApi.MessageRichMessage.CONSTRUCTOR: // TODO: rich message display phase
         case TdApi.MessageProximityAlertTriggered.CONSTRUCTOR:
         case TdApi.MessageContact.CONSTRUCTOR:
         case TdApi.MessageInvoice.CONSTRUCTOR:
@@ -11720,11 +11715,19 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+        case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+        case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+        case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+        case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+        case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+        case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+        case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
           // None of these messages ever passed to this method,
           // assuming we want to check RightId.SEND_BASIC_MESSAGES
           return getBasicMessageRestrictionText(chat);
         default:
-          Td.assertMessageContent_e0365d1c();
+          Td.assertMessageContent_bb294b24();
           throw Td.unsupported(message.content);
       }
     }
@@ -11754,6 +11757,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.InputMessageAnimation.CONSTRUCTOR:
           return getGifRestrictionText(chat);
         case TdApi.InputMessageSticker.CONSTRUCTOR:
+        case TdApi.InputMessageStakeDice.CONSTRUCTOR:
           return getStickerRestrictionText(chat);
         case TdApi.InputMessageDice.CONSTRUCTOR:
           return getDiceRestrictionText(chat, ((TdApi.InputMessageDice) content).emoji);
@@ -11764,6 +11768,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.InputMessageForwarded.CONSTRUCTOR: // TODO tdlib.getMessageLocally?
         case TdApi.InputMessageInvoice.CONSTRUCTOR:
         case TdApi.InputMessageLocation.CONSTRUCTOR:
+        case TdApi.InputMessageLiveLocation.CONSTRUCTOR:
+        case TdApi.InputMessageRichMessage.CONSTRUCTOR: // TODO: rich message display phase
         case TdApi.InputMessageText.CONSTRUCTOR:
         case TdApi.InputMessageVenue.CONSTRUCTOR:
         case TdApi.InputMessageContact.CONSTRUCTOR:
@@ -11771,7 +11777,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.InputMessagePaidMedia.CONSTRUCTOR:
           return getBasicMessageRestrictionText(chat);
         default:
-          Td.assertInputMessageContent_65313187();
+          Td.assertInputMessageContent_7c412303();
           throw Td.unsupported(content);
       }
     }

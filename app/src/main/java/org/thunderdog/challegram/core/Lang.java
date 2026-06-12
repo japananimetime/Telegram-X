@@ -1142,7 +1142,10 @@ public class Lang {
         res = R.string.ActionPinnedChecklist;
         break;
       case TdApi.MessageLocation.CONSTRUCTOR:
-        res = ((TdApi.MessageLocation) message.content).livePeriod > 0 ? R.string.ActionPinnedGeoLive : R.string.ActionPinnedGeo;
+        res = R.string.ActionPinnedGeo;
+        break;
+      case TdApi.MessageLiveLocation.CONSTRUCTOR:
+        res = R.string.ActionPinnedGeoLive;
         break;
       case TdApi.MessageVenue.CONSTRUCTOR:
         res = R.string.ActionPinnedGeo;
@@ -1228,9 +1231,19 @@ public class Lang {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+      case TdApi.MessageRichMessage.CONSTRUCTOR:
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
         break;
       default:
-        Td.assertMessageContent_e0365d1c();
+        Td.assertMessageContent_bb294b24();
         throw Td.unsupported(message.content);
     }
     if (format == null) {
