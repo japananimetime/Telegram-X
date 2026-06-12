@@ -6140,6 +6140,8 @@
   <string name="SensitiveContent">Sensitive Content</string>
 
   <string name="ProfileNote">Note</string>
+  <string name="ProfileNoteEdit">Edit note</string>
+  <string name="ProfileNoteHint">Note (visible only to you)</string>
 
   <string name="SavedMessagesTagLabel">Tag Label</string>
   <string name="SavedMessagesTagLabelHint">Enter a label for this tag (up to 12 characters)</string>
