@@ -6177,6 +6177,21 @@
   <string name="ReplyInOtherChat">Reply in other chat</string>
   <string name="QuoteInOtherChat">Quote in other chat</string>
 
+  <!-- Chat boosts -->
+  <string name="Boost">Boost</string>
+  <string name="BoostLevel">Boost level</string>
+  <string name="BoostLevelStatus">Level %1$d · %2$d boosts</string>
+  <string name="BoostsToNextLevel_one">%1$d boost to the next level</string>
+  <string name="BoostsToNextLevel_other">%1$d boosts to the next level</string>
+  <string name="BoostMaxLevel">This chat has reached the maximum boost level.</string>
+  <string name="BoostPremiumMembers">%1$d premium subscribers (%2$d%%)</string>
+  <string name="BoostThisChat">Boost this chat</string>
+  <string name="BoostAlreadyBoosted">You\'re already boosting this chat</string>
+  <string name="BoostShareLink">Share boost link</string>
+  <string name="BoostHint">Boosts from your premium subscription help unlock new features for the chat.</string>
+  <string name="BoostNoSlots">You have no boosts available.</string>
+  <string name="BoostApplied">Boost applied!</string>
+
   <string name="FactCheck">Fact Check</string>
   <string name="MessageEffectAdd">Add animated effect</string>
   <string name="MessageEffectChange">Change effect</string>

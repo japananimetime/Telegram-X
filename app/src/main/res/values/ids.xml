@@ -105,6 +105,7 @@
   <item type="id" name="more_btn_addMember" />
   <item type="id" name="more_btn_editDescription" />
   <item type="id" name="more_btn_editNote" />
+  <item type="id" name="more_btn_boost" />
   <item type="id" name="more_btn_join" />
   <item type="id" name="more_btn_archive" />
   <item type="id" name="more_btn_unarchive" />
@@ -653,6 +654,9 @@
   <item type="id" name="controller_premium" />
   <item type="id" name="controller_stars" />
   <item type="id" name="controller_starTransactions" />
+  <item type="id" name="controller_chatBoost" />
+  <item type="id" name="btn_boost" />
+  <item type="id" name="btn_boostLink" />
   <item type="id" name="controller_tonTransactions" />
   <item type="id" name="btn_buyStars" />
   <item type="id" name="btn_starOption" />

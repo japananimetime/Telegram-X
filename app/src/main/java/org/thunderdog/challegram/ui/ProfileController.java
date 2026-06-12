@@ -694,6 +694,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         ids.append(R.id.more_btn_share);
         strings.append(R.string.Share);
       }
+      ids.append(R.id.more_btn_boost);
+      strings.append(R.string.Boost);
     }
 
     // Add "Create Story" option for channels if user can post stories
@@ -811,6 +813,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           manageChat();
         } else if (id == R.id.more_btn_viewStats) {
           openStats();
+        } else if (id == R.id.more_btn_boost) {
+          openChatBoost();
         } else if (id == R.id.more_btn_createStory) {
           openStoryCompose();
         } else if (id == R.id.more_btn_editDescription) {
@@ -3750,6 +3754,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private void openStats () {
     ChatStatisticsController c = new ChatStatisticsController(context, tdlib);
     c.setArguments(new ChatStatisticsController.Args(chat.id));
+    navigateTo(c);
+  }
+
+  private void openChatBoost () {
+    ChatBoostController c = new ChatBoostController(context, tdlib);
+    c.setArguments(new ChatBoostController.Args(chat.id));
     navigateTo(c);
   }
 
