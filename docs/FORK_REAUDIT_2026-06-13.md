@@ -93,11 +93,11 @@ Ranked by visibility ÷ effort. None of these are bugs — they're missing featu
 
 | Rank | Feature area | Key unused TDLib funcs | Vis | Effort |
 |------|--------------|------------------------|-----|--------|
-| 1 | ~~**Chat boosts**~~ — ✅ DONE (`850be94ed`): `ChatBoostController` (status/level/progress + `BoostChat` + share link), wired from the channel/supergroup profile menu | High | M |
-| 2 | **Fact-check editing** | `SetMessageFactCheck` (display already done) | Low-Med | S |
-| 3 | **Quick replies** | `LoadQuickReplyShortcuts`, `AddQuickReplyShortcutMessage`, `EditQuickReplyMessage` (updates already cached) | Med | M |
-| 4 | **Downloads manager** | `SearchFileDownloads`, `GetFileDownloads`, `ToggleDownloadIsPaused` (`UpdateFileDownload` already arrives) | Med | M |
-| 5 | **Monetization/revenue dashboard** | `GetChatRevenueStatistics`, `GetStarRevenueStatistics`, `Get*WithdrawalUrl` (updates already handled) | Med | M |
+| 1 | ~~**Chat boosts**~~ — ✅ DONE (`850be94ed`): `ChatBoostController` (status/level/progress + `BoostChat` + share link), channel profile menu | High | M |
+| 2 | ~~**Fact-check editing**~~ — ✅ DONE (`57c3476c0`): admin context-menu action → `SetMessageFactCheck` (add/edit/remove) | Low-Med | S |
+| 3 | ~~**Quick replies**~~ — ✅ DONE (`5db0dc8bf`): cache + `QuickRepliesController` (list/delete) under Settings; create + "/" send-picker are follow-ups | Med | M |
+| 4 | ~~**Downloads manager**~~ — ✅ DONE (`61016ec13`): `DownloadsController` (`SearchFileDownloads` + pause/resume/remove/clear-all) under Settings | Med | M |
+| 5 | ~~**Monetization/revenue dashboard**~~ — ✅ DONE (`67f79c175`): `StarRevenueController` (`GetStarRevenueStatistics` balances + USD); chart + withdrawal are follow-ups | Med | M |
 | 6 | **Telegram Business suite** | `SetBusinessOpeningHours/Location/Greeting/AwayMessage/ConnectedBot/StartPage` | Med | L |
 | 7 | **Sticker-pack authoring** | `CreateNewStickerSet`, `AddStickerToSet`, `SetStickerEmojis` | Med | L |
 | 8 | **Saved Messages topics** | `LoadSavedMessagesTopics`, `GetSavedMessagesTopicHistory`, `ToggleSavedMessagesTopicIsPinned` | Med | L |
