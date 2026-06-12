@@ -44,6 +44,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
+import me.vkryl.core.CurrencyUtils;
 import me.vkryl.core.StringUtils;
 
 /**
@@ -621,7 +622,8 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
   }
 
   private String formatPrice(String currency, long amount) {
-    double price = amount / 100.0;
-    return String.format("%s %.2f", currency, price);
+    // amount/100.0 is wrong for zero-decimal (JPY) and 3-decimal currencies and
+    // ignores locale/symbol. CurrencyUtils handles per-currency exponent + format.
+    return CurrencyUtils.buildAmount(currency, amount);
   }
 }
