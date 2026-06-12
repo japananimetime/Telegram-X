@@ -574,7 +574,10 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
     final String id = gift.receivedGiftId;
     tdlib.send(new TdApi.UpgradeGift(null, id, keepOriginalDetails, starCount), (result, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
-        UI.showError(error);
+        // On insufficient balance, offer an in-app Stars top-up; otherwise show the error.
+        if (!tdlib.ui().showStarsBalanceLowPrompt(this, error, starCount)) {
+          UI.showError(error);
+        }
         return;
       }
       UI.showToast(R.string.UpgradeGiftDone, android.widget.Toast.LENGTH_SHORT);

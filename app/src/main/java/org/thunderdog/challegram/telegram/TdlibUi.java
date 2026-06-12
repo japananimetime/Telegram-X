@@ -8134,6 +8134,66 @@ public class TdlibUi extends Handler {
     });
   }
 
+  // Buying Telegram Stars (top-up)
+
+  /**
+   * Opens a payment form to buy the Stars described by {@code option}. This build has no
+   * Google Play Billing, so the purchase always goes through a Telegram payment form (card)
+   * via {@link TdApi.TelegramPaymentPurposeStars}, regardless of any {@code storeProductId}.
+   */
+  public void openStarsPurchase (ViewController<?> context, TdApi.StarPaymentOption option) {
+    TdApi.TelegramPaymentPurposeStars purpose = new TdApi.TelegramPaymentPurposeStars(option.currency, option.amount, option.starCount, 0);
+    openTelegramPaymentForm(context, new TdApi.InputInvoiceTelegram(purpose));
+  }
+
+  /** Loads and opens a payment form for an arbitrary Telegram input invoice. */
+  public void openTelegramPaymentForm (ViewController<?> context, TdApi.InputInvoice inputInvoice) {
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (result, error) -> UI.post(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        openPaymentForm(context, (TdApi.PaymentForm) result, inputInvoice);
+      }
+    }));
+  }
+
+  /** True if {@code error} indicates the user lacks enough Stars to complete the action. */
+  public static boolean isStarsBalanceLowError (@Nullable TdApi.Error error) {
+    if (error == null || error.message == null) {
+      return false;
+    }
+    String m = error.message;
+    return m.equals("BALANCE_TOO_LOW") || m.contains("not enough stars") || m.contains("STARS_BALANCE_TOO_LOW");
+  }
+
+  /**
+   * If {@code error} is an insufficient-Stars-balance error, prompts the user to buy more Stars
+   * (opening the Stars screen seeded with {@code requiredStarCount}) and returns true. Otherwise
+   * returns false, and the caller should surface the error itself.
+   */
+  public boolean showStarsBalanceLowPrompt (ViewController<?> context, @Nullable TdApi.Error error, long requiredStarCount) {
+    if (!isStarsBalanceLowError(error)) {
+      return false;
+    }
+    context.showOptions(
+      Lang.getString(R.string.GiftStarsTooLow),
+      new int[] {R.id.btn_buyStars, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.BuyStars), Lang.getString(R.string.Cancel)},
+      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_star_24, R.drawable.baseline_cancel_24},
+      (view, optionId) -> {
+        if (optionId == R.id.btn_buyStars) {
+          SettingsStarsController starsController = new SettingsStarsController(context.context(), tdlib);
+          starsController.setArguments(new SettingsStarsController.Args(requiredStarCount, "gift"));
+          context.navigateTo(starsController);
+        }
+        return true;
+      }
+    );
+    return true;
+  }
+
   public void openPaymentForm (TdlibDelegate context, String invoiceName, @Nullable UrlOpenParameters openParameters, @Nullable RunnableBool after) {
     UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
     TdApi.InputInvoiceName inputInvoice = new TdApi.InputInvoiceName(invoiceName);

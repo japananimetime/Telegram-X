@@ -382,10 +382,10 @@ public class GiftAuctionController extends RecyclerViewController<GiftAuctionCon
     final long userId = tdlib.myUserId();
     tdlib.send(new TdApi.PlaceGiftAuctionBid(giftId, starCount, userId, null, false), (ok, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
-        // Insufficient Stars balance surfaces here. The Stars top-up flow
-        // (SettingsStarsController.purchaseStars) is still stubbed upstream, so no
-        // in-app top-up is offered yet.
-        UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        // On insufficient balance, offer an in-app Stars top-up; otherwise show the error.
+        if (!tdlib.ui().showStarsBalanceLowPrompt(this, error, starCount)) {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        }
         return;
       }
       UI.showToast(R.string.GiftAuctionBidPlaced, Toast.LENGTH_SHORT);
@@ -400,7 +400,10 @@ public class GiftAuctionController extends RecyclerViewController<GiftAuctionCon
     }
     tdlib.send(new TdApi.IncreaseGiftAuctionBid(giftId, starCount), (ok, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
-        UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        // On insufficient balance, offer an in-app Stars top-up; otherwise show the error.
+        if (!tdlib.ui().showStarsBalanceLowPrompt(this, error, starCount)) {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        }
         return;
       }
       UI.showToast(R.string.GiftAuctionBidRaised, Toast.LENGTH_SHORT);

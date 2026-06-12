@@ -27,7 +27,7 @@ Deep build of the Stars gift economy (chosen from the fork gap audit). TDLib mas
 Full Stars/TON gift economy shipped on `feature/rich-messages`: render (1) → received-gifts surface (2) → send + settings (3) → upgrade/transfer (4) → resale + offers (5) → auctions (6) → collections (7) → crafting (8) → TON history (9). Each slice is its own compiling, pushed commit.
 
 ### Known stubs / follow-ups (all clearly commented in code)
-- **Stars top-up on insufficient balance** — `SettingsStarsController.purchaseStars` is stubbed upstream; every Stars-spending action (send/upgrade/resale buy/offer/auction bid) surfaces the TDLib error instead of an in-app top-up. Single highest-value follow-up.
+- ~~**Stars top-up on insufficient balance**~~ ✅ DONE. `SettingsStarsController.purchaseStars` now opens a real Telegram payment form (`InputInvoiceTelegram(TelegramPaymentPurposeStars)` → `GetPaymentForm` → `PaymentFormController` card flow). A reusable `TdlibUi.showStarsBalanceLowPrompt(...)` detects `BALANCE_TOO_LOW` and offers an in-app top-up; wired into send-gift, upgrade, resale buy, and auction place/raise bid. (Card completion still depends on the fork's pre-existing `PaymentFormController` / payment-provider setup.)
 - **Export-to-TON** (upgraded gift → NFT) — needs the 2FA password flow; stubbed in `UpgradedGiftController`.
 - **Auction bids** are bid-for-self only (no recipient/text picker); fixed 1-day offer duration; `paidMessageStarCount=0`.
 - **Collections**: reorder (`ReorderGiftCollections`/`ReorderGiftCollectionGifts`) and multi-select seeding of a new collection are unwired (functions noted at hook points).

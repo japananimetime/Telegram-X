@@ -216,14 +216,10 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
   }
 
   private void purchaseStars(TdApi.StarPaymentOption option) {
-    if (!StringUtils.isEmpty(option.storeProductId)) {
-      // Store purchase - not supported in this build
-      UI.showToast(R.string.PremiumStorePaymentNotAvailable, Toast.LENGTH_SHORT);
-    } else {
-      // Out-of-store purchase via Fragment/TON
-      // This would require TelegramPaymentPurposeStars and createInvoiceLink
-      UI.showToast(R.string.PremiumPaymentUnavailable, Toast.LENGTH_SHORT);
-    }
+    // This build has no Google Play Billing, so buy Stars out-of-store via a Telegram
+    // payment form (card) regardless of any storeProductId. Buying Stars is a regular
+    // payment, so PaymentFormController handles the card UI.
+    tdlib.ui().openStarsPurchase(this, option);
   }
 
   private void openTransactionHistory() {

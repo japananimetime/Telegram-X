@@ -215,13 +215,15 @@ public class GiftResaleController extends RecyclerViewController<GiftResaleContr
   }
 
   private void buyGift (String giftName, TdApi.GiftResalePrice price) {
+    // Star-priced resales can offer an in-app top-up; TON-priced ones cannot (different balance).
+    final long starCost = price instanceof TdApi.GiftResalePriceStar ? ((TdApi.GiftResalePriceStar) price).starCount : 0;
     // The resold gift is sent to the current user (self).
     tdlib.send(new TdApi.SendResoldGift(giftName, tdlib.mySender(), price), (result, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
-        // Insufficient balance surfaces here. The Stars top-up flow
-        // (SettingsStarsController.purchaseStars) is still stubbed, so no in-app
-        // top-up is offered yet.
-        UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        // On insufficient Stars balance (star-priced resale), offer a top-up; otherwise show the error.
+        if (starCost == 0 || !tdlib.ui().showStarsBalanceLowPrompt(this, error, starCost)) {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        }
         return;
       }
       UI.showToast(R.string.GiftResaleBought, Toast.LENGTH_SHORT);

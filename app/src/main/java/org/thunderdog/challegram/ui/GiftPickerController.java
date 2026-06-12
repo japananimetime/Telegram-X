@@ -191,12 +191,13 @@ public class GiftPickerController extends RecyclerViewController<GiftPickerContr
     if (message != null && !message.isEmpty()) {
       text = new TdApi.FormattedText(message, new TdApi.TextEntity[0]);
     }
+    final long cost = gift.starCount;
     tdlib.send(new TdApi.SendGift(gift.id, ownerId, text, isPrivate, payForUpgrade), (ok, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
-        // Insufficient balance surfaces here; we show the error string.
-        // TODO(Slice 3+): the Stars purchase flow (SettingsStarsController.purchaseStars)
-        //   is stubbed, so we cannot offer an in-app top-up yet.
-        UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        // On insufficient balance, offer an in-app Stars top-up; otherwise show the error.
+        if (!tdlib.ui().showStarsBalanceLowPrompt(this, error, cost)) {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_LONG);
+        }
         return;
       }
       UI.showToast(R.string.GiftSent, Toast.LENGTH_SHORT);
