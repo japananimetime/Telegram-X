@@ -91,7 +91,22 @@ public final class GiftRarityUtil {
   public static String formatTon (long amount, int maxFractionDigits) {
     double value = amount / Math.pow(10, maxFractionDigits);
     String formatted = String.format(java.util.Locale.US, "%." + maxFractionDigits + "f", value);
-    // Trim trailing zeros and a trailing dot for cleaner display.
+    return trimFraction(formatted);
+  }
+
+  /**
+   * Formats a nanoton amount (the "smallest units" used by {@code TonTransaction.tonAmount},
+   * 1 TON = 1e9 nanotons) as trimmed decimal digits with up to 4 fraction digits.
+   * Sign is dropped; callers add their own +/- prefix.
+   */
+  public static String formatTonNano (long nanotons) {
+    double value = Math.abs(nanotons) / 1_000_000_000.0;
+    String formatted = String.format(java.util.Locale.US, "%.4f", value);
+    return trimFraction(formatted);
+  }
+
+  // Trim trailing zeros and a trailing dot for cleaner display.
+  private static String trimFraction (String formatted) {
     if (formatted.contains(".")) {
       int end = formatted.length();
       while (end > 0 && formatted.charAt(end - 1) == '0') {
