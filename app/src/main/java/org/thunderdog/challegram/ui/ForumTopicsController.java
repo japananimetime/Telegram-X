@@ -1870,22 +1870,23 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
   private void resortTopics () {
     if (topics == null || topics.size() < 2) return;
 
-    // Sort: pinned first (server order), then by lastMessage date (newest first)
+    // TDLib contract: topics are sorted by `order` in descending order. `order`
+    // already folds in pinned state, last-message date AND draft date, so it is
+    // the single source of truth — using lastMessage.date for non-pinned topics
+    // (as before) ignored draft-date influence and mis-ordered topics with a
+    // newer draft but older last message.
     java.util.Collections.sort(topics, (a, b) -> {
-      // Pinned topics first
+      // Pinned topics first (defensive grouping; pinned topics also carry a higher order).
       if (a.isPinned != b.isPinned) {
         return a.isPinned ? -1 : 1;
       }
-
-      // Pinned order is defined by the server and doesn't change with new messages
-      if (a.isPinned && a.order != b.order) {
+      if (a.order != b.order) {
         return Long.compare(b.order, a.order); // Descending
       }
-
-      // Within same pinned status, sort by lastMessage date
+      // Stable tiebreak when orders are equal.
       int dateA = a.lastMessage != null ? a.lastMessage.date : 0;
       int dateB = b.lastMessage != null ? b.lastMessage.date : 0;
-      return Integer.compare(dateB, dateA); // Descending (newest first)
+      return Integer.compare(dateB, dateA);
     });
   }
 
