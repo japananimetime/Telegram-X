@@ -6107,6 +6107,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
         startTranslateMessages(selectedMessage);
         return true;
+      } else if (id == R.id.btn_messageSummarize) {
+        cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        summarizeMessage(selectedMessage.getNewestMessage());
+        return true;
       } else if (id == R.id.btn_chatTranslateOff) {
         stopTranslateMessages(selectedMessage);
         return true;
@@ -13133,6 +13137,27 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public void startTranslateMessages (TGMessage message) {
     startTranslateMessages(message, false);
+  }
+
+  private void summarizeMessage (TdApi.Message message) {
+    if (message == null) {
+      return;
+    }
+    UI.showToast(R.string.SummarizeProgress, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.SummarizeMessage(message.chatId, message.id, "", ""), (summary, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        showOptions(
+          TD.toCharSequence(summary),
+          new int[] {R.id.btn_close},
+          new String[] {Lang.getString(R.string.OK)},
+          null,
+          new int[] {R.drawable.baseline_check_circle_24},
+          null
+        );
+      }
+    }));
   }
 
   public void startTranslateMessages (TGMessage message, boolean forcePopup) {
