@@ -88,7 +88,8 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
   public void onOwnedStarCountChanged (TdApi.StarAmount starAmount) {
     runOnUiThreadOptional(() -> {
       if (transactions != null) {
-        transactions.starAmount = starAmount;
+        // Copy, don't alias Tdlib's cached StarAmount instance.
+        transactions.starAmount = new TdApi.StarAmount(starAmount.starCount, starAmount.nanostarCount);
         buildCells();
       }
     });
