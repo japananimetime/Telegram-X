@@ -63,6 +63,7 @@ public class TdlibListeners {
   final ReferenceList<AnimatedEmojiListener> animatedEmojiListeners;
   final ReferenceList<SavedMessagesTagsListener> savedMessagesTagsListeners;
   final ReferenceList<QuickReplyListener> quickReplyListeners;
+  final ReferenceList<SavedMessagesListener> savedMessagesListeners;
 
   final ReferenceLongMap<MessageListener> messageChatListeners;
   final ReferenceLongMap<MessageEditListener> messageEditChatListeners;
@@ -106,6 +107,7 @@ public class TdlibListeners {
     this.animatedEmojiListeners = new ReferenceList<>(true);
     this.savedMessagesTagsListeners = new ReferenceList<>(true);
     this.quickReplyListeners = new ReferenceList<>(true);
+    this.savedMessagesListeners = new ReferenceList<>(true);
 
     this.reactionLoadListeners = new ReferenceMap<>(true);
 
@@ -261,6 +263,21 @@ public class TdlibListeners {
   void updateQuickReplyShortcuts () {
     for (QuickReplyListener listener : quickReplyListeners) {
       listener.onQuickReplyShortcutsChanged();
+    }
+  }
+
+  @AnyThread
+  public void subscribeToSavedMessagesUpdates (SavedMessagesListener listener) {
+    savedMessagesListeners.add(listener);
+  }
+
+  public void unsubscribeFromSavedMessagesUpdates (SavedMessagesListener listener) {
+    savedMessagesListeners.remove(listener);
+  }
+
+  void updateSavedMessagesTopics () {
+    for (SavedMessagesListener listener : savedMessagesListeners) {
+      listener.onSavedMessagesTopicsChanged();
     }
   }
 

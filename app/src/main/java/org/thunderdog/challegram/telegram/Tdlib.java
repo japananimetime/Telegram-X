@@ -7885,14 +7885,44 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   // Updates: SAVED MESSAGES
 
+  private final HashMap<Long, TdApi.SavedMessagesTopic> savedMessagesTopics = new HashMap<>();
+  private int savedMessagesTopicCount = -1;
+
   @TdlibThread
   private void updateSavedMessagesTopic (TdApi.UpdateSavedMessagesTopic update) {
-
+    synchronized (dataLock) {
+      // order == 0 means the topic is no longer in the list.
+      if (update.topic.order != 0) {
+        savedMessagesTopics.put(update.topic.id, update.topic);
+      } else {
+        savedMessagesTopics.remove(update.topic.id);
+      }
+    }
+    listeners.updateSavedMessagesTopics();
   }
 
   @TdlibThread
   private void updateSavedMessagesTopicCount (TdApi.UpdateSavedMessagesTopicCount update) {
+    synchronized (dataLock) {
+      this.savedMessagesTopicCount = update.topicCount;
+    }
+    listeners.updateSavedMessagesTopics();
+  }
 
+  /** Cached Saved Messages topics in display order (descending by topic.order). Populated via LoadSavedMessagesTopics. */
+  public List<TdApi.SavedMessagesTopic> getSavedMessagesTopics () {
+    synchronized (dataLock) {
+      List<TdApi.SavedMessagesTopic> result = new ArrayList<>(savedMessagesTopics.values());
+      Collections.sort(result, (a, b) -> Long.compare(b.order, a.order));
+      return result;
+    }
+  }
+
+  /** Approximate total number of Saved Messages topics, or -1 if unknown. */
+  public int getSavedMessagesTopicCount () {
+    synchronized (dataLock) {
+      return savedMessagesTopicCount;
+    }
   }
 
   @TdlibThread

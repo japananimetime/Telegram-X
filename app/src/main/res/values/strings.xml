@@ -6198,6 +6198,13 @@
   <string name="MonetizationWithdraw">Withdraw Stars</string>
   <string name="MonetizationWithdrawUnavailable">Withdrawal isn\'t available yet.</string>
   <string name="MonetizationWithdraw2FARequired">Set up two-step verification before withdrawing Stars.</string>
+
+  <!-- Saved Messages topics -->
+  <string name="SavedMessagesTopics">Saved Messages</string>
+  <string name="SavedMessagesTopicsEmpty">You have no Saved Messages topics yet.</string>
+  <string name="MyNotes">My Notes</string>
+  <string name="AuthorHidden">Hidden Author</string>
+  <string name="DeleteSavedMessagesTopicConfirm">Delete this topic and all of its messages from Saved Messages?</string>
   <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
 
   <!-- Sticker pack authoring -->
