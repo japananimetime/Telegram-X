@@ -612,25 +612,38 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
   }
 
   public boolean toggleReaction (TdApi.ReactionType reactionType, boolean isBig, boolean updateRecentReactions, Client.ResultHandler handler) {
+    // Paid reactions are spent money: they must never go through the plain toggle path
+    // (which only adds a *pending* reaction and never commits the Stars). Route them
+    // through sendPaidReaction() instead, from a confirmation entry point.
+    if (reactionType.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+      throw new IllegalArgumentException("Paid reactions must be sent via sendPaidReaction()");
+    }
     TdApi.Message message = parent.getOldestMessage();
     boolean hasReaction = !hasReaction(reactionType);
     if (hasReaction) {
-      // Paid reactions require different API
-      if (reactionType.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
-        // Send paid reaction with 1 star by default (can be extended with UI for star count)
-        tdlib.client().send(new TdApi.AddPendingPaidMessageReaction(parent.getChatId(), message.id, 1, null), handler);
-      } else {
-        tdlib.client().send(new TdApi.AddMessageReaction(parent.getChatId(), message.id, reactionType, isBig, updateRecentReactions), handler);
-      }
+      tdlib.client().send(new TdApi.AddMessageReaction(parent.getChatId(), message.id, reactionType, isBig, updateRecentReactions), handler);
     } else {
       tdlib.client().send(new TdApi.RemoveMessageReaction(parent.getChatId(), message.id, reactionType), handler);
     }
     return hasReaction;
   }
 
-  public void addPaidReaction (long starCount, Client.ResultHandler handler) {
+  /**
+   * Adds {@code starCount} pending paid reactions and immediately commits them,
+   * actually spending the Stars. Without the commit, TDLib keeps the reaction
+   * pending forever and the Stars are never spent (the old "fake-working" path).
+   */
+  public void sendPaidReaction (long starCount, @Nullable TdApi.PaidReactionType type, Client.ResultHandler handler) {
     TdApi.Message message = parent.getOldestMessage();
-    tdlib.client().send(new TdApi.AddPendingPaidMessageReaction(parent.getChatId(), message.id, starCount, null), handler);
+    long chatId = parent.getChatId();
+    long messageId = message.id;
+    tdlib.client().send(new TdApi.AddPendingPaidMessageReaction(chatId, messageId, starCount, type), result -> {
+      if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
+        tdlib.client().send(new TdApi.CommitPendingPaidMessageReactions(chatId, messageId), handler);
+      } else {
+        handler.onResult(result);
+      }
+    });
   }
 
   public static class MessageReactionEntry implements TextColorSet, FactorAnimator.Target {

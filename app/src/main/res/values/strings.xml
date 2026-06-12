@@ -155,6 +155,8 @@
   <string name="StarsInsufficientBalance">Insufficient Stars balance. You need %1$s more Stars.</string>
   <string name="GiftStarsTooLow">You don\'t have enough Stars to complete this. Buy more Stars?</string>
   <string name="PaidReactionInsufficientStars">You don\'t have enough Stars for this reaction. Buy Stars in Settings.</string>
+  <string name="PaidReactionConfirm">Send a paid reaction using %1$d Star?</string>
+  <string name="PaidReactionSend">Send Star</string>
   <string name="StarTransactions">Transaction History</string>
   <string name="NoStarTransactions">No transactions yet</string>
   <!-- TON (Toncoin) transaction history (Slice 9) -->

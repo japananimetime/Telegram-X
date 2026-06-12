@@ -815,6 +815,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   }
 
   private void onReactionClick (View v, TGReaction reaction, boolean isLongClick) {
+    if (reaction.type.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+      state.message.confirmPaidReaction(v, reaction);
+      hidePopupWindow(true);
+      return;
+    }
     if (isLongClick) {
       if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && tdlib.isAnonymousAdminNonCreator(state.message.getChatId())) {
         return;

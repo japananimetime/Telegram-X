@@ -365,6 +365,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     this.messageReactions = new TGReactions(this, tdlib, msg.interactionInfo != null ? msg.interactionInfo.reactions : null, new TGReactions.MessageReactionsDelegate() {
       @Override
       public void onClick (View v, TGReactions.MessageReactionEntry entry) {
+        if (entry.getReactionType().getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+          confirmPaidReaction(v, entry.getTGReaction());
+          return;
+        }
         boolean hasReaction = messageReactions.hasReaction(entry.getReactionType());
         if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && !hasReaction && tdlib.isAnonymousAdminNonCreator(msg.chatId)) {
           showReactionBubbleTooltip(v, entry, Lang.getString(R.string.error_ANONYMOUS_REACTIONS_DISABLED));
@@ -9529,6 +9533,24 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   private void onSendError (@Nullable View v, @Nullable TGReactions.MessageReactionEntry entry, TdApi.Error error) {
     showReactionBubbleTooltip(v, entry, TD.toErrorString(error));
+  }
+
+  public void confirmPaidReaction (View v, TGReaction reaction) {
+    final long starCount = 1;
+    final TdApi.PaidReactionType type = tdlib.defaultPaidReaction();
+    messagesController().showOptions(
+      Lang.getString(R.string.PaidReactionConfirm, (int) starCount),
+      new int[] {R.id.btn_sendPaidReaction, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.PaidReactionSend), Lang.getString(R.string.Cancel)},
+      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_favorite_24, R.drawable.baseline_cancel_24},
+      (itemView, id) -> {
+        if (id == R.id.btn_sendPaidReaction) {
+          scheduleSetReactionAnimation(new NextReactionAnimation(reaction, NextReactionAnimation.TYPE_CLICK));
+          messageReactions.sendPaidReaction(starCount, type, handler(v, null, () -> {}));
+        }
+        return true;
+      });
   }
 
   private void showReactionBubbleTooltip (View v, TGReactions.MessageReactionEntry entry, String text) {
