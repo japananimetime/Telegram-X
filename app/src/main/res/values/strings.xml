@@ -5885,6 +5885,8 @@
   <string name="GiftCollectionManage">Manage Collections</string>
   <string name="GiftCollectionCreate">Create collection</string>
   <string name="GiftCollectionRename">Rename collection</string>
+  <string name="GiftCollectionMoveLeft">Move left</string>
+  <string name="GiftCollectionMoveRight">Move right</string>
   <string name="GiftCollectionDelete">Delete collection</string>
   <string name="GiftCollectionNameHint">Collection name</string>
   <string name="GiftCollectionNameInvalid">Enter a name of 1-12 characters.</string>

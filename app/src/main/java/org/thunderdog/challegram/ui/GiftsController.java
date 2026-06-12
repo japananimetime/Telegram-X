@@ -338,6 +338,23 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         ids.add(R.id.btn_giftCollectionRemoveFrom);
         titles.add(Lang.getString(R.string.GiftCollectionRemoveFrom));
         icons.add(R.drawable.baseline_folder_24);
+
+        // Reorder this gift within the collection (ReorderGiftCollectionGifts). Only
+        // offered once the whole collection is loaded, since the API persists the full
+        // gift order and a partial page would drop the not-yet-loaded gifts.
+        final int giftIndex = indexOfGift(gift.receivedGiftId);
+        if (endReached && giftIndex != -1) {
+          if (giftIndex > 0) {
+            ids.add(R.id.btn_giftCollectionGiftMoveLeft);
+            titles.add(Lang.getString(R.string.GiftCollectionMoveLeft));
+            icons.add(R.drawable.baseline_arrow_back_24);
+          }
+          if (giftIndex < gifts.size() - 1) {
+            ids.add(R.id.btn_giftCollectionGiftMoveRight);
+            titles.add(Lang.getString(R.string.GiftCollectionMoveRight));
+            icons.add(R.drawable.baseline_arrow_forward_24);
+          }
+        }
       }
     }
 
@@ -370,6 +387,10 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         pickCollectionForGift(gift);
       } else if (id == R.id.btn_giftCollectionRemoveFrom) {
         removeGiftFromCollection(gift, selectedCollectionId);
+      } else if (id == R.id.btn_giftCollectionGiftMoveLeft) {
+        moveGiftInCollection(gift, -1);
+      } else if (id == R.id.btn_giftCollectionGiftMoveRight) {
+        moveGiftInCollection(gift, +1);
       }
       return true;
     };
@@ -636,10 +657,23 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
     icons.add(R.drawable.baseline_create_new_folder_24);
 
     final TdApi.GiftCollection selected = selectedCollection();
+    final int selectedIndex = selected != null ? indexOfCollection(selected.id) : -1;
     if (selected != null) {
       ids.add(R.id.btn_giftCollectionRename);
       titles.add(Lang.getString(R.string.GiftCollectionRename));
       icons.add(R.drawable.baseline_edit_24);
+
+      // Reorder the selected collection within the strip (ReorderGiftCollections).
+      if (selectedIndex > 0) {
+        ids.add(R.id.btn_giftCollectionMoveLeft);
+        titles.add(Lang.getString(R.string.GiftCollectionMoveLeft));
+        icons.add(R.drawable.baseline_arrow_back_24);
+      }
+      if (selectedIndex != -1 && selectedIndex < collections.size() - 1) {
+        ids.add(R.id.btn_giftCollectionMoveRight);
+        titles.add(Lang.getString(R.string.GiftCollectionMoveRight));
+        icons.add(R.drawable.baseline_arrow_forward_24);
+      }
 
       ids.add(R.id.btn_giftCollectionDelete);
       titles.add(Lang.getString(R.string.GiftCollectionDelete));
@@ -660,11 +694,72 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
         promptCreateCollection();
       } else if (id == R.id.btn_giftCollectionRename && selected != null) {
         promptRenameCollection(selected);
+      } else if (id == R.id.btn_giftCollectionMoveLeft && selectedIndex > 0) {
+        moveCollection(selectedIndex, selectedIndex - 1);
+      } else if (id == R.id.btn_giftCollectionMoveRight && selectedIndex != -1) {
+        moveCollection(selectedIndex, selectedIndex + 1);
       } else if (id == R.id.btn_giftCollectionDelete && selected != null) {
         confirmDeleteCollection(selected);
       }
       return true;
     });
+  }
+
+  // Swaps two collections in the strip and persists the new order (ReorderGiftCollections).
+  private void moveCollection (int fromIndex, int toIndex) {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= collections.size() || toIndex >= collections.size()) {
+      return;
+    }
+    final TdApi.MessageSender ownerId = getArgumentsStrict().ownerId;
+    final List<TdApi.GiftCollection> previous = new ArrayList<>(collections);
+    TdApi.GiftCollection moved = collections.remove(fromIndex);
+    collections.add(toIndex, moved);
+    rebuildStrip();
+
+    int[] order = new int[collections.size()];
+    for (int i = 0; i < collections.size(); i++) {
+      order[i] = collections.get(i).id;
+    }
+    tdlib.send(new TdApi.ReorderGiftCollections(ownerId, order), (ok, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        // Revert the optimistic reorder on failure.
+        collections.clear();
+        collections.addAll(previous);
+        rebuildStrip();
+        UI.showError(error);
+      }
+    }));
+  }
+
+  // Swaps this gift with an adjacent one within the current collection and persists the
+  // new order (ReorderGiftCollectionGifts). Guarded by endReached at the call site so the
+  // full collection order is known.
+  private void moveGiftInCollection (TdApi.ReceivedGift gift, int delta) {
+    final int from = indexOfGift(gift.receivedGiftId);
+    final int to = from + delta;
+    if (from < 0 || to < 0 || to >= gifts.size() || selectedCollectionId == 0) {
+      return;
+    }
+    final TdApi.MessageSender ownerId = getArgumentsStrict().ownerId;
+    final int collectionId = selectedCollectionId;
+    final List<TdApi.ReceivedGift> previous = new ArrayList<>(gifts);
+    TdApi.ReceivedGift moved = gifts.remove(from);
+    gifts.add(to, moved);
+    adapter.notifyItemMoved(from + headerOffset(), to + headerOffset());
+
+    String[] order = new String[gifts.size()];
+    for (int i = 0; i < gifts.size(); i++) {
+      order[i] = gifts.get(i).receivedGiftId;
+    }
+    tdlib.send(new TdApi.ReorderGiftCollectionGifts(ownerId, collectionId, order), (ok, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        // Revert the optimistic move on failure.
+        gifts.clear();
+        gifts.addAll(previous);
+        adapter.notifyItemMoved(to + headerOffset(), from + headerOffset());
+        UI.showError(error);
+      }
+    }));
   }
 
   private void promptCreateCollection () {

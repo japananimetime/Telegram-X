@@ -496,6 +496,10 @@
   <item type="id" name="btn_giftCollectionAddTo" />
   <item type="id" name="btn_giftCollectionRemoveFrom" />
   <item type="id" name="btn_giftCollectionItem" />
+  <item type="id" name="btn_giftCollectionMoveLeft" />
+  <item type="id" name="btn_giftCollectionMoveRight" />
+  <item type="id" name="btn_giftCollectionGiftMoveLeft" />
+  <item type="id" name="btn_giftCollectionGiftMoveRight" />
   <item type="id" name="btn_giftCraft" />
   <item type="id" name="btn_giftCraftSetPrimary" />
   <item type="id" name="btn_peer_id" />

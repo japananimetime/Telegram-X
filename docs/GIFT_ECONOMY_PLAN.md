@@ -30,7 +30,7 @@ Full Stars/TON gift economy shipped on `feature/rich-messages`: render (1) → r
 - ~~**Stars top-up on insufficient balance**~~ ✅ DONE. `SettingsStarsController.purchaseStars` now opens a real Telegram payment form (`InputInvoiceTelegram(TelegramPaymentPurposeStars)` → `GetPaymentForm` → `PaymentFormController` card flow). A reusable `TdlibUi.showStarsBalanceLowPrompt(...)` detects `BALANCE_TOO_LOW` and offers an in-app top-up; wired into send-gift, upgrade, resale buy, and auction place/raise bid. (Card completion still depends on the fork's pre-existing `PaymentFormController` / payment-provider setup.)
 - **Export-to-TON** (upgraded gift → NFT) — needs the 2FA password flow; stubbed in `UpgradedGiftController`.
 - **Auction bids** are bid-for-self only (no recipient/text picker); fixed 1-day offer duration; `paidMessageStarCount=0`.
-- **Collections**: reorder (`ReorderGiftCollections`/`ReorderGiftCollectionGifts`) and multi-select seeding of a new collection are unwired (functions noted at hook points).
+- **Collections**: reorder ✅ DONE — `ReorderGiftCollections` (Move left/right in the manage menu) and `ReorderGiftCollectionGifts` (Move left/right in the per-gift sheet, gated on `endReached` so the full order is known); both optimistic with revert-on-error. Multi-select seeding of a new collection is still unwired.
 - **Crafting**: no per-attribute persistence percentages (API doesn't label backdrop vs symbol probabilities) — generic hint shown.
 - **Resale attribute filter UI** not built (empty filter passed to `SearchGiftsForResale`).
 
