@@ -515,9 +515,16 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     runOnUiThreadOptional(() -> {
       // Only refresh if this update is for the story currently on screen.
       if (story.posterChatId == currentChatId && story.id == currentStoryId) {
-        // Re-render caption, reactions, privacy and media (displayStory reads
-        // all of these off the Story object and updates the relevant views).
-        displayStory(story);
+        // Benign updates (view-count tick, seen echo, reaction change) must NOT
+        // restart the progress timer or re-prepare ExoPlayer. Only reload media
+        // when the underlying content fingerprint actually changed (an edit).
+        boolean mediaChanged = currentStory == null ||
+          storyContentFingerprint(currentStory.content) != storyContentFingerprint(story.content);
+        this.currentStory = story;
+        refreshChrome(story);
+        if (mediaChanged) {
+          loadStoryMedia(story);
+        }
       }
     });
   }
@@ -614,6 +621,44 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     // Notify TDLib that we're viewing this story
     openStory();
 
+    // Refresh non-media chrome (header, caption, reactions, progress dots)
+    refreshChrome(story);
+
+    // Load the media + (re)start the progress timer
+    loadStoryMedia(story);
+  }
+
+  /**
+   * Returns a fingerprint of the story's media content so we can detect whether
+   * a live {@code UpdateStory} actually changed the media (edit) versus only
+   * touched metadata (view count, seen echo, reactions). Reloading media on a
+   * benign update needlessly restarts the progress timer and re-prepares ExoPlayer.
+   */
+  private static long storyContentFingerprint (TdApi.StoryContent content) {
+    if (content == null) {
+      return 0;
+    }
+    switch (content.getConstructor()) {
+      case TdApi.StoryContentPhoto.CONSTRUCTOR: {
+        TdApi.Photo photo = ((TdApi.StoryContentPhoto) content).photo;
+        if (photo != null && photo.sizes != null && photo.sizes.length > 0 && photo.sizes[photo.sizes.length - 1].photo != null) {
+          return ((long) TdApi.StoryContentPhoto.CONSTRUCTOR << 32) | (photo.sizes[photo.sizes.length - 1].photo.id & 0xffffffffL);
+        }
+        return TdApi.StoryContentPhoto.CONSTRUCTOR;
+      }
+      case TdApi.StoryContentVideo.CONSTRUCTOR: {
+        TdApi.StoryVideo video = ((TdApi.StoryContentVideo) content).video;
+        if (video != null && video.video != null) {
+          return ((long) TdApi.StoryContentVideo.CONSTRUCTOR << 32) | (video.video.id & 0xffffffffL);
+        }
+        return TdApi.StoryContentVideo.CONSTRUCTOR;
+      }
+      default:
+        return content.getConstructor();
+    }
+  }
+
+  private void refreshChrome (TdApi.Story story) {
     // Update heart button state
     updateHeartButtonState();
 
@@ -662,7 +707,9 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       }
     }
     storyProgressView.setStoryCount(storyCount, currentStoryIndex);
+  }
 
+  private void loadStoryMedia (TdApi.Story story) {
     // Display content
     switch (story.content.getConstructor()) {
       case TdApi.StoryContentPhoto.CONSTRUCTOR: {

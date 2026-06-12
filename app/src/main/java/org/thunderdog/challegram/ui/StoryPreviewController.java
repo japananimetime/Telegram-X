@@ -13,6 +13,8 @@
 package org.thunderdog.challegram.ui;
 
 import android.content.Context;
+import android.text.InputType;
+import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
 import android.util.Log;
@@ -33,16 +35,19 @@ import org.thunderdog.challegram.navigation.Menu;
 import org.thunderdog.challegram.navigation.SettingsWrapBuilder;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.util.UserPickerMultiDelegate;
 import org.thunderdog.challegram.v.CustomRecyclerView;
+import org.thunderdog.challegram.widget.MaterialEditTextGroup;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import me.vkryl.core.StringUtils;
 import me.vkryl.core.collection.LongList;
 
 public class StoryPreviewController extends RecyclerViewController<StoryPreviewController.Args>
-    implements View.OnClickListener, Menu, UserPickerMultiDelegate {
+    implements View.OnClickListener, Menu, UserPickerMultiDelegate, SettingsAdapter.TextChangeListener {
 
   public static class Args {
     public final String filePath;
@@ -150,10 +155,27 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
           }
         }
       }
+
+      @Override
+      protected void modifyEditText (ListItem item, ViewGroup parent, MaterialEditTextGroup editText) {
+        if (item.getId() == R.id.input) {
+          editText.getEditText().setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+          Views.setSingleLine(editText.getEditText(), false);
+          editText.setMaxLength(tdlib.maxCaptionLength());
+        }
+      }
     };
+    adapter.setTextChangeListener(this);
 
     buildCells();
     recyclerView.setAdapter(adapter);
+  }
+
+  @Override
+  public void onTextChanged (int id, ListItem item, MaterialEditTextGroup v) {
+    if (id == R.id.input) {
+      captionText = v.getText().toString();
+    }
   }
 
   private void buildCells () {
@@ -162,6 +184,12 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.StoryPosting));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+
+    // Caption input
+    items.add(new ListItem(ListItem.TYPE_EDITTEXT_COUNTERED, R.id.input, 0, R.string.StoryCaption)
+        .setStringValue(captionText));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
     // Privacy setting - only for personal stories (channels don't have privacy settings)
@@ -436,11 +464,13 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
     UI.showToast(R.string.StoryPosting, Toast.LENGTH_SHORT);
 
     final int finalDuration = duration;
+    final TdApi.FormattedText caption = StringUtils.isEmpty(captionText) ? null :
+      new TdApi.FormattedText(captionText.trim(), new TdApi.TextEntity[0]);
     tdlib.client().send(new TdApi.PostStory(
       chatId,
       content,
       null,  // areas
-      null,  // caption
+      caption,
       privacy,
       new int[0],  // albumIds
       finalDuration,

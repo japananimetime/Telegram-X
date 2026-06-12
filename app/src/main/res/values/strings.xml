@@ -2770,6 +2770,7 @@
   <string name="StoryDuration24h">24 hours</string>
   <string name="StoryDuration48h">48 hours</string>
   <string name="StoryPosting">Posting story…</string>
+  <string name="StoryCaption">Add a caption…</string>
   <string name="StoryPostError">Failed to post story</string>
   <string name="StoryBoostNeeded">This channel needs more boosts to post stories</string>
   <string name="StoryLimitExceeded">Story limit exceeded</string>
