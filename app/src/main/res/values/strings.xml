@@ -140,6 +140,16 @@
   <string name="PaymentPhone">Phone number</string>
   <string name="PaymentEmail">Email</string>
   <string name="PaymentOrderInfoError">Couldn\'t validate your contact information.</string>
+  <string name="PaymentShippingAddress">Shipping address</string>
+  <string name="PaymentStreet1">Address line 1</string>
+  <string name="PaymentStreet2">Address line 2 (optional)</string>
+  <string name="PaymentCity">City</string>
+  <string name="PaymentState">State / region</string>
+  <string name="PaymentPostcode">Postal code</string>
+  <string name="PaymentCountry">Country code</string>
+  <string name="PaymentCountryHint">Two-letter country code (e.g. US, GB, DE).</string>
+  <string name="PaymentShippingMethod">Shipping method</string>
+  <string name="PaymentSelectShipping">Please choose a shipping method.</string>
   <string name="PaymentProcessing">Processing payment…</string>
   <string name="PaymentSuccess">Payment successful!</string>
   <string name="PaymentFailed">Payment failed: %1$s</string>

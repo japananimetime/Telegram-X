@@ -643,6 +643,13 @@
   <item type="id" name="btn_paymentName" />
   <item type="id" name="btn_paymentPhone" />
   <item type="id" name="btn_paymentEmail" />
+  <item type="id" name="btn_paymentStreet1" />
+  <item type="id" name="btn_paymentStreet2" />
+  <item type="id" name="btn_paymentCity" />
+  <item type="id" name="btn_paymentState" />
+  <item type="id" name="btn_paymentPostcode" />
+  <item type="id" name="btn_paymentCountry" />
+  <item type="id" name="btn_paymentShippingOption" />
   <item type="id" name="controller_premium" />
   <item type="id" name="controller_stars" />
   <item type="id" name="controller_starTransactions" />
