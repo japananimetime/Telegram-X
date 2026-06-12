@@ -222,9 +222,12 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
 
     // Check if we should show draft (draft exists with text content)
     // TODO: preview fallbacks for draftMessageContentRichMessage/VideoNote/VoiceNote (currently fall through to last message preview)
+    // Only prefer the draft when it's at least as new as the last message — a newer
+    // incoming message should win, otherwise the row shows a stale draft.
     boolean hasDraft = topic.draftMessage != null &&
       topic.draftMessage.content != null &&
-      topic.draftMessage.content.getConstructor() == TdApi.DraftMessageContentText.CONSTRUCTOR;
+      topic.draftMessage.content.getConstructor() == TdApi.DraftMessageContentText.CONSTRUCTOR &&
+      topic.draftMessage.date >= (topic.lastMessage != null ? topic.lastMessage.date : 0);
 
     if (hasDraft) {
       // Show draft preview

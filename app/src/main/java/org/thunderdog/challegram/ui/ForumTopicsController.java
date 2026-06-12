@@ -817,7 +817,9 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
           nextOffsetDate = forumTopics.nextOffsetDate;
           nextOffsetMessageId = forumTopics.nextOffsetMessageId;
           nextOffsetForumTopicId = forumTopics.nextOffsetForumTopicId;
-          canLoadMore = forumTopics.topics.length > 0 && nextOffsetForumTopicId != 0;
+          // A full page (== requested limit) means there may be more; the server can
+          // still return a non-zero cursor on the final partial page, so don't key on it.
+          canLoadMore = forumTopics.topics.length >= 100;
           tdlib.updateForumTopicsCache(chatId, allTopics);
           if (inSearchMode() && !searchInMessages && !StringUtils.isEmpty(currentSearchQuery)) {
             searchTopics(currentSearchQuery);
@@ -883,7 +885,9 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
           nextOffsetDate = forumTopics.nextOffsetDate;
           nextOffsetMessageId = forumTopics.nextOffsetMessageId;
           nextOffsetForumTopicId = forumTopics.nextOffsetForumTopicId;
-          canLoadMore = forumTopics.topics.length > 0 && nextOffsetForumTopicId != 0;
+          // A full page (== requested limit) means there may be more; the server can
+          // still return a non-zero cursor on the final partial page, so don't key on it.
+          canLoadMore = forumTopics.topics.length >= 100;
           tdlib.updateForumTopicsCache(chatId, allTopics != null ? allTopics : topics);
           if (added > 0 && adapter != null) {
             adapter.notifyItemRangeInserted(topics.size() - added, added);
@@ -1717,6 +1721,37 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     // Not used
   }
 
+  private void fetchAndInsertTopic (int topicId) {
+    tdlib.client().send(new TdApi.GetForumTopic(chatId, topicId), result -> {
+      if (result.getConstructor() == TdApi.ForumTopic.CONSTRUCTOR) {
+        TdApi.ForumTopic topic = (TdApi.ForumTopic) result;
+        UI.post(() -> {
+          if (isDestroyed() || topics == null) return;
+          // Skip if a concurrent path already inserted it.
+          if (indexOfTopic(topics, topicId) != -1 || (allTopics != null && indexOfTopic(allTopics, topicId) != -1)) {
+            return;
+          }
+          if (allTopics != null) {
+            allTopics.add(topic);
+            tdlib.updateForumTopicsCache(chatId, allTopics);
+          }
+          if (!inSearchMode()) {
+            topics.add(topic);
+            resortTopics();
+            adapter.setTopics(topics, null);
+          }
+        });
+      } else {
+        // Fall back to a full reload only if the targeted fetch failed.
+        UI.post(() -> {
+          if (!isDestroyed()) {
+            loadTopics();
+          }
+        });
+      }
+    });
+  }
+
   // MessageListener implementation
   @Override
   public void onNewMessage (TdApi.Message message) {
@@ -1740,9 +1775,9 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
       int allIndex = indexOfTopic(allTopics, finalTopicId);
 
       if (foundTopic == null && allIndex == -1) {
-        // Topic not in list - might be a new topic, refresh
-        // (loadTopics queues a pending reload if one is already in flight)
-        loadTopics();
+        // Topic not in the list — fetch just this one and insert it instead of
+        // reloading the entire 100-topic page.
+        fetchAndInsertTopic(finalTopicId);
         return;
       }
 
@@ -1788,16 +1823,17 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
    * @return true if the topic actually changed
    */
   private static boolean applyNewTopicMessage (TdApi.ForumTopic topic, TdApi.Message message) {
-    boolean changed = false;
-    if (topic.lastMessage == null || message.id > topic.lastMessage.id) {
-      topic.lastMessage = message;
-      changed = true;
+    boolean isNewer = topic.lastMessage == null || message.id > topic.lastMessage.id;
+    if (!isNewer) {
+      return false; // already seen this (or an older) message — don't double-count
     }
+    topic.lastMessage = message;
+    // Count toward unread only when lastMessage actually advances, so a duplicate
+    // onNewMessage / onMessageSendSucceeded echo for the same id can't increment twice.
     if (!message.isOutgoing && message.id > topic.lastReadInboxMessageId) {
       topic.unreadCount++;
-      changed = true;
     }
-    return changed;
+    return true;
   }
 
   @Override
