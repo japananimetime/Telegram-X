@@ -198,6 +198,12 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
       if (gift.originalDetails != null && args.dropOriginalDetailsStarCount >= 0) {
         actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftDropDetails, R.drawable.baseline_delete_24, R.string.UpgradedGiftDropDetails));
       }
+      // Craft / combine (Slice 8): combine several of the user's own upgraded
+      // gifts of this family into a new one. Only meaningful when we know the
+      // regular-gift family id.
+      if (gift.regularGiftId != 0) {
+        actions.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_giftCraft, R.drawable.baseline_premium_star_24, R.string.GiftCraft));
+      }
     } else {
       // Non-owner actions (Slice 5): make a purchase offer on someone else's gift.
       if (gift.canSendPurchaseOffer && gift.ownerId != null && !StringUtils.isEmpty(gift.name)) {
@@ -285,7 +291,19 @@ public class UpgradedGiftController extends RecyclerViewController<UpgradedGiftC
       startMakeOffer();
     } else if (id == R.id.btn_giftResaleBrowse) {
       openResaleMarket();
+    } else if (id == R.id.btn_giftCraft) {
+      openCraft();
     }
+  }
+
+  // Craft / combine (Slice 8)
+
+  private void openCraft () {
+    final TdApi.UpgradedGift gift = getArgumentsStrict().gift;
+    if (gift.regularGiftId == 0) {
+      return;
+    }
+    GiftCraftController.open(this, tdlib, gift.regularGiftId, gift.title);
   }
 
   // Resale: list / relist / unlist (SetGiftResalePrice)

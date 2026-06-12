@@ -5885,6 +5885,25 @@
   <string name="GiftCollectionPickTitle">Choose a collection</string>
   <string name="GiftCollectionNotFound">Collection not found.</string>
 
+  <!-- Gift crafting (Slice 8) -->
+  <string name="GiftCraft">Craft Gift</string>
+  <string name="GiftCraftTitle">Craft a Gift</string>
+  <string name="GiftCraftEmpty">You don\'t have enough gifts of this kind to craft a new one.</string>
+  <string name="GiftCraftSelectHint">Select at least 2 gifts to combine into a new one.</string>
+  <string name="GiftCraftSelected_one">%1$d selected</string>
+  <string name="GiftCraftSelected_other">%1$d selected</string>
+  <string name="GiftCraftButton">Craft</string>
+  <string name="GiftCraftPrimaryHint">The crafted gift keeps the number of the primary gift (marked ★). Long-press a selected gift to set it as primary.</string>
+  <string name="GiftCraftSetPrimary">Set as primary (keep its number)</string>
+  <string name="GiftCraftPrimarySet">Primary gift set.</string>
+  <string name="GiftCraftOddsHint">Keeping a backdrop or symbol from your gifts becomes more likely the more matching gifts you combine.</string>
+  <string name="GiftCraftConfirm">Combine %1$d gifts into a new one? The other gifts will be permanently lost. This cannot be undone.</string>
+  <string name="GiftCraftConfirmButton">Craft Gift</string>
+  <string name="GiftCraftDone">Gift crafted.</string>
+  <string name="GiftCraftTooEarly">One of these gifts can\'t be crafted yet. Try again in %1$s.</string>
+  <string name="GiftCraftInvalidGift">One of the selected gifts can\'t be used for crafting.</string>
+  <string name="GiftCraftFailed">Crafting failed. Please try again.</string>
+
   <string name="YouSharedUser">You shared **%1$s**</string>
   <string name="YouSharedUsers_one">You shared **%1$s user**</string>
   <string name="YouSharedUsers_other">You shared **%1$s users**</string>

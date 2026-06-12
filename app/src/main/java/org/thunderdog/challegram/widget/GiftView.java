@@ -66,9 +66,29 @@ public class GiftView extends View implements AttachDelegate {
   private boolean isPinned;
   private boolean isDimmed;
 
+  // Multi-select state (used by the craft picker, Slice 8). When checked, a
+  // tinted border + a check badge are drawn over the cell; the "primary" flag
+  // additionally marks the gift whose number is kept by a craft.
+  private boolean isChecked;
+  private boolean isPrimary;
+  private final Paint selectionBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint checkBadgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
   public GiftView (Context context) {
     super(context);
     this.receiver = new ComplexReceiver(this);
+  }
+
+  /**
+   * Marks this cell as selected/primary for the multi-select craft picker
+   * (Slice 8). {@code primary} implies {@code checked}.
+   */
+  public void setCheckedState (boolean checked, boolean primary) {
+    if (this.isChecked != checked || this.isPrimary != primary) {
+      this.isChecked = checked;
+      this.isPrimary = primary;
+      invalidate();
+    }
   }
 
   public void setGift (@Nullable Tdlib tdlib, @Nullable TdApi.ReceivedGift gift) {
@@ -83,6 +103,8 @@ public class GiftView extends View implements AttachDelegate {
     this.starText = null;
     this.isPinned = false;
     this.isDimmed = false;
+    this.isChecked = false;
+    this.isPrimary = false;
 
     if (gift != null && tdlib != null) {
       this.isPinned = gift.isPinned;
@@ -327,6 +349,43 @@ public class GiftView extends View implements AttachDelegate {
       pinDotPaint.setColor(Theme.getColor(ColorId.iconActive));
       final float dotRadius = Screen.dp(4);
       c.drawCircle(backgroundRect.right - Screen.dp(2), backgroundRect.top + Screen.dp(2), dotRadius, pinDotPaint);
+    }
+
+    // Selection overlay (craft picker, Slice 8): a tinted border ring around the
+    // background plus a check/star badge in the top-left corner.
+    if (isChecked) {
+      final int accent = Theme.getColor(isPrimary ? ColorId.iconActive : ColorId.fillingPositive);
+      selectionBorderPaint.setStyle(Paint.Style.STROKE);
+      selectionBorderPaint.setStrokeWidth(Math.max(2, Screen.dp(2)));
+      selectionBorderPaint.setColor(accent);
+      final float br = Screen.dp(RADIUS_DP);
+      c.drawRoundRect(backgroundRect, br, br, selectionBorderPaint);
+
+      final float badgeRadius = Screen.dp(9);
+      final float badgeCx = backgroundRect.left + Screen.dp(2);
+      final float badgeCy = backgroundRect.top + Screen.dp(2);
+      checkBadgePaint.setStyle(Paint.Style.FILL);
+      checkBadgePaint.setColor(accent);
+      c.drawCircle(badgeCx, badgeCy, badgeRadius, checkBadgePaint);
+
+      if (isPrimary) {
+        // Primary marker: a star glyph (the crafted gift keeps this gift's number).
+        TextPaint badgeText = Paints.getBoldPaint13(false);
+        badgeText.setColor(0xFFFFFFFF);
+        final String star = "★";
+        final float tw = badgeText.measureText(star);
+        c.drawText(star, badgeCx - tw / 2f, badgeCy + Screen.dp(4.5f), badgeText);
+      } else {
+        // Checkmark, drawn with two cached line strokes (no allocation).
+        checkBadgePaint.setColor(0xFFFFFFFF);
+        checkBadgePaint.setStyle(Paint.Style.STROKE);
+        checkBadgePaint.setStrokeWidth(Math.max(1.5f, Screen.dp(1.5f)));
+        final float l = badgeCx - Screen.dp(4);
+        final float m = badgeCx - Screen.dp(1);
+        final float rr = badgeCx + Screen.dp(4);
+        c.drawLine(l, badgeCy + Screen.dp(0.5f), m, badgeCy + Screen.dp(3.5f), checkBadgePaint);
+        c.drawLine(m, badgeCy + Screen.dp(3.5f), rr, badgeCy - Screen.dp(3.5f), checkBadgePaint);
+      }
     }
 
     // Star value below the sticker
