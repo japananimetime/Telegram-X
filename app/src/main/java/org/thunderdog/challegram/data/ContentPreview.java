@@ -325,8 +325,12 @@ public class ContentPreview {
         break;
       }
       case TdApi.MessageLocation.CONSTRUCTOR: {
-        TdApi.MessageLocation location = ((TdApi.MessageLocation) message.content);
-        alternativeText = location.livePeriod == 0 || location.expiresIn == 0 ? null : "live";
+        alternativeText = null;
+        break;
+      }
+      case TdApi.MessageLiveLocation.CONSTRUCTOR: {
+        TdApi.MessageLiveLocation liveLocation = ((TdApi.MessageLiveLocation) message.content);
+        alternativeText = liveLocation.expiresIn == 0 ? null : "live";
         break;
       }
       case TdApi.MessageGame.CONSTRUCTOR:
@@ -722,6 +726,8 @@ public class ContentPreview {
       case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
 
       // Handled by getSimpleContentPreview, but unsupported
+      // TODO(rich-messages): flatten first text blocks into a real preview
+      case TdApi.MessageRichMessage.CONSTRUCTOR:
       case TdApi.MessageUnsupported.CONSTRUCTOR:
       case TdApi.MessageUsersShared.CONSTRUCTOR:
       case TdApi.MessageChatShared.CONSTRUCTOR:
@@ -749,7 +755,7 @@ public class ContentPreview {
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
       default:
-        Td.assertMessageContent_11bff7df();
+        Td.assertMessageContent_bb294b24();
         throw Td.unsupported(message.content);
     }
     Refresher refresher = null;
@@ -1207,11 +1213,12 @@ public class ContentPreview {
       }
       case TdApi.PushMessageContentChecklist.CONSTRUCTOR:
       case TdApi.PushMessageContentChecklistTasksAdded.CONSTRUCTOR:
-      case TdApi.PushMessageContentChecklistTasksDone.CONSTRUCTOR: {
+      case TdApi.PushMessageContentChecklistTasksDone.CONSTRUCTOR:
+      case TdApi.PushMessageContentPollOptionAdded.CONSTRUCTOR: {
         return getNotificationPreview(TdApi.MessageUnsupported.CONSTRUCTOR, tdlib, chatId, push.senderId, push.senderName, null);
       }
       default:
-        Td.assertPushMessageContent_366f79c5();
+        Td.assertPushMessageContent_fd03564b();
         throw Td.unsupported(push.content);
     }
   }
@@ -1264,6 +1271,7 @@ public class ContentPreview {
       case TdApi.MessageAnimation.CONSTRUCTOR:
         return new ContentPreview(EMOJI_GIF, R.string.ChatContentAnimation, formattedArgument, argumentTranslatable);
       case TdApi.MessageLocation.CONSTRUCTOR:
+      case TdApi.MessageLiveLocation.CONSTRUCTOR:
         return new ContentPreview(EMOJI_LOCATION, "live".equals(Td.getText(formattedArgument)) ? R.string.AttachLiveLocation : R.string.Location);
       case TdApi.MessageVenue.CONSTRUCTOR:
         return new ContentPreview(EMOJI_LOCATION, R.string.Location);
@@ -1581,11 +1589,15 @@ public class ContentPreview {
       case TdApi.MessageUnsupported.CONSTRUCTOR:
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessageType);
 
+      // TODO(rich-messages): flatten first text blocks into a real preview
+      case TdApi.MessageRichMessage.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_INFO, R.string.UnsupportedMessageType);
+
       // Bots only. Unused
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
       default:
-        Td.assertMessageContent_11bff7df();
+        Td.assertMessageContent_bb294b24();
         throw new UnsupportedOperationException(Integer.toString(type));
     }
   }
