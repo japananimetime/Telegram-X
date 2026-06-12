@@ -155,9 +155,43 @@ public class StarRevenueController extends RecyclerViewController<StarRevenueCon
         UI.showToast(R.string.MonetizationWithdrawUnavailable, android.widget.Toast.LENGTH_SHORT);
         return;
       }
-      // Withdrawal requires a 2FA password to obtain the withdrawal URL — that flow
-      // is a follow-up; direct the user there for now.
-      UI.showToast(R.string.MonetizationWithdrawUnavailable, android.widget.Toast.LENGTH_SHORT);
+      startWithdrawal();
     }
+  }
+
+  private void startWithdrawal () {
+    // Withdrawal requires confirming the account's 2-step verification password to
+    // obtain a one-time withdrawal URL, which is then opened in the browser.
+    tdlib.send(new TdApi.GetPasswordState(), (state, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), android.widget.Toast.LENGTH_SHORT);
+        return;
+      }
+      if (!state.hasPassword) {
+        UI.showToast(R.string.MonetizationWithdraw2FARequired, android.widget.Toast.LENGTH_LONG);
+        return;
+      }
+      PasswordController c = new PasswordController(context, tdlib);
+      c.setArguments(new PasswordController.Args(PasswordController.MODE_CONFIRM, state)
+        .setSuccessListener(this::completeWithdrawal));
+      navigateTo(c);
+    }));
+  }
+
+  private void completeWithdrawal (String password) {
+    final long starCount = statistics != null && statistics.status != null && statistics.status.availableAmount != null
+      ? statistics.status.availableAmount.starCount : 0;
+    if (starCount <= 0) {
+      return;
+    }
+    tdlib.send(new TdApi.GetStarWithdrawalUrl(ownerId, starCount, password), (httpUrl, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), android.widget.Toast.LENGTH_SHORT);
+        return;
+      }
+      if (httpUrl != null && httpUrl.url != null) {
+        tdlib.ui().openUrl(this, httpUrl.url, null);
+      }
+    }));
   }
 }

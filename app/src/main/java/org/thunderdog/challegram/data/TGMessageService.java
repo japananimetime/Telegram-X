@@ -32,6 +32,7 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.ui.MapController;
+import org.thunderdog.challegram.ui.PaymentReceiptController;
 import org.thunderdog.challegram.util.text.FormattedText;
 import org.thunderdog.challegram.util.text.TextColorSet;
 
@@ -1161,7 +1162,6 @@ public final class TGMessageService extends TGMessageServiceImpl {
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentSuccessful paymentSuccessful) {
     super(context, msg); // TODO: recurring payment strings
-    // TODO click to view receipt
     String amount = CurrencyUtils.buildAmount(paymentSuccessful.currency, paymentSuccessful.totalAmount);
     TdlibSender targetSender = new TdlibSender(tdlib, msg.chatId, tdlib.sender(msg.chatId));
     setTextCreator(() ->
@@ -1191,6 +1191,11 @@ public final class TGMessageService extends TGMessageServiceImpl {
         }
       );
     }
+    setOnClickListener(() -> {
+      PaymentReceiptController c = new PaymentReceiptController(context(), tdlib);
+      c.setArguments(new PaymentReceiptController.Args(msg.chatId, msg.id));
+      navigateTo(c);
+    });
   }
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentRefunded paymentRefunded) {

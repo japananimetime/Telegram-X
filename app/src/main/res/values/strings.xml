@@ -159,6 +159,18 @@
   <string name="PaymentCardFailed">Failed to process card</string>
   <string name="PaymentVerificationNeeded">Payment requires additional verification</string>
   <string name="PaymentStarsNotSupported">Telegram Stars payment is not supported yet</string>
+  <string name="PaymentReceipt">Receipt</string>
+  <string name="PaymentReceiptProduct">Product</string>
+  <string name="PaymentReceiptTitle">Item</string>
+  <string name="PaymentReceiptDescription">Description</string>
+  <string name="PaymentReceiptSeller">Seller</string>
+  <string name="PaymentReceiptDate">Date</string>
+  <string name="PaymentReceiptPrice">Price</string>
+  <string name="PaymentReceiptTip">Tip</string>
+  <string name="PaymentReceiptTotal">Total</string>
+  <string name="PaymentReceiptMethodSection">Payment method</string>
+  <string name="PaymentReceiptMethod">Payment method</string>
+  <string name="PaymentReceiptTransaction">Transaction ID</string>
   <string name="TelegramStars">Telegram Stars</string>
   <string name="StarsBalance">Your balance</string>
   <string name="StarsBalanceFormat">%1$s Stars</string>
@@ -6185,6 +6197,7 @@
   <string name="MonetizationTotal">Total earned</string>
   <string name="MonetizationWithdraw">Withdraw Stars</string>
   <string name="MonetizationWithdrawUnavailable">Withdrawal isn\'t available yet.</string>
+  <string name="MonetizationWithdraw2FARequired">Set up two-step verification before withdrawing Stars.</string>
   <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
 
   <!-- Sticker pack authoring -->
