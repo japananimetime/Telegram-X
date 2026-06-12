@@ -8478,10 +8478,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageUnsupported.CONSTRUCTOR:
           unsupportedStringRes = R.string.UnsupportedMessageType;
           break;
-        // TODO(rich-messages): render via PageBlock-based TGMessageRichText instead of the unsupported placeholder
-        case TdApi.MessageRichMessage.CONSTRUCTOR:
-          unsupportedStringRes = R.string.UnsupportedMessageType;
-          break;
+        case TdApi.MessageRichMessage.CONSTRUCTOR: {
+          return new TGMessageRich(context, msg, ((TdApi.MessageRichMessage) content).message);
+        }
         // bots only
         case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
         case TdApi.MessageWebAppDataReceived.CONSTRUCTOR: {

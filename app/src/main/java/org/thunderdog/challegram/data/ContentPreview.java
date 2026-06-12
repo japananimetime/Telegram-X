@@ -745,9 +745,16 @@ public class ContentPreview {
         return new ContentPreview(EMOJI_GROUP, toggled.isHidden ? R.string.GeneralTopicWasHidden : R.string.GeneralTopicWasShown);
       }
 
+      case TdApi.MessageRichMessage.CONSTRUCTOR: {
+        TdApi.RichMessage richMessage = ((TdApi.MessageRichMessage) message.content).message;
+        String previewText = buildRichMessagePreview(richMessage);
+        if (!StringUtils.isEmpty(previewText)) {
+          return new ContentPreview(EMOJI_INFO, 0, previewText);
+        }
+        break; // Fallback to the placeholder provided by getSimpleContentPreview
+      }
+
       // Handled by getSimpleContentPreview, but unsupported
-      // TODO(rich-messages): flatten first text blocks into a real preview
-      case TdApi.MessageRichMessage.CONSTRUCTOR:
       case TdApi.MessageUnsupported.CONSTRUCTOR:
       case TdApi.MessageUsersShared.CONSTRUCTOR:
       case TdApi.MessageChatShared.CONSTRUCTOR:
@@ -1627,9 +1634,9 @@ public class ContentPreview {
       case TdApi.MessageUnsupported.CONSTRUCTOR:
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessageType);
 
-      // TODO(rich-messages): flatten first text blocks into a real preview
+      // Fallback when the rich message contains no text-bearing block (see buildRichMessagePreview)
       case TdApi.MessageRichMessage.CONSTRUCTOR:
-        return new ContentPreview(EMOJI_INFO, R.string.UnsupportedMessageType);
+        return new ContentPreview(EMOJI_INFO, R.string.Message);
 
       // Bots only. Unused
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
@@ -1638,6 +1645,80 @@ public class ContentPreview {
         Td.assertMessageContent_bb294b24();
         throw new UnsupportedOperationException(Integer.toString(type));
     }
+  }
+
+  /**
+   * Flattens the first text-bearing page block of a rich message into plain preview text.
+   */
+  @Nullable
+  private static String buildRichMessagePreview (@Nullable TdApi.RichMessage richMessage) {
+    if (richMessage == null || richMessage.blocks == null) {
+      return null;
+    }
+    return findFirstPageBlockText(richMessage.blocks);
+  }
+
+  @Nullable
+  private static String findFirstPageBlockText (TdApi.PageBlock[] blocks) {
+    for (TdApi.PageBlock block : blocks) {
+      String text = findPageBlockText(block);
+      if (!StringUtils.isEmpty(text)) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  @Nullable
+  private static String findPageBlockText (TdApi.PageBlock block) {
+    switch (block.getConstructor()) {
+      case TdApi.PageBlockParagraph.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockParagraph) block).text);
+      case TdApi.PageBlockSectionHeading.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockSectionHeading) block).text);
+      case TdApi.PageBlockTitle.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockTitle) block).title);
+      case TdApi.PageBlockSubtitle.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockSubtitle) block).subtitle);
+      case TdApi.PageBlockHeader.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockHeader) block).header);
+      case TdApi.PageBlockSubheader.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockSubheader) block).subheader);
+      case TdApi.PageBlockKicker.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockKicker) block).kicker);
+      case TdApi.PageBlockPreformatted.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockPreformatted) block).text);
+      case TdApi.PageBlockFooter.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockFooter) block).footer);
+      case TdApi.PageBlockPullQuote.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockPullQuote) block).text);
+      case TdApi.PageBlockBlockQuote.CONSTRUCTOR: {
+        TdApi.PageBlockBlockQuote quote = (TdApi.PageBlockBlockQuote) block;
+        String text = findFirstPageBlockText(quote.blocks);
+        return !StringUtils.isEmpty(text) ? text : trimmedRichText(quote.credit);
+      }
+      case TdApi.PageBlockList.CONSTRUCTOR: {
+        for (TdApi.PageBlockListItem item : ((TdApi.PageBlockList) block).items) {
+          String text = findFirstPageBlockText(item.blocks);
+          if (!StringUtils.isEmpty(text)) {
+            return text;
+          }
+        }
+        return null;
+      }
+      case TdApi.PageBlockDetails.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockDetails) block).header);
+    }
+    return null;
+  }
+
+  @Nullable
+  private static String trimmedRichText (@Nullable TdApi.RichText richText) {
+    if (richText == null) {
+      return null;
+    }
+    String text = TD.getText(richText);
+    return text != null ? text.trim() : null;
   }
 
   static int getDartRes (int value) {
