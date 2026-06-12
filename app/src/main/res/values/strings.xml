@@ -1905,6 +1905,9 @@
   <string name="AttachPhotoExpired">Expired photo</string>
   <string name="AttachVideoExpired">Expired video</string>
   <string name="PaidMedia">Paid content</string>
+  <string name="PaidMediaUnlock_one">Unlock for %1$d Star</string>
+  <string name="PaidMediaUnlock_other">Unlock for %1$d Stars</string>
+  <string name="PaidMediaUnlocked">Paid content unlocked</string>
   <string name="AttachVoiceNoteExpired">Expired voice message</string>
   <string name="AttachVideoNoteExpired">Expired video message</string>
   <string name="SendByEnter">Send with Enter</string>

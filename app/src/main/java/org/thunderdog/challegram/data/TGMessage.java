@@ -4363,6 +4363,12 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   // Getters
 
   public boolean onMessageClick (MessageView v, MessagesController c) {
+    // Tap a locked paid-media message to open the Stars payment form.
+    if (msg.content.getConstructor() == TdApi.MessagePaidMedia.CONSTRUCTOR
+      && isPaidMediaLocked((TdApi.MessagePaidMedia) msg.content)) {
+      unlockPaidMedia();
+      return true;
+    }
     // Tap-to-replay the send effect. Non-consuming: normal tap behavior (opening
     // media, following links) still runs.
     if (msg.effectId != 0) {
@@ -8618,8 +8624,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageChecklist.CONSTRUCTOR:
           return new TGMessageText(context, msg, buildChecklistText(((TdApi.MessageChecklist) content).list));
 
-        // unsupported / bubble placeholders still pending dedicated renderers
         case TdApi.MessagePaidMedia.CONSTRUCTOR:
+          return new TGMessageText(context, msg, buildPaidMediaText((TdApi.MessagePaidMedia) content));
+
+        // unsupported / bubble placeholders still pending dedicated renderers
         case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
@@ -8699,6 +8707,54 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         out.add(new TdApi.TextEntity(e.offset + offset, e.length, e.type));
       }
     }
+  }
+
+  static boolean isPaidMediaLocked (TdApi.MessagePaidMedia paidMedia) {
+    if (paidMedia.media == null) {
+      return false;
+    }
+    for (TdApi.PaidMedia m : paidMedia.media) {
+      if (m.getConstructor() == TdApi.PaidMediaPreview.CONSTRUCTOR) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Renders paid media as a text block: a bold "🔒 Unlock for N Stars" line (when
+  // still locked) plus the caption. Tapping the bubble opens the Stars payment form
+  // (see onMessageClick). Showing the actual unlocked photo/video needs the media
+  // pipeline and is a follow-up.
+  private static TdApi.FormattedText buildPaidMediaText (TdApi.MessagePaidMedia paidMedia) {
+    StringBuilder sb = new StringBuilder();
+    List<TdApi.TextEntity> entities = new ArrayList<>();
+    if (isPaidMediaLocked(paidMedia)) {
+      int start = sb.length();
+      sb.append("🔒 "); // lock
+      sb.append(Lang.plural(R.string.PaidMediaUnlock, paidMedia.starCount));
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    } else {
+      int start = sb.length();
+      sb.append(Lang.getString(R.string.PaidMediaUnlocked));
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    }
+    if (paidMedia.caption != null && !Td.isEmpty(paidMedia.caption)) {
+      sb.append("\n");
+      appendFormatted(sb, entities, paidMedia.caption);
+    }
+    return new TdApi.FormattedText(sb.toString(), entities.toArray(new TdApi.TextEntity[0]));
+  }
+
+  private void unlockPaidMedia () {
+    final TdApi.InputInvoiceMessage inputInvoice = new TdApi.InputInvoiceMessage(msg.chatId, msg.id);
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (form, error) -> executeOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        tdlib.ui().openPaymentForm(controller(), form, inputInvoice);
+      }
+    }));
   }
 
   public static TGMessage valueOfError (MessagesManager context, TdApi.Message msg, Throwable error) {
