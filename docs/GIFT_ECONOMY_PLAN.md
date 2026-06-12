@@ -15,11 +15,24 @@ Deep build of the Stars gift economy (chosen from the fork gap audit). TDLib mas
 - **Slice 2 — Received-gifts profile surface** ✅ DONE (`66cb41a87`). `GiftsController` (grid) + `GiftView` cell; profile "Gifts" row when `giftCount>0`; detail sheet with Save/Unsave + Pin/Unpin; closes the slice-1 View-Gift TODO via `GetReceivedGift`. (Used a profile row, not a `SharedBaseController` tab — the tab system is media-coupled.)
 - **Slice 3 — Send gift + settings** ✅ DONE (`91634872e`). `GetAvailableGifts`/`SendGift`/`CanSendGift`/`SetGiftSettings`/`SellGift`; `GiftPickerController` + `GiftSettingsController`; "Send a gift" entry in profile overflow. (Real star purchase on insufficient balance still stubbed — `SettingsStarsController.purchaseStars`.)
 - **Slice 4 — Upgrade / transfer** ✅ DONE (`9bd2a8d06`). `GetGiftUpgradePreview`/`UpgradeGift`/`TransferGift`/`GetUpgradedGift`/`SetUpgradedGiftColors`/`DropGiftOriginalDetails`; `UpgradedGiftHeaderView` hero card + `UpgradedGiftController` detail screen; `InternalLinkTypeUpgradedGift` routing. (Export-to-TON stubbed — needs 2FA password flow.)
-- **Slice 5 — Resale + purchase offers.** `SearchGiftsForResale`/`SendResoldGift`/`SetGiftResalePrice`/`SendGiftPurchaseOffer`/`ProcessGiftPurchaseOffer`.
-- **Slice 6 — Auctions.** `GiftAuctionState`/`PlaceGiftAuctionBid`/`IncreaseGiftAuctionBid`/`GetGiftAuctionState`; `UpdateGiftAuctionState`/`UpdateActiveGiftAuctions`; `InternalLinkTypeGiftAuction`.
-- **Slice 7 — Collections.** `GetGiftCollections` + collection CRUD; `InternalLinkTypeGiftCollection`.
-- **Slice 8 — Crafting.** `GetGiftsForCrafting`/`CraftGift`.
-- **Slice 9 — Transaction history glue** (render-only). Fold gift `StarTransactionType*`/`TonTransactionType*` into the Stars/TON transaction screens.
+- **Slice 5 — Resale + purchase offers** ✅ DONE (`e9f97db92`). `SearchGiftsForResale`/`SendResoldGift`/`SetGiftResalePrice`/`SendGiftPurchaseOffer`/`ProcessGiftPurchaseOffer`; `GiftResaleController` browser, resale actions on `UpgradedGiftController`, wired the slice-1 offer card accept/reject. Made `TGMessageGiveawayBase` button optional (`hasButton()`). (Stars top-up still stubbed; offer duration fixed 1 day; attribute filter UI not built.)
+- **Slice 6 — Auctions** ✅ DONE (`353e065a9`). `GetGiftAuctionState`/`PlaceGiftAuctionBid`/`IncreaseGiftAuctionBid`; live `UpdateGiftAuctionState`/`UpdateActiveGiftAuctions` via a feature-scoped `Tdlib.GiftAuctionListener` + cached snapshot; `GiftAuctionsController` list + `GiftAuctionController` detail/bidding + `GiftAuctionHeaderView`; `InternalLinkTypeGiftAuction`. (Bid-for-self only; Stars top-up stubbed.)
+- **Slice 7 — Collections** ✅ DONE (`727a64b0d`). `GetGiftCollections` + `Create`/`SetName`/`Delete`/`Add`/`Remove` CRUD; collections chip strip on `GiftsController` with `collectionId` filtering; `InternalLinkTypeGiftCollection` via `SearchPublicChat`. (Reorder funcs + multi-select seeding left as commented TODO.)
+- **Slice 8 — Crafting** ✅ DONE (`f829d7c00`). `GetGiftsForCrafting`/`CraftGift` (all 4 results); `GiftCraftController` multi-select picker with primary-number ordering + honest odds hint; `GiftView.setCheckedState`; "Craft Gift" action on `UpgradedGiftController`. (No fabricated per-attribute percentages.)
+- **Slice 9 — Transaction history glue** ✅ DONE (`c4479411b`). The Stars screen already labelled every gift `StarTransactionType*`; added `TonTransactionsController` (`GetTonTransactions`, all nine `TonTransactionType*` incl. gift offer/purchase/sale) + `GiftRarityUtil.formatTonNano`, reachable from `SettingsStarsController`.
+
+---
+
+## Status: all 9 slices complete ✅
+Full Stars/TON gift economy shipped on `feature/rich-messages`: render (1) → received-gifts surface (2) → send + settings (3) → upgrade/transfer (4) → resale + offers (5) → auctions (6) → collections (7) → crafting (8) → TON history (9). Each slice is its own compiling, pushed commit.
+
+### Known stubs / follow-ups (all clearly commented in code)
+- **Stars top-up on insufficient balance** — `SettingsStarsController.purchaseStars` is stubbed upstream; every Stars-spending action (send/upgrade/resale buy/offer/auction bid) surfaces the TDLib error instead of an in-app top-up. Single highest-value follow-up.
+- **Export-to-TON** (upgraded gift → NFT) — needs the 2FA password flow; stubbed in `UpgradedGiftController`.
+- **Auction bids** are bid-for-self only (no recipient/text picker); fixed 1-day offer duration; `paidMessageStarCount=0`.
+- **Collections**: reorder (`ReorderGiftCollections`/`ReorderGiftCollectionGifts`) and multi-select seeding of a new collection are unwired (functions noted at hook points).
+- **Crafting**: no per-attribute persistence percentages (API doesn't label backdrop vs symbol probabilities) — generic hint shown.
+- **Resale attribute filter UI** not built (empty filter passed to `SearchGiftsForResale`).
 
 ## Dependency order
 Rendering foundation (Gift/UpgradedGift sub-objects) → message contents → received gifts (produces `receivedGiftId`, the handle every mutating op needs) → upgrade/transfer → resale → auctions/crafting/collections. Payment glue is render-only.
