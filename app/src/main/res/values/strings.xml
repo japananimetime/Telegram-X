@@ -6015,15 +6015,6 @@
   <string name="TonTxStakeDice">Dice stake</string>
   <string name="TonTxStakeDicePayout">Dice payout</string>
   <string name="TonTxUnknown">Transaction</string>
-  <string name="StarTxGiftPurchase">Gift Purchase</string>
-  <string name="StarTxGiftSale">Gift Sale</string>
-  <string name="StarTxGiftAuction">Gift Auction</string>
-  <string name="StarTxGiftTransfer">Gift Transfer</string>
-  <string name="StarTxGiftUpgrade">Gift Upgrade</string>
-  <string name="ShowCameraWhileTyping">Camera button</string>
-  <string name="ShowAttachWhileTyping">Attach button</string>
-  <string name="ShowVoiceWhileTyping">Voice button</string>
-  <string name="InputWhileTypingInfo">Select which buttons remain visible when you\'re typing a message. Sending media will use your text as caption.</string>
   <string name="ShowAddStoryBorderInfo">Display gradient ring around the \"Add Story\" button.</string>
   <string name="GiftReceived">Gift Received</string>
   <string name="GiftSent">Gift Sent</string>
@@ -6235,10 +6226,20 @@
   <string name="BoostsToNextLevel_other">%1$d boosts to the next level</string>
   <string name="ServiceProtectedContentOn">%1$s enabled content protection</string>
   <string name="ChatListGiftedTon">TON gift</string>
-  <string name="xStars_one">%1$d Star</string>
-  <string name="xStars_other">%1$d Stars</string>
   <string name="ShowMore">Show more</string>
   <string name="MakePrivate">Hide my name and message</string>
   <string name="PayForUpgradeStars_one">Pay %1$d Star to allow upgrade</string>
   <string name="PayForUpgradeStars_other">Pay %1$d Stars to allow upgrade</string>
+
+  <!-- MINI APPS STRING SECTION -->
+
+  <string name="Reload">Reload</string>
+  <string name="WebApp">Web App</string>
+  <string name="WebAppCloseConfirmation">Are you sure you want to close this app?</string>
+  <string name="WebAppDownloadFile">Download %1$s?</string>
+  <string name="WebAppEmojiStatusAccess">Allow this bot to set your emoji status?</string>
+  <string name="WebAppLocationAccess">Allow this bot to access your location?</string>
+  <string name="Close">Close</string>
+  <string name="Download">Download</string>
+  <string name="ShareYourPhoneNumberBot">Share your phone number with this bot?</string>
 </resources>

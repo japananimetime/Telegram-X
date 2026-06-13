@@ -1617,4 +1617,10 @@
   <item type="id" name="btn_giftCraft" />
   <item type="id" name="btn_giftCraftSetPrimary" />
   <item type="id" name="controller_tonTransactions" />
+
+  <!-- MINI APPS ID SECTION -->
+
+  <item type="id" name="menu_webApp" />
+  <item type="id" name="controller_webApp" />
+  <item type="id" name="btn_reload" />
 </resources>
