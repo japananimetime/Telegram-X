@@ -159,6 +159,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private static final int MODE_CUSTOM_CONTENT = 7;
   private static final int MODE_TELEGRAM_FILES = 8;
 
+
   public interface ShareProviderDelegate {
     void generateFunctionsForChat (long chatId, TdApi.Chat chat, TdApi.MessageSendOptions sendOptions, ArrayList<TdApi.Function<?>> functions);
     CharSequence generateErrorMessageForChat (long chatId);
@@ -209,6 +210,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
     private Runnable after;
 
     private TdApi.MessageSendOptions defaultSendOptions;
+
+    private boolean isReplyToOtherChat;
+    private @Nullable TdApi.InputTextQuote inputTextQuote;
+    private ReplyToOtherChatDelegate replyToOtherChatDelegate;
 
     public Args (TdApi.Message message) {
       this(new TdApi.Message[]{message});
@@ -337,6 +342,16 @@ public class ShareController extends TelegramViewController<ShareController.Args
       this.messageThreadId = messageThreadId;
       return this;
     }
+
+    public Args setIsReplyToOtherChat(boolean value, ReplyToOtherChatDelegate delegate){
+      this.isReplyToOtherChat = value;
+      this.replyToOtherChatDelegate = delegate;
+      return this;
+    }
+  }
+  @FunctionalInterface
+  public interface ReplyToOtherChatDelegate {
+    void repliedTo(long chatId, @Nullable TdApi.MessageTopicForum topicForum);
   }
 
   public ShareController (Context context, Tdlib tdlib) {
@@ -1816,6 +1831,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private boolean hasSelectedAnything;
 
   private boolean processSingleTap (TGFoundChat chat) {
+    if(getArguments().isReplyToOtherChat) {
+      replyToOtherChat(chat.getAnyId(), null);
+      return true;
+    }
     if (!hasSelectedAnything && chat.isSelfChat() && selectedChats.size() == 0) {
       selectedChats.put(chat.getAnyId(), chat);
       selectedChatIds.append(chat.getAnyId());
@@ -1963,6 +1982,13 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
   private final LongSet lockedChatIds = new LongSet();
 
+  private void replyToOtherChat(long chatId, TdApi.MessageTopicForum topicForum){
+    Args args = getArguments();
+    if(args == null || args.replyToOtherChatDelegate == null) return;
+    args.replyToOtherChatDelegate.repliedTo(chatId, topicForum);
+    popupLayout.hideWindow(true);
+  }
+
   private boolean toggleCheckedImpl (View view, TGFoundChat chat, @Nullable RunnableBool after, boolean performAsyncChecks) {
     long chatId = chat.getAnyId();
     if (lockedChatIds.has(chatId)) {
@@ -2000,6 +2026,12 @@ public class ShareController extends TelegramViewController<ShareController.Args
     }
 
     if (result) {
+      if(!tdlib.isForum(chatId) && getArguments().isReplyToOtherChat){
+        Log.d("TG", "replyToOtherChat");
+        replyToOtherChat(chatId, null);
+
+        return false;
+      }
       selectedChats.put(chatId, chat);
       selectedChatIds.append(chatId);
       hasSelectedAnything = true;
@@ -2042,6 +2074,75 @@ public class ShareController extends TelegramViewController<ShareController.Args
       }
       headerCell.setSubtitle(Lang.pluralChatTitles(names, others));
     }
+  }
+
+  // Per-chat forum-topic selection for sharing into a forum (chatId -> forumTopicId).
+  private final java.util.HashMap<Long, Long> selectedForumTopics = new java.util.HashMap<>();
+
+  private @Nullable TdApi.MessageTopic getMessageTopicForChat (long chatId) {
+    Long topicId = selectedForumTopics.get(chatId);
+    if (topicId != null && topicId != 0) {
+      return new TdApi.MessageTopicForum(topicId.intValue());
+    }
+    // If it's a forum but no topic selected, default to General topic (id = 1)
+    if (tdlib.isForum(chatId)) {
+      return new TdApi.MessageTopicForum(1);
+    }
+    return null;
+  }
+
+  private void showForumTopicPicker (long chatId) {
+    // Load forum topics and show a picker popup
+    tdlib.client().send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), result -> {
+      if (result.getConstructor() == TdApi.ForumTopics.CONSTRUCTOR) {
+        TdApi.ForumTopics topics = (TdApi.ForumTopics) result;
+        runOnUiThreadOptional(() -> {
+          if (topics.topics.length == 0) {
+            // No topics (shouldn't happen but handle it)
+            selectedForumTopics.put(chatId, 1L); // Default to General topic
+            return;
+          }
+          // Build options for topic picker
+          String[] titles = new String[topics.topics.length];
+          int[] ids = new int[topics.topics.length];
+          for (int i = 0; i < topics.topics.length; i++) {
+            TdApi.ForumTopic topic = topics.topics[i];
+            titles[i] = topic.info.name;
+            ids[i] = topic.info.forumTopicId;
+          }
+          showOptions(tdlib.chatTitle(chatId), ids, titles, (itemView, id) -> {
+            if(getArguments().isReplyToOtherChat) {
+              Log.d("TG", "replyToOtherChat");
+              replyToOtherChat(chatId, new TdApi.MessageTopicForum(id));
+              return true;
+            }
+            selectedForumTopics.put(chatId, (long) id);
+            return true;
+          });
+        });
+      } else {
+        // Failed to load topics, default to General
+        runOnUiThreadOptional(() -> selectedForumTopics.put(chatId, 1L));
+      }
+    });
+  }
+
+  private String getTopicColorEmoji (int colorValue) {
+    // Map topic colors to colored circle emojis
+    if (colorValue == 0) return "\uD83D\uDFE6"; // Default blue
+    // Normalize color (remove alpha if present)
+    int color = colorValue & 0x00FFFFFF;
+    // Map to closest emoji based on RGB values
+    int r = (color >> 16) & 0xFF;
+    int g = (color >> 8) & 0xFF;
+    int b = color & 0xFF;
+    // Simple heuristic based on dominant color
+    if (r > 200 && g < 150 && b < 150) return "\uD83D\uDD34"; // Red
+    if (r > 200 && g > 180 && b < 150) return "\uD83D\uDFE1"; // Yellow
+    if (r > 180 && g < 150 && b > 180) return "\uD83D\uDFE3"; // Purple
+    if (r < 150 && g > 200 && b < 150) return "\uD83D\uDFE2"; // Green
+    if (r > 200 && g > 100 && b > 150) return "\uD83D\uDFE0"; // Orange (for pink)
+    return "\uD83D\uDFE6"; // Blue (default)
   }
 
   private static final boolean OPEN_KEYBOARD_WITH_AUTOSCROLL = false;
