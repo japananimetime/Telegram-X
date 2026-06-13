@@ -77,7 +77,20 @@ transcoder import); incomplete branches need pieces recovered from `main`
 
 **ALL 14 FEATURES ✅ rebased onto core and compile green individually.**
 
-## REMAINING — Step 3 + Step 4
+## ✅ Step 4 COMPLETE (2026-06-13) — combined rebuilt + everything integrated + full APK builds
+
+`all-features-combined` rebuilt off `core/tdlib`; all 14 features merged + every unbranched
+new-work cluster folded in (group-calls, payments, parity/business, stories-settings) +
+all cross-cutting renderers (service-message pills, paid-media/checklist bubbles, chat-list
+previews, live background/accent/emoji redraw, message-effects compose, message-action menu
+[summarize/transcribe/fact-check], live Stars/TON balance). **All 13 new controllers reachable
+(zero dead code). `assembleLatestX64Debug` → 87 MB APK, BUILD SUCCESSFUL.** Nothing pushed.
+
+Residual optional tail: a few audit hunks in shared divergent files (most audit fixes already
+in via the from-main dedicated-file copies), native group_call.cpp CMake wiring (Java/APK green
+without it), redundant in-chat call bar (GroupCallController already reachable via service-msg tap).
+
+## (historical) REMAINING — Step 3 + Step 4
 
 - **Step 3** (not started): branch the unbranched NEW work off core — payments cluster
   (formatPrice/tips/order-info/shipping/receipts/withdrawal/paid-reaction-amount/boosts),
