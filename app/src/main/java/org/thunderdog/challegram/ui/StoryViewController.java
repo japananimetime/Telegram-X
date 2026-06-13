@@ -2362,7 +2362,7 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       TextView removeView = new TextView(context);
       removeView.setText("✕");
       removeView.setTextSize(20f);
-      removeView.setTextColor(0xFFFF6666);
+      removeView.setTextColor(Theme.getColor(org.thunderdog.challegram.theme.ColorId.textNegative));
       removeView.setPadding(Screen.dp(12f), Screen.dp(4f), Screen.dp(8f), Screen.dp(4f));
       removeView.setOnClickListener(v -> {
         setStoryReaction(null);
