@@ -5997,4 +5997,8 @@
   <string name="CommunityProfile">Profile</string>
   <string name="ShowIdInProfile">Show ID in profile</string>
   <string name="ShowIdInProfileDesc">Display user and chat IDs in profile pages.</string>
+
+  <string name="ReplyInOtherChat">Reply in other chat</string>
+  <string name="QuoteInOtherChat">Quote in other chat</string>
+
 </resources>
