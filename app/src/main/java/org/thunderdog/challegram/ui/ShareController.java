@@ -2084,9 +2084,6 @@ public class ShareController extends TelegramViewController<ShareController.Args
     }
   }
 
-  // Per-chat forum-topic selection for sharing into a forum (chatId -> forumTopicId).
-  private final java.util.HashMap<Long, Long> selectedForumTopics = new java.util.HashMap<>();
-
   private @Nullable TdApi.MessageTopic getMessageTopicForChat (long chatId) {
     Long topicId = selectedForumTopics.get(chatId);
     if (topicId != null && topicId != 0) {

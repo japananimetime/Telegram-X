@@ -13,6 +13,8 @@
 package org.thunderdog.challegram.ui;
 
 import android.content.Context;
+
+import androidx.annotation.Nullable;
 import android.view.View;
 import android.widget.Toast;
 
@@ -74,6 +76,16 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
   private ListItem cardHolderItem;
 
   private boolean isProcessing = false;
+
+  public interface PaymentResultListener {
+    void onPaymentResult (boolean success);
+  }
+
+  private @Nullable PaymentResultListener paymentResultListener;
+
+  public void setPaymentResultListener (@Nullable PaymentResultListener listener) {
+    this.paymentResultListener = listener;
+  }
 
   public PaymentFormController(Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -468,10 +480,16 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
         isProcessing = false;
         if (error != null) {
           UI.showToast(Lang.getString(R.string.PaymentFailed, TD.toErrorString(error)), Toast.LENGTH_SHORT);
+          if (paymentResultListener != null) {
+            paymentResultListener.onPaymentResult(false);
+          }
         } else {
           TdApi.PaymentResult paymentResult = (TdApi.PaymentResult) result;
           if (paymentResult.success) {
             UI.showToast(R.string.PaymentSuccess, Toast.LENGTH_SHORT);
+            if (paymentResultListener != null) {
+              paymentResultListener.onPaymentResult(true);
+            }
             navigateBack();
           } else if (!StringUtils.isEmpty(paymentResult.verificationUrl)) {
             // Need 3D Secure verification
