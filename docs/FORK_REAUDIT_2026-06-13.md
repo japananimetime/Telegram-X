@@ -50,26 +50,26 @@ the code added since, plus a fresh parity sweep.
 ## P1 — correctness, still open
 
 **Forum topics** (remaining)
-- Unread count never decremented on *partial* read (only zeroed on full read) — the double-count is fixed, but partial-read drift needs per-topic `UpdateChatReadInbox` handling. `Tdlib.java:8624`.
-- `onForumTopicFullyUpdated` override is dead code (never dispatched). `:1629`.
-- `resortAndRefresh` uses `notifyDataSetChanged()` (flicker); should diff/range-notify. `:1622`.
-- `copyForumTopics` shares nested `lastMessage`/`info` refs; `onMessageContentChanged` mutates `lastMessage.content` in place across threads. `Tdlib.java:3599`.
+- ~~Unread count never decremented on *partial* read~~ — ✅ DONE (`ee5be0fab`): partial reads now fetch authoritative `GetForumTopic` instead of drifting.
+- ~~`onForumTopicFullyUpdated` override is dead code~~ — ✅ DONE (`ee5be0fab`): added `TdlibListeners.updateForumTopicFullyUpdated` dispatcher, fired with the fresh topic.
+- `resortAndRefresh` uses `notifyDataSetChanged()` (flicker); should diff/range-notify. (Deferred — DiffUtil migration, risky to do blind.) `:1622`.
+- ~~`copyForumTopics` shares nested `lastMessage` refs~~ — ✅ DONE (`ee5be0fab`): deep-copy `lastMessage` via `Td.copyOf`.
 
 **Payments** — ✅ **closed out.** Tips, contact info (name/phone/email), and the full shipping-address + shipping-option flow are all implemented. Minor polish remaining: email/phone keyboard input types on the order-info fields (cosmetic).
 
 **Mini Apps** (remaining)
-- Biometry access flags (`biometryAccessRequested/Granted`) are ephemeral per-session while the token is persisted → inconsistent `biometry_info_received`. `:1411`.
-- `postEvent` origin check is TOCTOU and `requireSameOrigin` defaults `false`; capture origin synchronously + default `true`. `WebAppProxy.java:42`.
+- ~~Biometry access flags ephemeral per-session while the token persists~~ — ✅ DONE (`fb78e6988`): flags persisted per-bot + derived from a saved token.
+- `postEvent` origin: `requireSameOrigin` is an authoritative TDLib field (honored on every launch path); residual TOCTOU needs a `WebMessageListener` migration (deferred — out of scope for a hardening pass). `WebAppProxy.java:42`.
 
 ---
 
 ## P2 — quality
 
-- `StarAmount` from the listener is aliased into Tdlib's cached object (`StarTransactionsController.java:82`) — copy it; balance display ignores `nanostarCount`.
-- `ChatsController` story-list listener added from two sites, never removed (soft leak via weak ref); `storyBarView` not nulled in `destroy()`. `ChatsController.java:3253`.
-- Gift auctions empty-state **toast spam** on every live update (`GiftAuctionsController.java:96,165`) — use inline empty state.
+- ~~`StarAmount` aliased + balance ignores `nanostarCount`~~ — ✅ DONE (`73464ad1c`): copy was already in place; balance now shows fractional nanostars.
+- ~~`ChatsController` story-list listener re-added on every toggle; `storyBarView` not nulled in `destroy()`~~ — ✅ DONE (`73464ad1c`): subscribe-once guard + nulled in destroy.
+- ~~Gift auctions empty-state **toast spam**~~ — ✅ DONE (`73464ad1c`): inline full-span empty row in the grid adapter.
 - ~~"View receipt" is a stub (`GetPaymentReceipt` unused)~~ — ✅ DONE (`3e04bd96c`): tapping the payment-successful service message opens `PaymentReceiptController`. (Payment-open logic is still duplicated between `TGMessageInvoice` and `TdlibUi.openPaymentForm` — minor.)
-- Mini-app `share_to_story` fetches an arbitrary bot-supplied `media_url` over HTTP with redirects, no scheme/host/size limit (SSRF-ish); `startFileDownload` passes raw `fileName` to a public dir. `WebAppController.java:1785,1560`.
+- ~~Mini-app `share_to_story` SSRF + `startFileDownload` path traversal~~ — ✅ DONE (`fb78e6988`): https+public-host only, no redirects, 30 MB cap; download file name collapsed to a bare name.
 - `appendFormatted`/`ContentPreview.java:660` lack the null guards their siblings have (low risk).
 
 ---
