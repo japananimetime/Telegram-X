@@ -8383,8 +8383,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGiveaway.CONSTRUCTOR: {
           return new TGMessageGiveaway(context, msg, (TdApi.MessageGiveaway) content);
         }
+        case TdApi.MessageInvoice.CONSTRUCTOR: {
+          return new TGMessageInvoice(context, msg, (TdApi.MessageInvoice) content);
+        }
         // unsupported
-        case TdApi.MessageInvoice.CONSTRUCTOR:
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
         case TdApi.MessageStory.CONSTRUCTOR:
         case TdApi.MessageChatSetBackground.CONSTRUCTOR:
@@ -8397,9 +8399,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGift.CONSTRUCTOR:
         case TdApi.MessageUpgradedGift.CONSTRUCTOR:
         case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
         case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
-        case TdApi.MessageStakeDice.CONSTRUCTOR:
 
         case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
         case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR: // TODO TGMessageService
