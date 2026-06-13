@@ -8467,29 +8467,43 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGiftedTon.CONSTRUCTOR: {
           return new TGMessageGiftedTon(context, msg, (TdApi.MessageGiftedTon) content);
         }
-        // unsupported
+        // Service messages (centered grey pill)
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
         case TdApi.MessageChatSetBackground.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatSetBackground) content);
         case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestProfilePhoto) content);
         case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestBirthdate) content);
+        case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGiveawayPrizeStars) content);
+        case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaidMessagesRefunded) content);
+        case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaidMessagePriceChanged) content);
+        case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChecklistTasksAdded) content);
+        case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChecklistTasksDone) content);
+        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaymentSuccessfulBot) content);
+        case TdApi.MessageGroupCall.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGroupCall) content);
+        case TdApi.MessageChecklist.CONSTRUCTOR:
+          return new TGMessageText(context, msg, buildChecklistText(((TdApi.MessageChecklist) content).list));
+        case TdApi.MessagePaidMedia.CONSTRUCTOR:
+          return new TGMessageText(context, msg, buildPaidMediaText((TdApi.MessagePaidMedia) content));
+
+        // unsupported
         case TdApi.MessageUsersShared.CONSTRUCTOR:
         case TdApi.MessageChatShared.CONSTRUCTOR:
-        case TdApi.MessagePaidMedia.CONSTRUCTOR:
-        case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
         case TdApi.MessageStakeDice.CONSTRUCTOR:
-
-        case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
-        case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessageChecklist.CONSTRUCTOR: // TODO TGMessagePoll
-        case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR: // TODO TGMessageService
-        case TdApi.MessageChecklistTasksDone.CONSTRUCTOR: // TODO TGMessageService
         case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
@@ -8519,6 +8533,94 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       Log.e("Cannot parse message", t);
       return valueOfError(context, msg, t);
     }
+  }
+
+  private static TdApi.FormattedText buildChecklistText (TdApi.Checklist list) {
+    StringBuilder sb = new StringBuilder();
+    List<TdApi.TextEntity> entities = new ArrayList<>();
+    if (list != null && list.title != null && !Td.isEmpty(list.title)) {
+      int start = sb.length();
+      appendFormatted(sb, entities, list.title);
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    }
+    if (list != null && list.tasks != null) {
+      for (TdApi.ChecklistTask task : list.tasks) {
+        if (sb.length() > 0) {
+          sb.append("\n");
+        }
+        boolean done = task.completionDate != 0;
+        sb.append(done ? "☑ " : "☐ "); // ballot box (with/without check) + nbsp
+        if (task.text != null) {
+          int start = sb.length();
+          appendFormatted(sb, entities, task.text);
+          if (done) {
+            entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeStrikethrough()));
+          }
+        }
+      }
+    }
+    if (sb.length() == 0) {
+      sb.append(Lang.getString(R.string.Checklist));
+    }
+    return new TdApi.FormattedText(sb.toString(), entities.toArray(new TdApi.TextEntity[0]));
+  }
+
+  private static void appendFormatted (StringBuilder sb, List<TdApi.TextEntity> out, TdApi.FormattedText text) {
+    final int offset = sb.length();
+    sb.append(text.text);
+    if (text.entities != null) {
+      for (TdApi.TextEntity e : text.entities) {
+        out.add(new TdApi.TextEntity(e.offset + offset, e.length, e.type));
+      }
+    }
+  }
+
+  static boolean isPaidMediaLocked (TdApi.MessagePaidMedia paidMedia) {
+    if (paidMedia.media == null) {
+      return false;
+    }
+    for (TdApi.PaidMedia m : paidMedia.media) {
+      if (m.getConstructor() == TdApi.PaidMediaPreview.CONSTRUCTOR) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Renders paid media as a text block: a bold "🔒 Unlock for N Stars" line (when
+  // still locked) plus the caption. Tapping the bubble opens the Stars payment form
+  // (see onMessageClick). Showing the actual unlocked photo/video needs the media
+  // pipeline and is a follow-up.
+  private static TdApi.FormattedText buildPaidMediaText (TdApi.MessagePaidMedia paidMedia) {
+    StringBuilder sb = new StringBuilder();
+    List<TdApi.TextEntity> entities = new ArrayList<>();
+    if (isPaidMediaLocked(paidMedia)) {
+      int start = sb.length();
+      sb.append("🔒 "); // lock
+      sb.append(Lang.plural(R.string.PaidMediaUnlock, paidMedia.starCount));
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    } else {
+      int start = sb.length();
+      sb.append(Lang.getString(R.string.PaidMediaUnlocked));
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    }
+    if (paidMedia.caption != null && !Td.isEmpty(paidMedia.caption)) {
+      sb.append("\n");
+      appendFormatted(sb, entities, paidMedia.caption);
+    }
+    return new TdApi.FormattedText(sb.toString(), entities.toArray(new TdApi.TextEntity[0]));
+  }
+
+  private void unlockPaidMedia () {
+    final TdApi.InputInvoiceMessage inputInvoice = new TdApi.InputInvoiceMessage(msg.chatId, msg.id);
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (form, error) -> executeOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        tdlib.ui().openPaymentForm(controller(), form, inputInvoice);
+      }
+    }));
   }
 
   public static TGMessage valueOfError (MessagesManager context, TdApi.Message msg, Throwable error) {

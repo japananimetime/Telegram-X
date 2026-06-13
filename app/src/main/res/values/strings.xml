@@ -6381,4 +6381,52 @@
   <string name="StartVoiceChat">Start Voice Chat</string>
   <string name="StartLiveStream">Start Live Stream</string>
   <string name="StartRtmpStream">Stream with…</string>
+  <string name="Checklist">Checklist</string>
+  <string name="PaidMediaUnlock_one">Unlock for %1$d Star</string>
+  <string name="PaidMediaUnlock_other">Unlock for %1$d Stars</string>
+  <string name="PaidMediaUnlocked">Paid content unlocked</string>
+
+  <!-- SERVICE MESSAGE STRING SECTION -->
+
+  <string name="ServiceChatOwnerChanged">%1$s is now the owner of this group</string>
+  <string name="ServiceChecklistTasksAdded_one">%2$s added %1$s task to a checklist</string>
+  <string name="ServiceChecklistTasksAdded_other">%2$s added %1$s tasks to a checklist</string>
+  <string name="ServiceChecklistTasksDone_one">%2$s marked %1$s task as done</string>
+  <string name="ServiceChecklistTasksDone_other">%2$s marked %1$s tasks as done</string>
+  <string name="ServiceGiveawayPrizeStars_one">This chat won %1$s Star in a giveaway</string>
+  <string name="ServiceGiveawayPrizeStars_other">This chat won %1$s Stars in a giveaway</string>
+  <string name="ServiceManagedBotCreated">A bot was added to manage this chat</string>
+  <string name="ServicePaidMessagePriceChangedFree">Paid messages were turned off in this chat</string>
+  <string name="ServicePaidMessagePriceChanged_one">Paid messages now cost %1$s Star each</string>
+  <string name="ServicePaidMessagePriceChanged_other">Paid messages now cost %1$s Stars each</string>
+  <string name="ServicePaidMessagesRefunded_one">%2$s Stars refunded for %1$s paid message</string>
+  <string name="ServicePaidMessagesRefunded_other">%2$s Stars refunded for %1$s paid messages</string>
+  <string name="ServicePassportDataSent">You sent the bot your Telegram Passport data</string>
+  <string name="ServicePaymentSentBot">You completed a payment</string>
+  <string name="ServicePollOptionAdded">%1$s added an option to a poll</string>
+  <string name="ServicePollOptionDeleted">%1$s removed an option from a poll</string>
+  <string name="ServiceProtectedContentDisableRequested">A request to disable content protection was sent</string>
+  <string name="ServiceProtectedContentOff">%1$s disabled content protection</string>
+  <string name="ServiceVideoCallEnded">Video call ended</string>
+  <string name="ServiceVideoCallEndedDuration">Video call ended · %1$s</string>
+  <string name="ServiceVideoCallMissed">Missed video call</string>
+  <string name="ServiceVideoCallStarted">%1$s started a video call</string>
+  <string name="ServiceVideoCallStarted_outgoing">You started a video call</string>
+  <string name="ServiceVoiceCallEnded">Call ended</string>
+  <string name="ServiceVoiceCallEndedDuration">Call ended · %1$s</string>
+  <string name="ServiceVoiceCallMissed">Missed call</string>
+  <string name="ServiceVoiceCallStarted">%1$s started a call</string>
+  <string name="ServiceVoiceCallStarted_outgoing">You started a call</string>
+  <string name="XChangedWallpaper">%1$s changed the wallpaper</string>
+  <string name="XChangedWallpaperForBoth">%1$s set a new wallpaper for both of you</string>
+  <string name="XSuggestedBirthdate">%1$s suggested a date of birth for you</string>
+  <string name="XSuggestedPhoto">%1$s suggested a profile photo for you</string>
+  <string name="YouChangedWallpaper">You changed the wallpaper</string>
+  <string name="YouChangedWallpaperForThisChat">You set a new wallpaper for this chat</string>
+  <string name="YouSharedChat">You shared **%1$s**</string>
+  <string name="YouSharedUser">You shared **%1$s**</string>
+  <string name="YouSharedUsers_one">You shared **%1$s user**</string>
+  <string name="YouSharedUsers_other">You shared **%1$s users**</string>
+  <string name="YouSuggestedBirthdate">You suggested a date of birth</string>
+  <string name="YouSuggestedPhoto">You suggested a profile photo</string>
 </resources>

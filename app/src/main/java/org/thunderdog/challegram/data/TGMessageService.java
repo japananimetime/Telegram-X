@@ -21,6 +21,7 @@ import androidx.annotation.StringRes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.chat.MediaPreview;
 import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
@@ -28,8 +29,10 @@ import org.thunderdog.challegram.telegram.TdlibSender;
 import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.ui.MapController;
+import org.thunderdog.challegram.ui.PaymentReceiptController;
 import org.thunderdog.challegram.util.text.FormattedText;
 import org.thunderdog.challegram.util.text.TextColorSet;
 
@@ -67,6 +70,45 @@ public final class TGMessageService extends TGMessageServiceImpl {
           new SenderArgument(sender, isUserChat())
         );
       }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageUsersShared usersShared) {
+    super(context, msg);
+    setTextCreator(() -> {
+      int count = usersShared.users != null ? usersShared.users.length : 0;
+      if (count == 1) {
+        TdApi.SharedUser sharedUser = usersShared.users[0];
+        // firstName/lastName are only filled for bots, so get from cache
+        String name = tdlib.cache().userName(sharedUser.userId);
+        if (StringUtils.isEmpty(name)) {
+          name = TD.getUserName(sharedUser.firstName, sharedUser.lastName);
+        }
+        if (StringUtils.isEmpty(name)) {
+          name = "User";
+        }
+        return getText(R.string.YouSharedUser, new BoldArgument(name));
+      } else {
+        return getPlural(R.string.YouSharedUsers, count);
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatShared chatShared) {
+    super(context, msg);
+    setTextCreator(() -> {
+      // title is only filled for bots, so get from cache
+      String title = null;
+      if (chatShared.chat != null) {
+        title = tdlib.chatTitle(chatShared.chat.chatId);
+        if (StringUtils.isEmpty(title)) {
+          title = chatShared.chat.title;
+        }
+      }
+      if (StringUtils.isEmpty(title)) {
+        title = "Chat";
+      }
+      return getText(R.string.YouSharedChat, new BoldArgument(title));
     });
   }
 
@@ -232,6 +274,148 @@ public final class TGMessageService extends TGMessageServiceImpl {
             new BoldArgument(themeName)
           );
         }
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatSetBackground setBackground) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (msg.isOutgoing) {
+        return getText(setBackground.onlyForSelf ? R.string.YouChangedWallpaperForThisChat : R.string.YouChangedWallpaper);
+      } else {
+        return getText(
+          setBackground.onlyForSelf ? R.string.XChangedWallpaper : R.string.XChangedWallpaperForBoth,
+          new SenderArgument(sender, isUserChat())
+        );
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestProfilePhoto suggestPhoto) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (msg.isOutgoing) {
+        return getText(R.string.YouSuggestedPhoto);
+      } else {
+        return getText(R.string.XSuggestedPhoto, new SenderArgument(sender, isUserChat()));
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageSuggestBirthdate suggestBirthdate) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (msg.isOutgoing) {
+        return getText(R.string.YouSuggestedBirthdate);
+      } else {
+        return getText(R.string.XSuggestedBirthdate, new SenderArgument(sender, isUserChat()));
+      }
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePassportDataSent passportDataSent) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePassportDataSent));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentSuccessfulBot paymentSuccessfulBot) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePaymentSentBot));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaidMessagesRefunded paidMessagesRefunded) {
+    super(context, msg);
+    setTextCreator(() -> getPlural(
+      R.string.ServicePaidMessagesRefunded,
+      paidMessagesRefunded.messageCount,
+      new BoldArgument(Long.toString(paidMessagesRefunded.starCount))
+    ));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaidMessagePriceChanged priceChanged) {
+    super(context, msg);
+    setTextCreator(() -> {
+      if (priceChanged.paidMessageStarCount <= 0) {
+        return getText(R.string.ServicePaidMessagePriceChangedFree);
+      }
+      return getPlural(R.string.ServicePaidMessagePriceChanged, priceChanged.paidMessageStarCount);
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGiveawayPrizeStars giveawayPrizeStars) {
+    super(context, msg);
+    setTextCreator(() -> getPlural(R.string.ServiceGiveawayPrizeStars, giveawayPrizeStars.starCount));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChecklistTasksAdded tasksAdded) {
+    super(context, msg);
+    setTextCreator(() -> getPlural(
+      R.string.ServiceChecklistTasksAdded,
+      tasksAdded.tasks != null ? tasksAdded.tasks.length : 0,
+      new SenderArgument(sender, isUserChat())
+    ));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChecklistTasksDone tasksDone) {
+    super(context, msg);
+    setTextCreator(() -> {
+      int doneCount = tasksDone.markedAsDoneTaskIds != null ? tasksDone.markedAsDoneTaskIds.length : 0;
+      return getPlural(
+        R.string.ServiceChecklistTasksDone,
+        doneCount,
+        new SenderArgument(sender, isUserChat())
+      );
+    });
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePollOptionAdded pollOptionAdded) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePollOptionAdded, new SenderArgument(sender, isUserChat())));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePollOptionDeleted pollOptionDeleted) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServicePollOptionDeleted, new SenderArgument(sender, isUserChat())));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatOwnerChanged ownerChanged) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServiceChatOwnerChanged, new SenderArgument(sender, isUserChat())));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageManagedBotCreated managedBotCreated) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServiceManagedBotCreated));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatHasProtectedContentToggled protectedContentToggled) {
+    super(context, msg);
+    setTextCreator(() -> getText(
+      protectedContentToggled.newHasProtectedContent ? R.string.ServiceProtectedContentOn : R.string.ServiceProtectedContentOff,
+      new SenderArgument(sender, isUserChat())
+    ));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatHasProtectedContentDisableRequested protectedContentDisableRequested) {
+    super(context, msg);
+    setTextCreator(() -> getText(R.string.ServiceProtectedContentDisableRequested));
+  }
+
+  public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageGroupCall groupCall) {
+    super(context, msg);
+    setTextCreator(() -> {
+      // MessageGroupCall is a call not bound to a chat; isVideo selects video vs voice.
+      if (groupCall.isActive) {
+        return msg.isOutgoing
+          ? getText(groupCall.isVideo ? R.string.ServiceVideoCallStarted_outgoing : R.string.ServiceVoiceCallStarted_outgoing)
+          : getText(groupCall.isVideo ? R.string.ServiceVideoCallStarted : R.string.ServiceVoiceCallStarted, new SenderArgument(sender, isUserChat()));
+      } else if (groupCall.wasMissed) {
+        return getText(groupCall.isVideo ? R.string.ServiceVideoCallMissed : R.string.ServiceVoiceCallMissed);
+      } else if (groupCall.duration > 0) {
+        return getText(groupCall.isVideo ? R.string.ServiceVideoCallEndedDuration : R.string.ServiceVoiceCallEndedDuration, new BoldArgument(Lang.getDuration(groupCall.duration)));
+      } else {
+        return getText(groupCall.isVideo ? R.string.ServiceVideoCallEnded : R.string.ServiceVoiceCallEnded);
       }
     });
   }
@@ -978,7 +1162,6 @@ public final class TGMessageService extends TGMessageServiceImpl {
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentSuccessful paymentSuccessful) {
     super(context, msg); // TODO: recurring payment strings
-    // TODO click to view receipt
     String amount = CurrencyUtils.buildAmount(paymentSuccessful.currency, paymentSuccessful.totalAmount);
     TdlibSender targetSender = new TdlibSender(tdlib, msg.chatId, tdlib.sender(msg.chatId));
     setTextCreator(() ->
@@ -1008,6 +1191,11 @@ public final class TGMessageService extends TGMessageServiceImpl {
         }
       );
     }
+    setOnClickListener(() -> {
+      PaymentReceiptController c = new PaymentReceiptController(context(), tdlib);
+      c.setArguments(new PaymentReceiptController.Args(msg.chatId, msg.id));
+      navigateTo(c);
+    });
   }
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessagePaymentRefunded paymentRefunded) {
@@ -2286,6 +2474,49 @@ public final class TGMessageService extends TGMessageServiceImpl {
     setOnClickListener(() ->
       tdlib.ui().openStory(context.controller(), messageStory.storyPosterChatId, messageStory.storyId)
     );
+    // Tapping the thumbnail card opens the story viewer (the preview is not an
+    // openable in-app media item, so route it explicitly).
+    setOnMediaPreviewClickListener(() ->
+      tdlib.ui().openStory(context.controller(), messageStory.storyPosterChatId, messageStory.storyId)
+    );
+    // Upgrade the plain service line into a tappable preview card: fetch the
+    // referenced story and render its thumbnail below the "Shared a story" text.
+    // While loading (or if the story is unavailable), the service line alone is
+    // shown; tap-to-open keeps working regardless.
+    requestStoryPreview(messageStory.storyPosterChatId, messageStory.storyId);
+  }
+
+  private void requestStoryPreview (long storyPosterChatId, int storyId) {
+    tdlib.send(new TdApi.GetStory(storyPosterChatId, storyId, false), (story, error) -> {
+      if (story == null) {
+        return; // Story unavailable/expired: keep the plain service line.
+      }
+      MediaPreview preview = buildStoryPreview(story);
+      if (preview == null) {
+        return;
+      }
+      runOnUiThreadOptional(() -> setDisplayMediaPreview(preview));
+    });
+  }
+
+  @Nullable
+  private MediaPreview buildStoryPreview (@NonNull TdApi.Story story) {
+    final int size = Screen.dp(50f);
+    final int cornerRadius = Screen.dp(8f); // rounded square, distinct from circular avatars
+    switch (story.content.getConstructor()) {
+      case TdApi.StoryContentPhoto.CONSTRUCTOR: {
+        TdApi.StoryContentPhoto photo = (TdApi.StoryContentPhoto) story.content;
+        return MediaPreview.valueOf(tdlib, photo.photo, size, cornerRadius, false);
+      }
+      case TdApi.StoryContentVideo.CONSTRUCTOR: {
+        TdApi.StoryVideo video = ((TdApi.StoryContentVideo) story.content).video;
+        return MediaPreview.valueOf(tdlib, video.thumbnail, video.minithumbnail, size, cornerRadius);
+      }
+      case TdApi.StoryContentUnsupported.CONSTRUCTOR:
+      default:
+        // No thumbnail available for unsupported content; leave the service line as-is.
+        return null;
+    }
   }
 
   // Pre-impl: utilities used by constructors
