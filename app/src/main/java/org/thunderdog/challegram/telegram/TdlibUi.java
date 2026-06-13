@@ -125,6 +125,7 @@ import org.thunderdog.challegram.ui.SettingsPrivacyController;
 import org.thunderdog.challegram.ui.SettingsPrivacyKeyController;
 import org.thunderdog.challegram.ui.SettingsProxyController;
 import org.thunderdog.challegram.ui.SettingsSessionsController;
+import org.thunderdog.challegram.ui.SettingsStarsController;
 import org.thunderdog.challegram.ui.SettingsThemeController;
 import org.thunderdog.challegram.ui.SettingsWebsitesController;
 import org.thunderdog.challegram.ui.ShareController;
