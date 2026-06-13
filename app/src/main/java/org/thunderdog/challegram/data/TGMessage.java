@@ -8623,6 +8623,25 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }));
   }
 
+  public final TdApi.FactCheck getFactCheck () {
+    return msg.factCheck;
+  }
+
+  public final void setFactCheck (@Nullable TdApi.FormattedText text) {
+    TdApi.FormattedText factText = text != null ? text : new TdApi.FormattedText("", new TdApi.TextEntity[0]);
+    tdlib.send(new TdApi.SetMessageFactCheck(msg.chatId, msg.id, factText), tdlib.typedOkHandler());
+  }
+
+  public final void recognizeSpeech () {
+    tdlib.send(new TdApi.RecognizeSpeech(msg.chatId, msg.id), (ok, error) -> {
+      if (error != null) {
+        runOnUiThreadOptional(() ->
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT)
+        );
+      }
+    });
+  }
+
   public static TGMessage valueOfError (MessagesManager context, TdApi.Message msg, Throwable error) {
     String text = Lang.getString(R.string.FailureMessageText);
 

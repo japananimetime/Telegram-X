@@ -11222,6 +11222,74 @@ public class MessagesController extends ViewController<MessagesController.Argume
     });
   }
 
+  private boolean hasCustomChatBackground;
+
+  // Only active in the regular chat view (PREVIEW_MODE_NONE); the wallpaper-picker
+  // preview modes manage wallpaperView themselves and must not be overridden.
+  private void applyChatBackground (@Nullable TdApi.ChatBackground chatBackground, boolean animated) {
+    if (wallpaperView == null || previewMode != PREVIEW_MODE_NONE) {
+      return;
+    }
+    if (chatBackground != null && chatBackground.background != null) {
+      wallpaperView.initWithCustomWallpaper(new TGBackground(tdlib, chatBackground.background));
+      hasCustomChatBackground = true;
+    } else if (hasCustomChatBackground) {
+      // Peer removed their custom wallpaper: fall back to the user's theme wallpaper.
+      wallpaperView.initWithSetupMode(false);
+      hasCustomChatBackground = false;
+    }
+  }
+
+  // ChatListener: peer-set chat theme / background / accent colors (live updates)
+
+  @Override
+  public void onChatBackgroundChanged (long chatId, @Nullable TdApi.ChatBackground background) {
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        applyChatBackground(background, true);
+      }
+    });
+  }
+
+  @Override
+  public void onChatThemeChanged (long chatId, TdApi.ChatTheme theme) {
+    // TODO(chat-theme): apply peer-set named chat themes. The peer-set *background*
+    // portion is already handled live via onChatBackgroundChanged above.
+  }
+
+  @Override
+  public void onChatAccentColorsChanged (long chatId,
+                                         int accentColorId, long backgroundCustomEmojiId,
+                                         int profileAccentColorId, long profileBackgroundCustomEmojiId) {
+    // Accent colors are resolved per-render from the (already-updated) TdApi.Chat,
+    // but nothing repaints on its own — refresh the header and rebuild the visible
+    // message layouts (author names are tinted with the chat accent).
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        refreshChatHeaderAppearance();
+      }
+    });
+  }
+
+  @Override
+  public void onChatEmojiStatusChanged (long chatId, @Nullable TdApi.EmojiStatus emojiStatus) {
+    runOnUiThreadOptional(() -> {
+      if (getChatId() == chatId) {
+        refreshChatHeaderAppearance();
+      }
+    });
+  }
+
+  private void refreshChatHeaderAppearance () {
+    if (headerCell != null && chat != null) {
+      TdApi.Chat headerChat = messageThread != null ? tdlib.chatSync(messageThread.getContextChatId()) : null;
+      headerCell.setChat(tdlib, headerChat != null ? headerChat : chat, messageThread, forumTopic);
+    }
+    if (manager != null) {
+      manager.rebuildLayouts();
+    }
+  }
+
   private boolean exitOnTransformFinish;
 
   @Override

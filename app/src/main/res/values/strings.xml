@@ -6443,4 +6443,18 @@
   <string name="ChatListProtectedContent">Content protection changed</string>
   <string name="ChatListSuggestedBirthdate">Suggested a date of birth</string>
   <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>
+
+  <!-- MESSAGE ACTIONS STRING SECTION -->
+
+  <string name="FactCheckAdd">Add fact check</string>
+  <string name="FactCheckEdit">Edit fact check</string>
+  <string name="FactCheckHint">Fact check (leave empty to remove)</string>
+  <string name="MessageEffectAdd">Add animated effect</string>
+  <string name="MessageEffectAdded">Effect added — it plays when you send</string>
+  <string name="MessageEffectChange">Change effect</string>
+  <string name="MessageEffectChoose">Choose an effect</string>
+  <string name="MessageEffectNone">No effect</string>
+  <string name="MessageEffectPremium">Premium</string>
+  <string name="SummarizeProgress">Generating summary…</string>
+  <string name="ViewForum">View forum</string>
 </resources>

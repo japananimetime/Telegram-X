@@ -1649,6 +1649,13 @@
   <item type="id" name="more_btn_monetization" />
   <item type="id" name="more_btn_startCall" />
   <item type="id" name="more_btn_startStream" />
+  <item type="id" name="btn_messageEffect" />
+  <item type="id" name="btn_messageFactCheck" />
+  <item type="id" name="btn_messageSummarize" />
+  <item type="id" name="btn_messageTranscribe" />
+  <item type="id" name="btn_openGroupCall" />
+  <item type="id" name="btn_viewForum" />
+  <item type="id" name="msg_bot_menu" />
   <item type="id" name="btn_addStoryColor" />
   <item type="id" name="btn_boost" />
   <item type="id" name="btn_boostLink" />
