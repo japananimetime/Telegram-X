@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.component.chat.MessageView;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.loader.ComplexReceiver;
@@ -305,6 +306,10 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
   }
 
   public boolean isEmpty () {
+    // Community feature: disable reactions
+    if (CommunityConfig.disableReactions) {
+      return true;
+    }
     return reactions == null || Td.isEmpty(reactions);
   }
 
