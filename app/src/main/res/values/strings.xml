@@ -6429,4 +6429,18 @@
   <string name="YouSharedUsers_other">You shared **%1$s users**</string>
   <string name="YouSuggestedBirthdate">You suggested a date of birth</string>
   <string name="YouSuggestedPhoto">You suggested a profile photo</string>
+
+  <!-- CHAT-LIST PREVIEW STRING SECTION -->
+
+  <string name="ChatListChecklistUpdated">Checklist updated</string>
+  <string name="ChatListGiveawayStars">Stars prize</string>
+  <string name="ChatListManagedBot">Bot added to manage chat</string>
+  <string name="ChatListOwnerChanged">Group ownership transferred</string>
+  <string name="ChatListPaidPriceChanged">Paid message price changed</string>
+  <string name="ChatListPaidRefund">Stars refunded</string>
+  <string name="ChatListPassportSent">Passport data sent</string>
+  <string name="ChatListPollUpdated">Poll updated</string>
+  <string name="ChatListProtectedContent">Content protection changed</string>
+  <string name="ChatListSuggestedBirthdate">Suggested a date of birth</string>
+  <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>
 </resources>

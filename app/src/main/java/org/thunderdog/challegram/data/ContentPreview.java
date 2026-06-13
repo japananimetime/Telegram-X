@@ -590,6 +590,27 @@ public class ContentPreview {
         TdApi.FormattedText formatted = TD.toFormattedText(text, false);
         return new ContentPreview(EMOJI_STARS, 0, formatted, true);
       }
+      case TdApi.MessageUpgradedGift.CONSTRUCTOR: {
+        TdApi.MessageUpgradedGift upgradedGift = (TdApi.MessageUpgradedGift) message.content;
+        String title = upgradedGift.gift != null ? upgradedGift.gift.title : null;
+        String text = StringUtils.isEmpty(title) ? Lang.getString(R.string.GiftUpgraded) : title;
+        return new ContentPreview(EMOJI_GIFT, 0, text, true);
+      }
+      case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.RefundedGift), true);
+      }
+      case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.UpgradedGiftPurchaseOffer), true);
+      }
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR: {
+        TdApi.MessageUpgradedGiftPurchaseOfferRejected rejected = (TdApi.MessageUpgradedGiftPurchaseOfferRejected) message.content;
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(rejected.wasExpired ? R.string.UpgradedGiftOfferExpired : R.string.UpgradedGiftOfferRejected), true);
+      }
+      case TdApi.MessageGiftedTon.CONSTRUCTOR: {
+        TdApi.MessageGiftedTon giftedTon = (TdApi.MessageGiftedTon) message.content;
+        String amount = GiftRarityUtil.formatTon(giftedTon.tonAmount, 9);
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.GiftedTonAmount, amount), true);
+      }
       case TdApi.MessageGiveaway.CONSTRUCTOR: {
         TdApi.MessageGiveaway giveaway = (TdApi.MessageGiveaway) message.content;
         String text;
@@ -716,8 +737,6 @@ public class ContentPreview {
       case TdApi.MessageChatDeletePhoto.CONSTRUCTOR:
       case TdApi.MessageGiveawayCreated.CONSTRUCTOR:
       case TdApi.MessageGift.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGift.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
       case TdApi.MessageVideoChatStarted.CONSTRUCTOR:
       case TdApi.MessageGroupCall.CONSTRUCTOR:
       case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
@@ -770,8 +789,15 @@ public class ContentPreview {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-      case TdApi.MessageGiftedTon.CONSTRUCTOR:
       case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
         break;
 
       // Bots only. Unused
@@ -1586,30 +1612,57 @@ public class ContentPreview {
         return new ContentPreview(EMOJI_GROUP, arg1 == ARG_TRUE ? R.string.GeneralTopicWasHidden : R.string.GeneralTopicWasShown);
 
       case TdApi.MessageStory.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_PHOTO, R.string.Story);
+      case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_PHOTO, R.string.ChatListSuggestedPhoto);
+      case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_INFO, R.string.ChatListSuggestedBirthdate);
+      case TdApi.MessagePassportDataSent.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_LOCK, R.string.ChatListPassportSent);
+      case TdApi.MessageChatSetBackground.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_THEME, R.string.Wallpaper);
+      case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_STARS, R.string.ChatListGiveawayStars);
+      case TdApi.MessageGiftedTon.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GIFT, R.string.ChatListGiftedTon);
+      case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_STARS, R.string.ChatListPaidRefund);
+      case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_STARS, R.string.ChatListPaidPriceChanged);
+      case TdApi.MessageChecklist.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.Checklist);
+      case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
+      case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.ChatListChecklistUpdated);
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.ChatListPollUpdated);
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ChatListOwnerChanged);
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ChatListManagedBot);
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_LOCK, R.string.ChatListProtectedContent);
+      case TdApi.MessageGroupCall.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_CALL, R.string.VideoChat);
+      case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_INVOICE, R.string.ServicePaymentSentBot);
+
       case TdApi.MessageUsersShared.CONSTRUCTOR:
       case TdApi.MessageChatShared.CONSTRUCTOR:
-      case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
-      case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
-      case TdApi.MessagePassportDataSent.CONSTRUCTOR:
-      case TdApi.MessageChatSetBackground.CONSTRUCTOR:
       case TdApi.MessagePremiumGiftCode.CONSTRUCTOR:
-      case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageChecklist.CONSTRUCTOR:
-      case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
-      case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
-      case TdApi.MessageGroupCall.CONSTRUCTOR:
-      case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
-      case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-      case TdApi.MessageGiftedTon.CONSTRUCTOR:
-      case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
+      case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
+      case TdApi.MessageStakeDice.CONSTRUCTOR:
         // TODO support these previews
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessage);
         
