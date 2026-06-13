@@ -1600,14 +1600,18 @@ public class MediaLayout extends FrameLayoutFix implements
       closeButton.setAlpha(0f);
       counterHintView.setAlpha(0f);
       groupMediaView.setAlpha(0f);
-      hotMediaView.setAlpha(0f);
+      if (hotMediaView != null) {
+        hotMediaView.setAlpha(0f);
+      }
 
       setCounterEnabled(false);
     }
     // No need to reset, right?
     // setNeedSpoiler(false);
     setAllowSpoiler(getCurrentController().allowSpoiler());
-    hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+    if (hotMediaView != null) {
+      hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+    }
     if (counterView != null) {
       counterView.setTranslationY(0f);
       checkSuffix(false);
@@ -1769,7 +1773,9 @@ public class MediaLayout extends FrameLayoutFix implements
       if (translateFactor > 0f && (counterFactor == 0f || !getCurrentController().supportsMediaGrouping())) {
         translateFactor = 0f;
       }
-      hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+      if (hotMediaView != null) {
+        hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+      }
       float alpha = counterFactor * translateFactor;
       groupMediaView.setAlpha(alpha);
       counterHintView.setAlpha(alpha);
@@ -1797,7 +1803,9 @@ public class MediaLayout extends FrameLayoutFix implements
   private void __setCounterFactor (float factor) {
     if (this.counterFactor != factor) {
       this.counterFactor = factor;
-      hotMediaView.setAlpha(factor * (allowSpoiler ? 1f : 0f));
+      if (hotMediaView != null) {
+        hotMediaView.setAlpha(factor * (allowSpoiler ? 1f : 0f));
+      }
       setAddExtraSpacing(factor == 1f);
     }
   }
