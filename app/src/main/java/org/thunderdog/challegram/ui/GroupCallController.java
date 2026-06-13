@@ -19,12 +19,12 @@ import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
-import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.GroupCallListener;
+import org.thunderdog.challegram.telegram.GroupCallManager;
 import org.thunderdog.challegram.telegram.Tdlib;
-import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
 import java.util.ArrayList;
@@ -43,7 +43,7 @@ import me.vkryl.core.StringUtils;
  * the full participant roster (which require the WebRTC join pipeline) are
  * separate follow-up slices.
  */
-public class GroupCallController extends RecyclerViewController<GroupCallController.Args> implements GroupCallListener {
+public class GroupCallController extends RecyclerViewController<GroupCallController.Args> implements GroupCallListener, GroupCallManager.Listener, View.OnClickListener {
 
   public static class Args {
     public final int groupCallId;
@@ -85,6 +85,7 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     recyclerView.setAdapter(adapter);
     buildLoadingCells();
     tdlib.listeners().subscribeToGroupCallUpdates(groupCallId, this);
+    tdlib.groupCalls().addListener(this);
     tdlib.send(new TdApi.GetGroupCall(groupCallId), (result, error) -> runOnUiThreadOptional(() -> {
       if (error != null) {
         showError(TD.toErrorString(error));
@@ -100,6 +101,28 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
   public void destroy () {
     super.destroy();
     tdlib.listeners().unsubscribeFromGroupCallUpdates(groupCallId, this);
+    tdlib.groupCalls().removeListener(this);
+  }
+
+  @Override
+  public void onGroupCallJoinStateChanged (int groupCallId, int state, boolean micMuted) {
+    if (groupCall != null && (groupCallId == this.groupCallId || state == GroupCallManager.STATE_NONE)) {
+      buildCells();
+    }
+  }
+
+  @Override
+  public void onClick (View v) {
+    final int id = v.getId();
+    if (id == R.id.btn_groupCallJoinLeave) {
+      if (tdlib.groupCalls().getState(groupCallId) == GroupCallManager.STATE_NONE) {
+        tdlib.ui().joinVideoChat(this, groupCallId);
+      } else {
+        tdlib.groupCalls().leave();
+      }
+    } else if (id == R.id.btn_groupCallMute) {
+      tdlib.groupCalls().setMicMuted(!tdlib.groupCalls().isMicMuted());
+    }
   }
 
   @Override
@@ -174,6 +197,25 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       return;
     }
     List<ListItem> items = new ArrayList<>();
+
+    // Join / Leave / Mute — only for live (non-scheduled) calls.
+    if (groupCall.scheduledStartDate == 0) {
+      final int callState = tdlib.groupCalls().getState(groupCallId);
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      if (callState == GroupCallManager.STATE_NONE) {
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallJoinLeave, R.drawable.baseline_call_24, R.string.GroupCallJoin)
+          .setTextColorId(ColorId.textNeutral));
+      } else {
+        int leaveLabel = callState == GroupCallManager.STATE_CONNECTED ? R.string.GroupCallLeave : R.string.GroupCallConnecting;
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallJoinLeave, R.drawable.baseline_call_end_24, leaveLabel)
+          .setTextColorId(ColorId.textNegative));
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        boolean muted = tdlib.groupCalls().isMicMuted();
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallMute, R.drawable.baseline_mic_24,
+          muted ? R.string.GroupCallUnmute : R.string.GroupCallMute));
+      }
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
 
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     addRow(items, Lang.getString(R.string.GroupCallType), Lang.getString(typeRes()), true);

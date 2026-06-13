@@ -670,6 +670,8 @@
   <item type="id" name="controller_savedMessagesTopics" />
   <item type="id" name="controller_groupCall" />
   <item type="id" name="btn_openGroupCall" />
+  <item type="id" name="btn_groupCallJoinLeave" />
+  <item type="id" name="btn_groupCallMute" />
   <item type="id" name="btn_savedMessagesTopic" />
   <item type="id" name="btn_savedMessagesSettings" />
   <item type="id" name="controller_stickerSets" />
