@@ -418,6 +418,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (canSelectSender()) {
       items.add(0, createHapticSenderItem(R.id.btn_openSendersMenu, chat.messageSenderId, false, false));
     }
+    if (!isEditingMessage() && hasAvailableMessageEffects()) {
+      if (items == null) {
+        items = new ArrayList<>();
+      }
+      items.add(new HapticMenuHelper.MenuItem(R.id.btn_messageEffect,
+        Lang.getString(pendingMessageEffectId != 0 ? R.string.MessageEffectChange : R.string.MessageEffectAdd),
+        R.drawable.baseline_premium_star_24));
+    }
     hideCursorsForInputView();
     return items;
   }
@@ -468,6 +476,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       });
     } else if (viewId == R.id.btn_debugLtrEmoji) {
       pickDateOrProceed(Td.newSendOptions(), (sendOptions, disableMarkdown) -> send(new TdApi.InputMessageText(new TdApi.FormattedText(Text.bidiGenerateTestMessage(), new TdApi.TextEntity[0]), null, false), false, sendOptions, null));
+    } else if (viewId == R.id.btn_messageEffect) {
+      showMessageEffectPicker();
     }
     return true;
   }
@@ -2177,11 +2187,128 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return false;
   }
 
+  // Message effect chosen for the next sent message (one-shot). 0 = none.
+  private long pendingMessageEffectId;
+
+  public long getPendingMessageEffectId () {
+    return pendingMessageEffectId;
+  }
+
+  public void setPendingMessageEffectId (long effectId) {
+    if (this.pendingMessageEffectId != effectId) {
+      this.pendingMessageEffectId = effectId;
+      if (sendButton != null) {
+        sendButton.invalidate();
+      }
+    }
+  }
+
+  /**
+   * Single choke point that stamps the chosen one-shot message effect onto the
+   * outgoing send options. All user-initiated text sends funnel through send(), so
+   * this is the one place effectId needs to be applied (and consumed). Edits never
+   * carry an effect, so the pending choice is preserved across an edit.
+   */
+  private TdApi.MessageSendOptions applyPendingMessageEffect (TdApi.MessageSendOptions sendOptions) {
+    if (pendingMessageEffectId == 0 || isEditingMessage()) {
+      return sendOptions;
+    }
+    long effectId = pendingMessageEffectId;
+    setPendingMessageEffectId(0);
+    if (sendOptions == null) {
+      sendOptions = Td.newSendOptions();
+    }
+    sendOptions.effectId = effectId;
+    return sendOptions;
+  }
+
+  /**
+   * Stamps the pending one-shot effect onto an already-built (non-null) options
+   * object in place and consumes it. Used by the media/content send paths that
+   * don't funnel through send().
+   */
+  private void stampPendingMessageEffect (TdApi.MessageSendOptions sendOptions) {
+    if (sendOptions == null || pendingMessageEffectId == 0 || isEditingMessage()) {
+      return;
+    }
+    sendOptions.effectId = pendingMessageEffectId;
+    setPendingMessageEffectId(0);
+  }
+
+  private boolean hasAvailableMessageEffects () {
+    // TDLib applies effectId only to sendMessage/sendMessageAlbum in private,
+    // non-secret chats — don't offer the picker where the server would ignore it.
+    if (chat == null || !tdlib.isUserChat(chat.id) || ChatId.isSecret(chat.id)) {
+      return false;
+    }
+    return tdlib.availableReactionEffectIds().length > 0 || tdlib.availableStickerEffectIds().length > 0;
+  }
+
+  private void showMessageEffectPicker () {
+    long[] reactionIds = tdlib.availableReactionEffectIds();
+    long[] stickerIds = tdlib.availableStickerEffectIds();
+    LongList all = new LongList(reactionIds.length + stickerIds.length);
+    for (long id : reactionIds) all.append(id);
+    for (long id : stickerIds) all.append(id);
+    if (all.isEmpty()) {
+      return;
+    }
+    final int count = Math.min(all.size(), 24);
+    final TdApi.MessageEffect[] resolved = new TdApi.MessageEffect[count];
+    final int[] remaining = {count};
+    for (int i = 0; i < count; i++) {
+      final int index = i;
+      tdlib.getMessageEffect(all.get(i), effect -> runOnUiThreadOptional(() -> {
+        resolved[index] = effect;
+        if (--remaining[0] == 0) {
+          buildMessageEffectSheet(resolved);
+        }
+      }));
+    }
+  }
+
+  private void buildMessageEffectSheet (TdApi.MessageEffect[] effects) {
+    IntList ids = new IntList(effects.length + 1);
+    StringList strings = new StringList(effects.length + 1);
+    final LongList effectIds = new LongList(effects.length);
+    int optionId = 0;
+    for (TdApi.MessageEffect effect : effects) {
+      if (effect == null) {
+        continue;
+      }
+      ids.append(optionId++);
+      effectIds.append(effect.id);
+      String label = effect.emoji;
+      if (effect.isPremium && !tdlib.hasPremium()) {
+        label = label + "  " + Lang.getString(R.string.MessageEffectPremium);
+      }
+      strings.append(label);
+    }
+    if (effectIds.isEmpty()) {
+      return;
+    }
+    final int noneId = optionId;
+    if (pendingMessageEffectId != 0) {
+      ids.append(noneId);
+      strings.append(Lang.getString(R.string.MessageEffectNone));
+    }
+    showOptions(Lang.getString(R.string.MessageEffectChoose), ids.get(), strings.get(), null, null, (itemView, id) -> {
+      if (id == noneId) {
+        setPendingMessageEffectId(0);
+      } else if (id >= 0 && id < effectIds.size()) {
+        setPendingMessageEffectId(effectIds.get(id));
+        context().tooltipManager().builder(sendButton).show(tdlib, R.string.MessageEffectAdded).hideDelayed();
+      }
+      return true;
+    });
+  }
+
   private void send (TdApi.MessageSendOptions sendOptions) {
     send(sendOptions, true);
   }
 
-  private void send (TdApi.MessageSendOptions sendOptions, boolean applyMarkdown) {
+  private void send (TdApi.MessageSendOptions inSendOptions, boolean applyMarkdown) {
+    final TdApi.MessageSendOptions sendOptions = applyPendingMessageEffect(inSendOptions);
     if (isEditingMessage()) {
       saveMessage(applyMarkdown);
     } else if (hasAttachedFiles()) {
