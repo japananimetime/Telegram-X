@@ -2361,6 +2361,24 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     return groupCallManager;
   }
 
+  public boolean canManageVideoChats (TdApi.Chat chat) {
+    if (chat == null || chat.id == 0 || ChatId.isUserChat(chat.id) || ChatId.isSecret(chat.id)) {
+      return false;
+    }
+    TdApi.ChatMemberStatus status = chatStatus(chat.id);
+    if (status != null) {
+      switch (status.getConstructor()) {
+        case TdApi.ChatMemberStatusCreator.CONSTRUCTOR:
+          return true;
+        case TdApi.ChatMemberStatusAdministrator.CONSTRUCTOR:
+          return ((TdApi.ChatMemberStatusAdministrator) status).rights.canManageVideoChats;
+        default:
+          return false;
+      }
+    }
+    return false;
+  }
+
   public TdlibFileGenerationManager filegen () {
     return fileGenerationManager;
   }

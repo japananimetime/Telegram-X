@@ -684,6 +684,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         ids.append(R.id.more_btn_share);
         strings.append(R.string.Share);
       }
+      ids.append(R.id.more_btn_boost);
+      strings.append(R.string.Boost);
     }
 
     // Add "Create Story" option for channels if user can post stories
@@ -706,6 +708,20 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (supergroupFull != null && supergroupFull.canGetStatistics) {
       ids.append(R.id.more_btn_viewStats);
       strings.append(R.string.Stats);
+    }
+
+    if (supergroupFull != null && supergroupFull.canGetStarRevenueStatistics) {
+      ids.append(R.id.more_btn_monetization);
+      strings.append(R.string.Monetization);
+    }
+
+    TdApi.Chat currentVideoChat = tdlib.chat(getChatId());
+    boolean noActiveVideoChat = currentVideoChat == null || currentVideoChat.videoChat == null || currentVideoChat.videoChat.groupCallId == 0;
+    if (noActiveVideoChat && tdlib.canManageVideoChats(currentVideoChat)) {
+      ids.append(R.id.more_btn_startCall);
+      strings.append(isChannel() ? R.string.StartLiveStream : R.string.StartVoiceChat);
+      ids.append(R.id.more_btn_startStream);
+      strings.append(R.string.StartRtmpStream);
     }
 
     if (mode == Mode.CHANNEL && Settings.instance().getMessagesFilterSetting(Settings.MESSAGES_FILTER_ENABLED)) {
@@ -802,6 +818,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           manageChat();
         } else if (id == R.id.more_btn_viewStats) {
           openStats();
+        } else if (id == R.id.more_btn_boost) {
+          openChatBoost();
+        } else if (id == R.id.more_btn_monetization) {
+          openMonetization();
+        } else if (id == R.id.more_btn_startCall) {
+          tdlib.ui().createVideoChat(this, getChatId(), false);
+        } else if (id == R.id.more_btn_startStream) {
+          tdlib.ui().createVideoChat(this, getChatId(), true);
         } else if (id == R.id.more_btn_createStory) {
           openStoryCompose();
         } else if (id == R.id.more_btn_editDescription) {
@@ -3605,6 +3629,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private void openStats () {
     ChatStatisticsController c = new ChatStatisticsController(context, tdlib);
     c.setArguments(new ChatStatisticsController.Args(chat.id));
+    navigateTo(c);
+  }
+
+  private void openChatBoost () {
+    ChatBoostController c = new ChatBoostController(context, tdlib);
+    c.setArguments(new ChatBoostController.Args(chat.id));
+    navigateTo(c);
+  }
+
+  private void openMonetization () {
+    StarRevenueController c = new StarRevenueController(context, tdlib);
+    c.setArguments(new StarRevenueController.Args(new TdApi.MessageSenderChat(chat.id)));
     navigateTo(c);
   }
 

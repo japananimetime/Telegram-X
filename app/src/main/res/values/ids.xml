@@ -1640,6 +1640,15 @@
 
   <!-- PARITY / BUSINESS / PAYMENTS / STORIES ID SECTION -->
 
+  <item type="id" name="btn_storiesSettings" />
+  <item type="id" name="btn_quickRepliesSettings" />
+  <item type="id" name="btn_downloadsSettings" />
+  <item type="id" name="btn_businessSettings" />
+  <item type="id" name="btn_savedMessagesSettings" />
+  <item type="id" name="more_btn_boost" />
+  <item type="id" name="more_btn_monetization" />
+  <item type="id" name="more_btn_startCall" />
+  <item type="id" name="more_btn_startStream" />
   <item type="id" name="btn_addStoryColor" />
   <item type="id" name="btn_boost" />
   <item type="id" name="btn_boostLink" />

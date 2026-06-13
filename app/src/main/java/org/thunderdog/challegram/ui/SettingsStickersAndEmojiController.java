@@ -207,6 +207,8 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickerSettings, R.drawable.deproko_baseline_insert_sticker_24, R.string.StickerPacks));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickerSetCreate, R.drawable.baseline_create_24, R.string.StickerPackCreate));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickerSuggestions, 0, R.string.SuggestStickers));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_toggleNewSetting, 0, R.string.LoopAnimatedStickers).setLongId(Settings.SETTING_FLAG_NO_ANIMATED_STICKERS_LOOP).setBoolValue(true));
@@ -295,6 +297,8 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
       SettingsStickersController c = new SettingsStickersController(context, tdlib, SettingsStickersController.TYPE_STICKER);
       c.setArguments(getArguments());
       navigateTo(c);
+    } else if (viewId == R.id.btn_stickerSetCreate) {
+      navigateTo(new StickerSetsController(context, tdlib));
     } else if (viewId == R.id.btn_animatedEmojiSettings) {
       SettingsStickersController c = new SettingsStickersController(context, tdlib, SettingsStickersController.TYPE_EMOJI);
       c.setArguments(getArguments());

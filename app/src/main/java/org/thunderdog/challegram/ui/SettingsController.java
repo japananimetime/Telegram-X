@@ -649,6 +649,8 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_privacySettings, R.drawable.baseline_lock_24, R.string.PrivacySettings));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_storiesSettings, R.drawable.baseline_camera_alt_24, R.string.StoriesSettings));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_stickerSettingsAndEmoji, R.drawable.deproko_baseline_stickers_filled_24, R.string.StickersAndEmoji));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_themeSettings, R.drawable.baseline_palette_24, R.string.ThemeSettings));
@@ -661,6 +663,14 @@ public class SettingsController extends ViewController<Void> implements
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatFolders, R.drawable.baseline_folder_copy_24, R.string.ChatFolders));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     }
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_quickRepliesSettings, R.drawable.baseline_flash_on_24, R.string.QuickReplies));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_downloadsSettings, R.drawable.baseline_file_download_24, R.string.Downloads));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_businessSettings, R.drawable.baseline_work_24, R.string.TelegramBusiness));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_savedMessagesSettings, R.drawable.baseline_bookmark_24, R.string.SavedMessagesTopics));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_languageSettings, R.drawable.baseline_language_24, R.string.Language));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_voiceTranscription, R.drawable.baseline_mic_24, R.string.VoiceTranscription));
@@ -1164,6 +1174,16 @@ public class SettingsController extends ViewController<Void> implements
         }
         return true;
       });
+    } else if (viewId == R.id.btn_storiesSettings) {
+      navigateTo(new SettingsStoriesController(context, tdlib));
+    } else if (viewId == R.id.btn_quickRepliesSettings) {
+      navigateTo(new QuickRepliesController(context, tdlib));
+    } else if (viewId == R.id.btn_downloadsSettings) {
+      navigateTo(new DownloadsController(context, tdlib));
+    } else if (viewId == R.id.btn_businessSettings) {
+      navigateTo(new SettingsBusinessController(context, tdlib));
+    } else if (viewId == R.id.btn_savedMessagesSettings) {
+      navigateTo(new SavedMessagesTopicsController(context, tdlib));
     } else if (viewId == R.id.btn_languageSettings) {
       navigateTo(new SettingsLanguageController(context, tdlib));
     } else if (viewId == R.id.btn_voiceTranscription) {

@@ -6378,4 +6378,7 @@
   <string name="TelegramBusiness">Telegram Business</string>
   <string name="Visibility">Visibility</string>
   <string name="xColorN">Color %1$d</string>
+  <string name="StartVoiceChat">Start Voice Chat</string>
+  <string name="StartLiveStream">Start Live Stream</string>
+  <string name="StartRtmpStream">Stream with…</string>
 </resources>
