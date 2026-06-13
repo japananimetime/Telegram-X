@@ -52,6 +52,7 @@ import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -1418,6 +1419,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     }
 
     biometryAccessRequested = true;
+    saveBiometryAccess();
 
     showOptions(
       reason != null && !reason.isEmpty() ? reason : Lang.getString(R.string.ConfirmYourBiometrics),
@@ -1425,6 +1427,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       new String[] {Lang.getString(R.string.Allow), Lang.getString(R.string.Cancel)},
       (itemView, id) -> {
         biometryAccessGranted = (id == R.id.btn_done);
+        saveBiometryAccess();
         sendBiometryAccessResult(biometryAccessGranted);
         return true;
       }
@@ -1552,16 +1555,51 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void startFileDownload (String url, String fileName) {
     try {
+      Uri uri = Uri.parse(url);
+      String scheme = uri.getScheme();
+      if (scheme == null || !(scheme.equalsIgnoreCase("https") || scheme.equalsIgnoreCase("http"))) {
+        return; // only http(s) downloads from a bot-supplied URL
+      }
+      // The file name is bot-supplied: collapse it to a bare name so it can't
+      // escape the Downloads dir via path traversal.
+      String safeName = sanitizeDownloadFileName(fileName);
       DownloadManager downloadManager = (DownloadManager) context().getSystemService(Context.DOWNLOAD_SERVICE);
       if (downloadManager != null) {
-        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-        request.setTitle(fileName);
+        DownloadManager.Request request = new DownloadManager.Request(uri);
+        request.setTitle(safeName);
         request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-        request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName);
+        request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, safeName);
         downloadManager.enqueue(request);
       }
     } catch (Exception e) {
       Log.e("Failed to start download: %s", e.getMessage());
+    }
+  }
+
+  private static String sanitizeDownloadFileName (String fileName) {
+    String name = fileName != null ? new File(fileName).getName() : null;
+    if (name == null || name.isEmpty() || name.equals(".") || name.equals("..")) {
+      return "download";
+    }
+    return name.replaceAll("[\\\\/\\u0000]", "_");
+  }
+
+  /** Whether the URL is https pointing at a public host (blocks SSRF to private/loopback/link-local targets). */
+  private static boolean isPublicHttpsUrl (URL url) {
+    try {
+      if (!"https".equalsIgnoreCase(url.getProtocol())) {
+        return false;
+      }
+      String host = url.getHost();
+      if (host == null || host.isEmpty()) {
+        return false;
+      }
+      java.net.InetAddress address = java.net.InetAddress.getByName(host);
+      return !address.isLoopbackAddress() && !address.isAnyLocalAddress()
+        && !address.isLinkLocalAddress() && !address.isSiteLocalAddress()
+        && !address.isMulticastAddress();
+    } catch (Exception e) {
+      return false;
     }
   }
 
@@ -1811,11 +1849,21 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       boolean isVideo = false;
       try {
         URL url = new URL(mediaUrl);
+        // The URL is bot-supplied: require https to a public host (no private/
+        // loopback/link-local targets) and don't follow redirects — this blocks
+        // SSRF to internal services / cloud metadata endpoints.
+        if (!isPublicHttpsUrl(url)) {
+          throw new IOException("Refused non-public media URL");
+        }
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(15000);
-        connection.setInstanceFollowRedirects(true);
+        connection.setInstanceFollowRedirects(false);
         connection.connect();
+        if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+          connection.disconnect();
+          throw new IOException("Unexpected response: " + connection.getResponseCode());
+        }
 
         String contentType = connection.getContentType();
         if (contentType != null) {
@@ -1828,11 +1876,17 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         String extension = isVideo ? ".mp4" : ".jpg";
         tempFile = File.createTempFile("story_share_", extension, context().getCacheDir());
 
+        final long maxBytes = 30L * 1024 * 1024; // cap to avoid memory/disk DoS
+        long total = 0;
         try (InputStream in = connection.getInputStream();
              FileOutputStream out = new FileOutputStream(tempFile)) {
           byte[] buffer = new byte[8192];
           int bytesRead;
           while ((bytesRead = in.read(buffer)) != -1) {
+            total += bytesRead;
+            if (total > maxBytes) {
+              throw new IOException("Media exceeds size limit");
+            }
             out.write(buffer, 0, bytesRead);
           }
         }
@@ -2252,7 +2306,27 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   private void loadBiometricToken () {
     try {
-      biometricToken = getBiometricTokenPrefs().getString(getBiometricTokenKey(), null);
+      SharedPreferences prefs = getBiometricTokenPrefs();
+      biometricToken = prefs.getString(getBiometricTokenKey(), null);
+      long botId = getArguments() != null ? getArguments().botUserId : 0;
+      biometryAccessRequested = prefs.getBoolean("bio_requested_" + tdlib.id() + "_" + botId, false);
+      biometryAccessGranted = prefs.getBoolean("bio_granted_" + tdlib.id() + "_" + botId, false);
+      // A persisted token implies access was previously requested and granted; keep
+      // the flags consistent so biometry_info_received doesn't contradict itself.
+      if (biometricToken != null) {
+        biometryAccessRequested = true;
+        biometryAccessGranted = true;
+      }
+    } catch (Exception ignored) { }
+  }
+
+  private void saveBiometryAccess () {
+    try {
+      long botId = getArguments() != null ? getArguments().botUserId : 0;
+      getBiometricTokenPrefs().edit()
+        .putBoolean("bio_requested_" + tdlib.id() + "_" + botId, biometryAccessRequested)
+        .putBoolean("bio_granted_" + tdlib.id() + "_" + botId, biometryAccessGranted)
+        .apply();
     } catch (Exception ignored) { }
   }
 
