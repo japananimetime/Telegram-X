@@ -1637,4 +1637,46 @@
   <item type="id" name="btn_rtmpServerUrl" />
   <item type="id" name="btn_rtmpStreamKey" />
   <item type="id" name="btn_rtmpRevoke" />
+
+  <!-- PARITY / BUSINESS / PAYMENTS / STORIES ID SECTION -->
+
+  <item type="id" name="btn_addStoryColor" />
+  <item type="id" name="btn_boost" />
+  <item type="id" name="btn_boostLink" />
+  <item type="id" name="btn_businessAway" />
+  <item type="id" name="btn_businessChatLink" />
+  <item type="id" name="btn_businessChatLinkCreate" />
+  <item type="id" name="btn_businessChatLinks" />
+  <item type="id" name="btn_businessGreeting" />
+  <item type="id" name="btn_businessLocation" />
+  <item type="id" name="btn_businessOpeningHours" />
+  <item type="id" name="btn_businessStartPage" />
+  <item type="id" name="btn_clearDownloads" />
+  <item type="id" name="btn_download" />
+  <item type="id" name="btn_pauseDownload" />
+  <item type="id" name="btn_quickReply" />
+  <item type="id" name="btn_removeDownload" />
+  <item type="id" name="btn_resetStoryColors" />
+  <item type="id" name="btn_savedMessagesTopic" />
+  <item type="id" name="btn_showAddStoryBorder" />
+  <item type="id" name="btn_stickerSetAdd" />
+  <item type="id" name="btn_stickerSetCreate" />
+  <item type="id" name="btn_storyColor" />
+  <item type="id" name="btn_storyRingColors" />
+  <item type="id" name="btn_withdrawStars" />
+  <item type="id" name="controller_business" />
+  <item type="id" name="controller_businessChatLinks" />
+  <item type="id" name="controller_businessLocation" />
+  <item type="id" name="controller_businessStartPage" />
+  <item type="id" name="controller_chatBoost" />
+  <item type="id" name="controller_downloads" />
+  <item type="id" name="controller_paymentReceipt" />
+  <item type="id" name="controller_quickReplies" />
+  <item type="id" name="controller_savedMessagesTopics" />
+  <item type="id" name="controller_starRevenue" />
+  <item type="id" name="controller_stickerSets" />
+  <item type="id" name="controller_storiesSettings" />
+  <item type="id" name="controller_storyColorPicker" />
+  <item type="id" name="data_color" />
+  <item type="id" name="preview" />
 </resources>

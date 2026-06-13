@@ -440,6 +440,7 @@ public class Settings {
   public static final long SETTING_FLAG_FORCE_DISABLE_HLS_VIDEO = 1 << 20;
   public static final long SETTING_FLAG_HIDE_STORIES = 1L << 21;
   public static final long SETTING_FLAG_STORY_QUICK_REACTIONS = 1L << 22;
+  public static final long SETTING_FLAG_SHOW_ADD_STORY_BORDER = 1L << 23;
 
   public static final long EXPERIMENT_FLAG_ALLOW_EXPERIMENTS = 1;
   public static final long EXPERIMENT_FLAG_SHOW_PEER_IDS = 1 << 2;
@@ -1398,6 +1399,32 @@ public class Settings {
 
   public boolean useStoryQuickReactions () {
     return getNewSetting(SETTING_FLAG_STORY_QUICK_REACTIONS);
+  }
+
+  public boolean showAddStoryBorder () {
+    return getNewSetting(SETTING_FLAG_SHOW_ADD_STORY_BORDER);
+  }
+
+  // Default story ring gradient colors
+  public static final int[] DEFAULT_STORY_RING_COLORS = {
+    0xFF7B68EE,  // Medium slate blue
+    0xFF00CED1,  // Dark turquoise
+    0xFF00FA9A   // Medium spring green
+  };
+
+  private static final String KEY_STORY_RING_COLORS = "settings_story_ring_colors";
+
+  public int[] getStoryRingColors () {
+    int[] colors = pmc.getIntArray(KEY_STORY_RING_COLORS);
+    return colors != null && colors.length > 0 ? colors : DEFAULT_STORY_RING_COLORS;
+  }
+
+  public void setStoryRingColors (int[] colors) {
+    if (colors == null || colors.length == 0) {
+      pmc.remove(KEY_STORY_RING_COLORS);
+    } else {
+      pmc.putIntArray(KEY_STORY_RING_COLORS, colors);
+    }
   }
 
   private boolean setNewSettings (long newSettings) {

@@ -62,6 +62,8 @@ public class TdlibListeners {
 
   final ReferenceList<AnimatedEmojiListener> animatedEmojiListeners;
   final ReferenceList<SavedMessagesTagsListener> savedMessagesTagsListeners;
+  final ReferenceList<QuickReplyListener> quickReplyListeners;
+  final ReferenceList<SavedMessagesListener> savedMessagesListeners;
 
   final ReferenceLongMap<MessageListener> messageChatListeners;
   final ReferenceLongMap<MessageEditListener> messageEditChatListeners;
@@ -104,6 +106,8 @@ public class TdlibListeners {
 
     this.animatedEmojiListeners = new ReferenceList<>(true);
     this.savedMessagesTagsListeners = new ReferenceList<>(true);
+    this.quickReplyListeners = new ReferenceList<>(true);
+    this.savedMessagesListeners = new ReferenceList<>(true);
 
     this.reactionLoadListeners = new ReferenceMap<>(true);
 
@@ -342,6 +346,34 @@ public class TdlibListeners {
   @AnyThread
   public void unsubscribeFromGroupCallUpdates (int groupCallId, GroupCallListener listener) {
     specificGroupCallListeners.remove(groupCallId, listener);
+  }
+
+  public void subscribeToQuickReplyUpdates (QuickReplyListener listener) {
+    quickReplyListeners.add(listener);
+  }
+
+  public void unsubscribeFromQuickReplyUpdates (QuickReplyListener listener) {
+    quickReplyListeners.remove(listener);
+  }
+
+  void updateQuickReplyShortcuts () {
+    for (QuickReplyListener listener : quickReplyListeners) {
+      listener.onQuickReplyShortcutsChanged();
+    }
+  }
+
+  public void subscribeToSavedMessagesUpdates (SavedMessagesListener listener) {
+    savedMessagesListeners.add(listener);
+  }
+
+  public void unsubscribeFromSavedMessagesUpdates (SavedMessagesListener listener) {
+    savedMessagesListeners.remove(listener);
+  }
+
+  void updateSavedMessagesTopics () {
+    for (SavedMessagesListener listener : savedMessagesListeners) {
+      listener.onSavedMessagesTopicsChanged();
+    }
   }
 
   public void performStartup (boolean isAfterRestart) {
