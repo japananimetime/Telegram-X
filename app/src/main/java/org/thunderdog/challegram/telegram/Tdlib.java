@@ -76,6 +76,7 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.EditRightsController;
+import org.thunderdog.challegram.ui.WebAppController;
 import org.thunderdog.challegram.unsorted.Passcode;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.ChangeLogList;
@@ -7079,6 +7080,33 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     ui().sendMessage(ui().obtainMessage(MSG_ACTION_CALL_BARS, callId, barsCount));
   }
 
+  // WebApp message sent listener support
+  private final java.util.Map<Long, WebAppController> webAppMessageSentListeners = new java.util.HashMap<>();
+
+  public void addWebAppMessageSentListener (long launchId, WebAppController listener) {
+    synchronized (webAppMessageSentListeners) {
+      webAppMessageSentListeners.put(launchId, listener);
+    }
+  }
+
+  public void removeWebAppMessageSentListener (WebAppController listener) {
+    synchronized (webAppMessageSentListeners) {
+      webAppMessageSentListeners.values().remove(listener);
+    }
+  }
+
+  @TdlibThread
+  private void updateWebAppMessageSent (TdApi.UpdateWebAppMessageSent update) {
+    WebAppController listener;
+    synchronized (webAppMessageSentListeners) {
+      listener = webAppMessageSentListeners.remove(update.webAppLaunchId);
+    }
+    if (listener != null) {
+      listener.onWebAppMessageSent(update.webAppLaunchId);
+    }
+  }
+
+
   // Updates: NOTIFICATIONS
 
   private boolean havePendingNotifications, haveInitializedNotifications;
@@ -8626,11 +8654,6 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     // TODO
   }
 
-  @TdlibThread
-  private void updateWebAppMessageSent (TdApi.UpdateWebAppMessageSent update) {
-    // TODO
-  }
-
   // Updates: NOTIFICATIONS
 
   @TdlibThread
@@ -9531,6 +9554,22 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       this.trustedMiniAppBotUserIds = update.botUserIds;
     }
     listeners.updateTrustedMiniAppBots(update);
+  }
+
+  public boolean isTrustedMiniAppBot (long botUserId) {
+    if (botUserId == 0) {
+      return false;
+    }
+    synchronized (dataLock) {
+      if (trustedMiniAppBotUserIds != null) {
+        for (long trustedId : trustedMiniAppBotUserIds) {
+          if (trustedId == botUserId) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   private void updateSavedAnimations (TdApi.UpdateSavedAnimations update) {
