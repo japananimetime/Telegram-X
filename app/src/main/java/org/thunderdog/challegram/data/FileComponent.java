@@ -43,6 +43,8 @@ import org.thunderdog.challegram.mediaview.MediaViewThumbLocation;
 import org.thunderdog.challegram.mediaview.disposable.DisposableMediaViewController;
 import org.thunderdog.challegram.player.TGPlayerController;
 import org.thunderdog.challegram.telegram.TGLegacyAudioManager;
+import org.thunderdog.challegram.telegram.SpeechRecognitionManager;
+import org.thunderdog.challegram.telegram.SpeechRecognitionProvider;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibFilesManager;
@@ -50,6 +52,7 @@ import org.thunderdog.challegram.telegram.TdlibManager;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.DrawAlgorithms;
+import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
@@ -92,6 +95,12 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
   private @Nullable Text trimmedTitle, trimmedSubtitle;
   private float sizeWidth;
+
+  // Transcription state
+  private @Nullable TdApi.SpeechRecognitionResult transcriptionResult;
+  private boolean isTranscribing;
+  private @Nullable Text transcriptionText;
+  private boolean transcribeButtonCaught;
 
   private final TGMessage context;
   private final TdApi.Message message;
@@ -249,6 +258,11 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
     this.waveform = new Waveform(voice.waveform, Waveform.MODE_BITMAP, context.isOutgoingBubble());
     this.unreadFactor = playPauseFile != context.getMessage() || context.isContentRead() ? 0f : 1f;
 
+    // Initialize transcription state from voice note
+    if (voice.speechRecognitionResult != null) {
+      setTranscriptionResultInternal(voice.speechRecognitionResult);
+    }
+
     this.progress = new FileProgressComponent(context.context(), context.tdlib(), TdlibFilesManager.DOWNLOAD_FLAG_VOICE, false,message != null ? message.chatId : context.getChatId(), message != null ? message.id : context.getId());
     this.progress.setBackgroundColorProvider(context);
     this.progress.setSimpleListener(this);
@@ -337,6 +351,172 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
   public boolean isVoice () {
     return voice != null;
+  }
+
+  // --- Transcription ---
+
+  /**
+   * Set transcription result from message update.
+   */
+  public void setTranscriptionResult (@Nullable TdApi.SpeechRecognitionResult result) {
+    setTranscriptionResultInternal(result);
+    rebuildLayout();
+    context.invalidate();
+  }
+
+  private void setTranscriptionResultInternal (@Nullable TdApi.SpeechRecognitionResult result) {
+    this.transcriptionResult = result;
+    if (result == null) {
+      this.isTranscribing = false;
+      this.transcriptionText = null;
+      return;
+    }
+
+    switch (result.getConstructor()) {
+      case TdApi.SpeechRecognitionResultPending.CONSTRUCTOR: {
+        TdApi.SpeechRecognitionResultPending pending = (TdApi.SpeechRecognitionResultPending) result;
+        this.isTranscribing = true;
+        if (!StringUtils.isEmpty(pending.partialText)) {
+          buildTranscriptionText(pending.partialText);
+        }
+        break;
+      }
+      case TdApi.SpeechRecognitionResultText.CONSTRUCTOR: {
+        TdApi.SpeechRecognitionResultText text = (TdApi.SpeechRecognitionResultText) result;
+        this.isTranscribing = false;
+        buildTranscriptionText(text.text);
+        break;
+      }
+      case TdApi.SpeechRecognitionResultError.CONSTRUCTOR: {
+        TdApi.SpeechRecognitionResultError error = (TdApi.SpeechRecognitionResultError) result;
+        this.isTranscribing = false;
+        buildTranscriptionText(Lang.getString(R.string.TranscriptionError));
+        break;
+      }
+    }
+  }
+
+  private void buildTranscriptionText (String text) {
+    if (StringUtils.isEmpty(text)) {
+      this.transcriptionText = null;
+      return;
+    }
+    int maxWidth = lastMaxWidth - getPreviewSize() - getPreviewOffset() - Screen.dp(8f);
+    if (maxWidth > 0) {
+      this.transcriptionText = new Text.Builder(text, maxWidth, Paints.robotoStyleProvider(14f), context.getTextColorSet())
+        .maxLineCount(10)
+        .build();
+    }
+  }
+
+  /**
+   * Get the current transcription result.
+   */
+  @Nullable
+  public TdApi.SpeechRecognitionResult getTranscriptionResult () {
+    return transcriptionResult;
+  }
+
+  /**
+   * Check if transcription is currently in progress.
+   */
+  public boolean isTranscribing () {
+    return isTranscribing;
+  }
+
+  /**
+   * Check if there's a completed transcription.
+   */
+  public boolean hasTranscription () {
+    return transcriptionResult != null &&
+           transcriptionResult.getConstructor() == TdApi.SpeechRecognitionResultText.CONSTRUCTOR;
+  }
+
+  /**
+   * Check if the transcribe button should be shown.
+   * Hidden when: transcription complete, or in preview mode, or self-destructing message
+   */
+  public boolean shouldShowTranscribeButton () {
+    if (voice == null) {
+      return false;
+    }
+    if (TD.isSelfDestructTypeImmediately(message)) {
+      return false;
+    }
+    if (context.getChatId() == 0) {
+      // Preview mode
+      return false;
+    }
+    // Don't show if we already have a completed transcription
+    if (hasTranscription()) {
+      return false;
+    }
+    // Check if transcription is available (Premium or trial remaining)
+    return SpeechRecognitionManager.instance().isTranscriptionAvailable(context.tdlib());
+  }
+
+  /**
+   * Start transcription for this voice message.
+   */
+  public void startTranscription () {
+    if (voice == null || message == null) {
+      return;
+    }
+
+    long chatId = message.chatId;
+    long messageId = message.id;
+
+    this.isTranscribing = true;
+    context.invalidate();
+
+    SpeechRecognitionManager.instance().getActiveProvider().transcribe(
+      context.tdlib(),
+      chatId,
+      messageId,
+      new SpeechRecognitionProvider.Callback() {
+        @Override
+        public void onProgress (@NonNull String partialText) {
+          UI.post(() -> {
+            if (transcriptionResult != null &&
+                transcriptionResult.getConstructor() == TdApi.SpeechRecognitionResultPending.CONSTRUCTOR) {
+              buildTranscriptionText(partialText);
+              context.invalidate();
+            }
+          });
+        }
+
+        @Override
+        public void onSuccess (@NonNull String text) {
+          // Results come through message content update, not directly here for TDLib
+          // This callback is for non-TDLib providers
+        }
+
+        @Override
+        public void onError (@NonNull String errorCode, @NonNull String errorMessage) {
+          UI.post(() -> {
+            isTranscribing = false;
+            String displayError;
+            if ("MSG_VOICE_TOO_LONG".equals(errorCode) || errorMessage.contains("MSG_VOICE_TOO_LONG")) {
+              displayError = Lang.getString(R.string.TranscriptionVoiceTooLong);
+            } else {
+              displayError = Lang.getString(R.string.TranscriptionError);
+            }
+            buildTranscriptionText(displayError);
+            context.invalidate();
+          });
+        }
+      }
+    );
+  }
+
+  /**
+   * Get the height including transcription text if present.
+   */
+  public int getTranscriptionHeight () {
+    if (transcriptionText == null) {
+      return 0;
+    }
+    return transcriptionText.getHeight() + Screen.dp(8f);
   }
 
   public FileProgressComponent getFileProgress () {
@@ -528,7 +708,7 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
   }
 
   public int getHeight () {
-    return getDocHeight();
+    return getDocHeight() + getTranscriptionHeight();
   }
 
   private boolean loadCaught;
@@ -568,6 +748,18 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
     switch (event.getAction()) {
       case MotionEvent.ACTION_DOWN: {
         clearTouch();
+
+        // Check transcribe button touch
+        if (lastTranscribeButtonX >= 0 && lastTranscribeButtonY >= 0 && (shouldShowTranscribeButton() || isTranscribing)) {
+          int buttonSize = Screen.dp(24f);
+          int touchPadding = Screen.dp(8f);
+          if (x >= lastTranscribeButtonX - touchPadding && x <= lastTranscribeButtonX + buttonSize + touchPadding &&
+              y >= lastTranscribeButtonY - touchPadding && y <= lastTranscribeButtonY + buttonSize + touchPadding) {
+            transcribeButtonCaught = true;
+            return true;
+          }
+        }
+
         if (waveform != null && isPlaying && playDuration > 0 && playPosition >= 0) {
           int radius = Screen.dp(FileProgressComponent.DEFAULT_FILE_RADIUS);
           int waveformLeft = startX + radius * 2 + getPreviewOffset();
@@ -617,6 +809,16 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
         break;
       }
       case MotionEvent.ACTION_UP: {
+        // Handle transcribe button tap
+        if (transcribeButtonCaught) {
+          if (!isTranscribing && shouldShowTranscribeButton()) {
+            context.performClickSoundFeedback();
+            startTranscription();
+          }
+          transcribeButtonCaught = false;
+          return true;
+        }
+
         if (!(loadCaught || seekCaught != null))
           return false;
         if (isSeeking && desiredSeek != -1 && isPlaying && playDuration > 0) {
@@ -632,6 +834,10 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
         break;
       }
       case MotionEvent.ACTION_CANCEL: {
+        if (transcribeButtonCaught) {
+          transcribeButtonCaught = false;
+          return true;
+        }
         if (!(loadCaught || seekCaught != null))
           return false;
         dropSeek();
@@ -640,11 +846,12 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
       }
     }
 
-    return loadCaught || seekCaught != null;
+    return loadCaught || seekCaught != null || transcribeButtonCaught;
   }
 
   public void clearTouch () {
     loadCaught = false;
+    transcribeButtonCaught = false;
   }
 
   // private static final boolean USE_ROUND_SMOOTHING = false;
@@ -766,12 +973,56 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
         // c.drawCircle(x, y, outerRadius * unreadFactor, Paints.fillingPaint(context.getContentReplaceColor()));
         c.drawCircle(x, y, innerRadius * unreadFactor, Paints.fillingPaint(ColorUtils.alphaColor(unreadFactor, Theme.getColor(align ? ColorId.bubbleOut_waveformActive : ColorId.waveformActive))));
       }
+
+      // Draw transcribe button (between waveform and duration)
+      int waveformRight = waveformLeft + waveform.getWidth();
+      if (shouldShowTranscribeButton() || isTranscribing) {
+        int buttonSize = Screen.dp(24f);
+        int buttonX = waveformRight + Screen.dp(4f);
+        int buttonY = cy - buttonSize / 2;
+        lastTranscribeButtonX = buttonX;
+        lastTranscribeButtonY = buttonY;
+
+        // Draw icon or loading indicator
+        int iconColor = Theme.getColor(align ? ColorId.bubbleOut_waveformInactive : ColorId.waveformInactive);
+        if (isTranscribing) {
+          // Draw spinning indicator
+          float rotation = (System.currentTimeMillis() % 1000) / 1000f * 360f;
+          c.save();
+          c.rotate(rotation, buttonX + buttonSize / 2f, buttonY + buttonSize / 2f);
+          Drawables.draw(c, view.getSparseDrawable(R.drawable.baseline_sync_24, 0), buttonX, buttonY, Paints.getPorterDuffPaint(iconColor));
+          c.restore();
+          // Schedule next frame for animation
+          UI.post(context::invalidate, 16);
+        } else {
+          // Draw transcribe icon
+          Drawables.draw(c, view.getSparseDrawable(R.drawable.baseline_format_text_24, 0), buttonX, buttonY, Paints.getPorterDuffPaint(iconColor));
+        }
+      } else {
+        lastTranscribeButtonX = -1;
+        lastTranscribeButtonY = -1;
+      }
+
       if (trimmedSubtitle != null) {
         int textX = startX + previewSize + getPreviewOffset() + waveform.getWidth() + Screen.dp(12f);
+        if (shouldShowTranscribeButton() || isTranscribing) {
+          textX += Screen.dp(28f); // Make room for transcribe button
+        }
         trimmedSubtitle.draw(c, textX, textX + trimmedSubtitle.getWidth(), 0, startY + Screen.dp(18f), null, alpha);
+      }
+
+      // Draw transcription text below waveform
+      if (transcriptionText != null) {
+        int textY = startY + Screen.dp(FileProgressComponent.DEFAULT_FILE_RADIUS) * 2 + Screen.dp(8f);
+        int textLeft = startX + previewSize + getPreviewOffset();
+        transcriptionText.draw(c, textLeft, textLeft + transcriptionText.getWidth(), 0, textY, null, alpha);
       }
     }
   }
+
+  // Transcribe button position tracking for touch handling
+  private int lastTranscribeButtonX = -1;
+  private int lastTranscribeButtonY = -1;
 
   private boolean setSubtitle (@Nullable String subtitle) {
     String measure = buildSubtitle(subtitle, false);

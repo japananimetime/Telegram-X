@@ -1171,8 +1171,6 @@ public class Lang {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
       case TdApi.MessagePremiumGiftCode.CONSTRUCTOR:
       case TdApi.MessageGiveawayCreated.CONSTRUCTOR:
