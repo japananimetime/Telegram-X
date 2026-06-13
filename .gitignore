@@ -18,3 +18,7 @@ obj
 /local.properties
 
 libc++_shared.so
+
+# Claude Code config (may contain API tokens)
+.mcp.json
+.claude/
