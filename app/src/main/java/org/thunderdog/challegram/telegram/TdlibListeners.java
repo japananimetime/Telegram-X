@@ -1413,6 +1413,14 @@ public class TdlibListeners {
     );
   }
 
+  // updateForumTopicFullyUpdated (custom: a freshly fetched full ForumTopic)
+
+  void updateForumTopicFullyUpdated (long chatId, int forumTopicId, TdApi.ForumTopic topic) {
+    runForumUpdate(chatId, forumTopicId, listener ->
+      listener.onForumTopicFullyUpdated(chatId, topic)
+    );
+  }
+
   // updateForumUnreadTopicCount (custom, not from TDLib)
 
   void updateForumUnreadTopicCount (long chatId, int unreadTopicCount) {

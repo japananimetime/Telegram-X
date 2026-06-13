@@ -3609,7 +3609,10 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private static List<TdApi.ForumTopic> copyForumTopics (List<TdApi.ForumTopic> topics) {
     List<TdApi.ForumTopic> copy = new java.util.ArrayList<>(topics.size());
     for (TdApi.ForumTopic topic : topics) {
-      copy.add(new TdApi.ForumTopic(topic.info, topic.lastMessage, topic.order, topic.isPinned, topic.unreadCount, topic.lastReadInboxMessageId, topic.lastReadOutboxMessageId, topic.unreadMentionCount, topic.unreadReactionCount, topic.unreadPollVoteCount, topic.notificationSettings, topic.draftMessage));
+      // Deep-copy lastMessage: onMessageContentChanged mutates lastMessage.content
+      // in place, which would otherwise corrupt this cached copy across threads.
+      TdApi.Message lastMessage = topic.lastMessage != null ? Td.copyOf(topic.lastMessage) : null;
+      copy.add(new TdApi.ForumTopic(topic.info, lastMessage, topic.order, topic.isPinned, topic.unreadCount, topic.lastReadInboxMessageId, topic.lastReadOutboxMessageId, topic.unreadMentionCount, topic.unreadReactionCount, topic.unreadPollVoteCount, topic.notificationSettings, topic.draftMessage));
     }
     return copy;
   }
@@ -8688,11 +8691,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   @TdlibThread
   private void updateForumTopic (TdApi.UpdateForumTopic update) {
     boolean unreadStateChanged = false;
+    boolean needFreshUnreadCount = false;
     synchronized (dataLock) {
       List<TdApi.ForumTopic> topics = forumTopicsCache.get(update.chatId);
       if (topics != null) {
         for (TdApi.ForumTopic topic : topics) {
           if (topic.info.forumTopicId == update.forumTopicId) {
+            long oldReadInbox = topic.lastReadInboxMessageId;
             topic.isPinned = update.isPinned;
             topic.lastReadInboxMessageId = update.lastReadInboxMessageId;
             topic.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
@@ -8701,11 +8706,15 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
             topic.unreadPollVoteCount = update.unreadPollVoteCount;
             topic.notificationSettings = update.notificationSettings;
             topic.draftMessage = update.draftMessage;
-            // unreadCount is not part of the update; it can only be inferred
-            // here when the last known message became read
+            // unreadCount is not part of the update.
             if (topic.unreadCount > 0 && topic.lastMessage != null && update.lastReadInboxMessageId >= topic.lastMessage.id) {
+              // Everything is read.
               topic.unreadCount = 0;
               unreadStateChanged = true;
+            } else if (topic.unreadCount > 0 && update.lastReadInboxMessageId > oldReadInbox) {
+              // Partial read: the count decreased by an unknown amount; fetch the
+              // authoritative value instead of letting it drift.
+              needFreshUnreadCount = true;
             }
             break;
           }
@@ -8713,6 +8722,17 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
     }
     listeners.updateForumTopic(update);
+    if (needFreshUnreadCount) {
+      final long chatId = update.chatId;
+      final int topicId = update.forumTopicId;
+      client().send(new TdApi.GetForumTopic(chatId, topicId), result -> {
+        if (result.getConstructor() == TdApi.ForumTopic.CONSTRUCTOR) {
+          TdApi.ForumTopic freshTopic = (TdApi.ForumTopic) result;
+          updateForumTopicUnreadCount(chatId, topicId, freshTopic.unreadCount);
+          listeners.updateForumTopicFullyUpdated(chatId, topicId, freshTopic);
+        }
+      });
+    }
     if (unreadStateChanged) {
       recomputeForumUnreadTopicCount(update.chatId);
     }
