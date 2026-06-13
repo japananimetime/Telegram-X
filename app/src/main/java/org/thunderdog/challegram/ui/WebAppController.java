@@ -1188,10 +1188,14 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         });
       }
     } else if (paymentForm.type instanceof TdApi.PaymentFormTypeRegular) {
-      // FEATURE-DEP(premium-billing): card-based invoice payments open PaymentFormController,
-      // which lives in the premium-billing feature. The standalone mini-apps branch reports
-      // cancelled; the combined build wires the real form.
-      sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"cancelled\"}");
+      PaymentFormController formController = new PaymentFormController(context(), tdlib);
+      formController.setArguments(new PaymentFormController.Args(paymentForm, inputInvoice, 0));
+      formController.setPaymentResultListener(success -> {
+        if (isDestroyed()) return;
+        String status = success ? "paid" : "cancelled";
+        sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"" + status + "\"}");
+      });
+      navigateTo(formController);
     } else {
       sendEventToWebApp("invoice_closed", "{\"slug\":\"" + escapeJsonString(slug) + "\",\"status\":\"failed\"}");
     }
@@ -1981,12 +1985,13 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       final File downloadedFile = tempFile;
       final boolean videoMedia = isVideo;
       UI.post(() -> {
-        // FEATURE-DEP(stories): share-to-story opens StoryPreviewController, which lives in
-        // the stories feature. The standalone mini-apps branch just cleans up; the combined
-        // build wires the story composer.
-        downloadedFile.delete();
         if (!isDestroyed()) {
-          UI.showToast("Sharing to story isn't available in this build", android.widget.Toast.LENGTH_SHORT);
+          StoryPreviewController controller = new StoryPreviewController(context, tdlib);
+          StoryPreviewController.Args storyArgs = new StoryPreviewController.Args(downloadedFile.getAbsolutePath(), videoMedia);
+          controller.setArguments(storyArgs);
+          navigateTo(controller);
+        } else {
+          downloadedFile.delete();
         }
       });
     });
