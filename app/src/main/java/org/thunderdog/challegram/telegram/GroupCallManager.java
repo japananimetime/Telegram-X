@@ -18,6 +18,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.service.GroupCallService;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.voip.GroupCallInstance;
 
@@ -110,6 +111,9 @@ public class GroupCallManager implements GroupCallInstance.Listener {
     this.groupCallId = groupCallId;
     setState(STATE_JOINING);
 
+    // Keep the process alive + hold audio focus while the call is active.
+    GroupCallService.start(UI.getAppContext());
+
     // Kicks off the handshake; the payload arrives in onJoinPayloadEmitted().
     instance.emitJoinPayload();
   }
@@ -125,6 +129,7 @@ public class GroupCallManager implements GroupCallInstance.Listener {
     }
     this.groupCallId = 0;
     setState(STATE_NONE);
+    GroupCallService.stop(UI.getAppContext());
     if (wasActive && leftGroupCallId != 0) {
       tdlib.send(new TdApi.LeaveGroupCall(leftGroupCallId), tdlib.typedOkHandler());
     }

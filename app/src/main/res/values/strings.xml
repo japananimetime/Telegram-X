@@ -6218,6 +6218,12 @@
   <string name="GroupCallScheduledFor">Scheduled for %1$s</string>
   <string name="GroupCallRtmp">Live stream (RTMP)</string>
   <string name="GroupCallLiveStream">Live stream</string>
+  <string name="VoipOngoingGroupCall">Tap to return to the call</string>
+  <string name="GroupCallJoin">Join</string>
+  <string name="GroupCallLeave">Leave</string>
+  <string name="GroupCallMute">Mute</string>
+  <string name="GroupCallUnmute">Unmute</string>
+  <string name="GroupCallConnecting">Connecting…</string>
   <string name="xParticipants_one">%1$s participant</string>
   <string name="xParticipants_other">%1$s participants</string>
   <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
