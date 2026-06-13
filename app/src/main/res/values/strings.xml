@@ -6242,4 +6242,39 @@
   <string name="Close">Close</string>
   <string name="Download">Download</string>
   <string name="ShareYourPhoneNumberBot">Share your phone number with this bot?</string>
+
+  <!-- GROUP CALLS STRING SECTION -->
+
+  <string name="VoiceChat">Voice Chat</string>
+  <string name="VideoChat">Video chat</string>
+  <string name="GroupCallType">Type</string>
+  <string name="GroupCallStatus">Status</string>
+  <string name="GroupCallParticipants">Participants</string>
+  <string name="GroupCallSpeaking">Recently active</string>
+  <string name="GroupCallSpeakingNow">Speaking</string>
+  <string name="GroupCallActive">Live now</string>
+  <string name="GroupCallEnded">Ended</string>
+  <string name="GroupCallScheduledFor">Scheduled for %1$s</string>
+  <string name="GroupCallRtmp">Live stream (RTMP)</string>
+  <string name="GroupCallLiveStream">Live stream</string>
+  <string name="VoipOngoingGroupCall">Tap to return to the call</string>
+  <string name="GroupCallJoin">Join</string>
+  <string name="GroupCallLeave">Leave</string>
+  <string name="GroupCallMute">Mute</string>
+  <string name="GroupCallUnmute">Unmute</string>
+  <string name="GroupCallConnecting">Connecting…</string>
+  <string name="GroupCallManage">Manage</string>
+  <string name="GroupCallStartNow">Start now</string>
+  <string name="GroupCallCopyInvite">Copy invite link</string>
+  <string name="GroupCallRename">Edit title</string>
+  <string name="GroupCallEnd">End call</string>
+  <string name="GroupCallEndConfirm">End this call for everyone?</string>
+  <string name="RtmpStream">Live stream</string>
+  <string name="RtmpServerUrl">Server URL</string>
+  <string name="RtmpStreamKey">Stream key</string>
+  <string name="RtmpStreamHint">Use these in your streaming app (e.g. OBS) to broadcast into the chat. Keep the stream key secret.</string>
+  <string name="RtmpRevoke">Revoke stream key</string>
+  <string name="RtmpRevokeConfirm">Revoke the current stream key and generate a new one? The old key will stop working.</string>
+  <string name="xParticipants_one">%1$s participant</string>
+  <string name="xParticipants_other">%1$s participants</string>
 </resources>

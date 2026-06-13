@@ -2351,6 +2351,16 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     return statusManager;
   }
 
+  private GroupCallManager groupCallManager;
+
+  /** Orchestrates joining/leaving video chats (group calls) for this account. */
+  public synchronized GroupCallManager groupCalls () {
+    if (groupCallManager == null) {
+      groupCallManager = new GroupCallManager(this);
+    }
+    return groupCallManager;
+  }
+
   public TdlibFileGenerationManager filegen () {
     return fileGenerationManager;
   }

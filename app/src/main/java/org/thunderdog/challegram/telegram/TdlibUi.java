@@ -7381,6 +7381,49 @@ public class TdlibUi extends Handler {
     // TODO open voice chat layer
   }
 
+  public void joinVideoChat (ViewController<?> context, int groupCallId) {
+    if (groupCallId == 0) {
+      return;
+    }
+    org.thunderdog.challegram.util.Permissions permissions = context.context().permissions();
+    if (permissions.canRecordAudio()) {
+      tdlib.groupCalls().joinVideoChat(groupCallId);
+    } else {
+      permissions.requestRecordAudioPermissions(granted -> {
+        if (granted) {
+          tdlib.groupCalls().joinVideoChat(groupCallId);
+        }
+      });
+    }
+  }
+
+  /**
+   * Creates a video chat in the chat (requires canManageVideoChats). A normal
+   * video chat is joined immediately; an RTMP stream opens its server URL / key
+   * screen instead.
+   */
+  public void createVideoChat (ViewController<?> context, long chatId, boolean isRtmpStream) {
+    if (chatId == 0) {
+      return;
+    }
+    tdlib.send(new TdApi.CreateVideoChat(chatId, "", 0, isRtmpStream), (groupCallId, error) -> UI.post(() -> {
+      if (context.isDestroyed()) {
+        return;
+      }
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), android.widget.Toast.LENGTH_SHORT);
+        return;
+      }
+      if (isRtmpStream) {
+        org.thunderdog.challegram.ui.RtmpUrlController c = new org.thunderdog.challegram.ui.RtmpUrlController(context.context(), tdlib);
+        c.setArguments(new org.thunderdog.challegram.ui.RtmpUrlController.Args(chatId));
+        context.navigateTo(c);
+      } else if (groupCallId != null) {
+        joinVideoChat(context, groupCallId.id);
+      }
+    }));
+  }
+
   // Suggestions by emoji
 
   @Retention(RetentionPolicy.SOURCE)
