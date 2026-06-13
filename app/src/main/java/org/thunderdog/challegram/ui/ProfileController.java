@@ -694,6 +694,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.Stats);
     }
 
+    if (mode == Mode.CHANNEL && Settings.instance().getMessagesFilterSetting(Settings.MESSAGES_FILTER_ENABLED)) {
+      ids.append(R.id.more_btn_messagesFilter);
+      strings.append(R.string.MessagesFilter);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -788,6 +793,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           return;
         } else if (id == R.id.more_btn_join) {
           joinChannel();
+          return;
+        } else if (id == R.id.more_btn_messagesFilter) {
+          tdlib.ui().openMessageFilterSettings(this, getChatId(), null);
           return;
         }
         break;
@@ -1837,7 +1845,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
                 break;
               }
               case MODE_SUPERGROUP:
-              case MODE_CHANNEL: {
+              case Mode.CHANNEL: {
                 if (supergroupFull != null) {
                   StringBuilder b = new StringBuilder();
                   b.append(Lang.plural(R.string.xMembers, supergroupFull.memberCount));

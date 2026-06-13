@@ -645,6 +645,8 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_tweakSettings, R.drawable.baseline_extension_24, R.string.TweakSettings));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_communityFeatures, R.drawable.baseline_group_24, R.string.CommunityFeatures));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     if (Settings.instance().chatFoldersEnabled()) {
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatFolders, R.drawable.baseline_folder_copy_24, R.string.ChatFolders));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
@@ -1220,6 +1222,8 @@ public class SettingsController extends ViewController<Void> implements
       SettingsThemeController c = new SettingsThemeController(context, tdlib);
       c.setArguments(new SettingsThemeController.Args(SettingsThemeController.MODE_INTERFACE_OPTIONS));
       navigateTo(c);
+    } else if (viewId == R.id.btn_communityFeatures) {
+      navigateTo(new SettingsCommunityController(context, tdlib));
     } else if (viewId == R.id.btn_chatSettings) {
       navigateTo(new SettingsDataController(context, tdlib));
     } else if (viewId == R.id.btn_privacySettings) {
