@@ -25,6 +25,7 @@ import org.thunderdog.challegram.telegram.GroupCallListener;
 import org.thunderdog.challegram.telegram.GroupCallManager;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
 import java.util.ArrayList;
@@ -122,6 +123,8 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       }
     } else if (id == R.id.btn_groupCallMute) {
       tdlib.groupCalls().setMicMuted(!tdlib.groupCalls().isMicMuted());
+    } else {
+      handleAdminClick(id);
     }
   }
 
@@ -245,6 +248,51 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     }
 
+    // Admin actions.
+    if (groupCall.canBeManaged) {
+      items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.GroupCallManage));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      boolean first = true;
+      if (groupCall.scheduledStartDate != 0) {
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallStart, R.drawable.baseline_call_24, R.string.GroupCallStartNow)
+          .setTextColorId(ColorId.textNeutral));
+        first = false;
+      }
+      if (!first) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      }
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallInvite, R.drawable.baseline_link_24, R.string.GroupCallCopyInvite));
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallRename, R.drawable.baseline_edit_24, R.string.GroupCallRename));
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallEnd, R.drawable.baseline_call_end_24, R.string.GroupCallEnd)
+        .setTextColorId(ColorId.textNegative));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
+
     adapter.setItems(items, false);
+  }
+
+  private void handleAdminClick (int id) {
+    if (id == R.id.btn_groupCallStart) {
+      tdlib.send(new TdApi.StartScheduledVideoChat(groupCallId), tdlib.typedOkHandler());
+    } else if (id == R.id.btn_groupCallInvite) {
+      tdlib.send(new TdApi.GetVideoChatInviteLink(groupCallId, false), (result, error) -> runOnUiThreadOptional(() -> {
+        if (error != null) {
+          UI.showToast(TD.toErrorString(error), android.widget.Toast.LENGTH_SHORT);
+        } else if (result != null) {
+          UI.copyText(result.url, R.string.CopiedLink);
+        }
+      }));
+    } else if (id == R.id.btn_groupCallRename) {
+      openInputAlert(Lang.getString(R.string.GroupCallRename), Lang.getString(R.string.GroupCallType),
+        R.string.Save, R.string.Cancel, groupCall != null ? groupCall.title : "", (inputView, title) -> {
+          tdlib.send(new TdApi.SetVideoChatTitle(groupCallId, title != null ? title.trim() : ""), tdlib.typedOkHandler());
+          return true;
+        }, true);
+    } else if (id == R.id.btn_groupCallEnd) {
+      showConfirm(Lang.getString(R.string.GroupCallEndConfirm), Lang.getString(R.string.GroupCallEnd), () ->
+        tdlib.send(new TdApi.EndGroupCall(groupCallId), tdlib.typedOkHandler()));
+    }
   }
 }

@@ -11482,6 +11482,25 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     return canInviteUsers(chat, false);
   }
 
+  /** Whether the current user can create/manage video chats (group calls) in the chat. */
+  public boolean canManageVideoChats (TdApi.Chat chat) {
+    if (chat == null || chat.id == 0 || ChatId.isUserChat(chat.id) || ChatId.isSecret(chat.id)) {
+      return false;
+    }
+    TdApi.ChatMemberStatus status = chatStatus(chat.id);
+    if (status != null) {
+      switch (status.getConstructor()) {
+        case TdApi.ChatMemberStatusCreator.CONSTRUCTOR:
+          return true;
+        case TdApi.ChatMemberStatusAdministrator.CONSTRUCTOR:
+          return ((TdApi.ChatMemberStatusAdministrator) status).rights.canManageVideoChats;
+        default:
+          return false;
+      }
+    }
+    return false;
+  }
+
   public boolean canSendPolls (long chatId) {
     if (chatId == 0)
       return false;

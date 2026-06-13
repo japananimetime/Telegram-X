@@ -725,6 +725,15 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.Monetization);
     }
 
+    TdApi.Chat currentChat = tdlib.chat(getChatId());
+    boolean noActiveVideoChat = currentChat == null || currentChat.videoChat == null || currentChat.videoChat.groupCallId == 0;
+    if (noActiveVideoChat && tdlib.canManageVideoChats(currentChat)) {
+      ids.append(R.id.more_btn_startCall);
+      strings.append(isChannel() ? R.string.StartLiveStream : R.string.StartVoiceChat);
+      ids.append(R.id.more_btn_startStream);
+      strings.append(R.string.StartRtmpStream);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -822,6 +831,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           openChatBoost();
         } else if (id == R.id.more_btn_monetization) {
           openMonetization();
+        } else if (id == R.id.more_btn_startCall) {
+          tdlib.ui().createVideoChat(this, getChatId(), false);
+        } else if (id == R.id.more_btn_startStream) {
+          tdlib.ui().createVideoChat(this, getChatId(), true);
         } else if (id == R.id.more_btn_createStory) {
           openStoryCompose();
         } else if (id == R.id.more_btn_editDescription) {

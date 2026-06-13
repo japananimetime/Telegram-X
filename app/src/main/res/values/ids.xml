@@ -672,6 +672,16 @@
   <item type="id" name="btn_openGroupCall" />
   <item type="id" name="btn_groupCallJoinLeave" />
   <item type="id" name="btn_groupCallMute" />
+  <item type="id" name="btn_groupCallInvite" />
+  <item type="id" name="btn_groupCallRename" />
+  <item type="id" name="btn_groupCallStart" />
+  <item type="id" name="btn_groupCallEnd" />
+  <item type="id" name="more_btn_startCall" />
+  <item type="id" name="more_btn_startStream" />
+  <item type="id" name="controller_rtmpUrl" />
+  <item type="id" name="btn_rtmpServerUrl" />
+  <item type="id" name="btn_rtmpStreamKey" />
+  <item type="id" name="btn_rtmpRevoke" />
   <item type="id" name="btn_savedMessagesTopic" />
   <item type="id" name="btn_savedMessagesSettings" />
   <item type="id" name="controller_stickerSets" />
