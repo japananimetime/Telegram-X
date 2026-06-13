@@ -21,6 +21,7 @@ import androidx.annotation.StringRes;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.component.dialogs.ChatView;
 import org.thunderdog.challegram.component.user.UserView;
 import org.thunderdog.challegram.core.Lang;
@@ -311,7 +312,7 @@ public class TGUser implements UserProvider {
     String statusText;
     if ((flags & FLAG_CUSTOM_STATUS_TEXT) != 0) {
       return true;
-    } else if (((flags & FLAG_CONTACT) != 0 || (flags & FLAG_SHOW_PHONE_NUMBER) != 0) && user != null) {
+    } else if (((flags & FLAG_CONTACT) != 0 || (flags & FLAG_SHOW_PHONE_NUMBER) != 0) && user != null && !CommunityConfig.hidePhoneNumber) {
       statusText = Strings.formatPhone(user.phoneNumber);
     } else if ((flags & FLAG_USERNAME) != 0 && user != null && !Td.isEmpty(user.usernames)) {
       TdApi.Usernames usernames = user.usernames;

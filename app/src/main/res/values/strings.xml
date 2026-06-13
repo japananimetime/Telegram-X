@@ -5900,4 +5900,66 @@
   <string name="SavedMessagesTagLabelHint">Enter a label for this tag (up to 12 characters)</string>
   <string name="SavedMessagesTagLabelPremiumRequired">Tag labels require a **Telegram Premium** subscription.</string>
 
+  <!-- RESOLUTION STRING SECTION -->
+
+  <string name="ResolutionOption">Photo Resolution Selector</string>
+  <string name="ResolutionDesc">Resolution Selector (Experimental): Possible instability or app crashes.</string>
+  <string name="ResolutionLow">Low (800px)</string>
+  <string name="ResolutionMedium">Medium (1280px)</string>
+  <string name="ResolutionHigh">High (2560px)</string>
+
+  <!-- CLEAR CALLS STRING SECTION -->
+
+  <string name="AreYouSureClearCalls">Do you want to delete all recent calls?</string>
+  <string name="ClearRecentCalls">Clear recent calls</string>
+
+  <!-- MESSAGES FILTER STRING SECTION -->
+
+  <string name="MessagesFilter">Messages Filter</string>
+  <string name="MessagesFilterDesc">When enabled, content of messages that match at least one of the criteria below, will be hidden and minimized.</string>
+
+  <string name="MessagesFilterGroupsAndChats">Groups and Chats</string>
+  <string name="MessagesFilterHideBlockedSenders">Blocked senders in groups</string>
+  <string name="MessagesFilterHideBlockedSendersDesc">Hide message content in group chats, if it comes from a blocked sender.</string>
+  <string name="MessagesFilterHideBlockedSendersMentions">Mentions of blocked chats</string>
+  <string name="MessagesFilterHideBlockedSendersMentionsDesc">Hide message content, if it includes a reply, mention or direct link to the blocked chat.</string>
+
+  <string name="MessagesFilterChannels">Channels</string>
+  <string name="MessagesFilterChannelsManage">Manage Filtered Channels</string>
+  <string name="MessagesFilterFilteredChannels">Filtered Channels</string>
+  <string name="MessagesFilterBlockedSendersManage">Manage Blocked Senders</string>
+
+  <string name="MessagesFilterShowMessage">Show Message</string>
+
+  <string name="ChatMessagesFilterInfo">Hides all messages with links to other chats, channels or external sites.</string>
+  <string name="ChatMessagesFilterInternal">Telegram links</string>
+  <string name="ChatMessagesFilterExternal">External links</string>
+  <string name="ChatMessagesFilterNone">None</string>
+
+  <string name="MessagesFilterUnknownChat">Unknown Chat</string>
+
+  <!-- COMMUNITY FEATURES STRING SECTION -->
+
+  <string name="CommunityFeatures">Community Features</string>
+  <string name="CommunityFeaturesDesc">Optional features adapted from community forks. All features are disabled by default.</string>
+
+  <string name="CommunityAppearance">Appearance</string>
+  <string name="HidePhoneNumber">Hide phone number</string>
+  <string name="SquareAvatars">Square avatars</string>
+  <string name="BlurDrawer">Blur drawer background</string>
+  <string name="RoundedStickers">Rounded stickers</string>
+
+  <string name="CommunityChatFeatures">Chat</string>
+  <string name="DisableReactions">Disable reactions</string>
+  <string name="HideStickerTimestamp">Hide sticker timestamp</string>
+  <string name="RememberSendOptions">Remember send options</string>
+  <string name="RememberSendOptionsDesc">Remember silent/scheduled message settings between sessions.</string>
+
+  <string name="CommunityInputButtons">Input Buttons</string>
+  <string name="DisableCameraButton">Hide camera button</string>
+  <string name="DisableRecordButton">Hide voice record button</string>
+
+  <string name="CommunityProfile">Profile</string>
+  <string name="ShowIdInProfile">Show ID in profile</string>
+  <string name="ShowIdInProfileDesc">Display user and chat IDs in profile pages.</string>
 </resources>

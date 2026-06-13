@@ -78,6 +78,7 @@ import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.BuildConfig;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.MainActivity;
 import org.thunderdog.challegram.R;
@@ -1268,11 +1269,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (scheduleButton != null) {
       attachButtons.addView(scheduleButton);
     }
-    if (cameraButton != null) {
+    if (cameraButton != null && !CommunityConfig.disableCameraButton) {
       attachButtons.addView(cameraButton);
     }
     attachButtons.addView(mediaButton);
-    attachButtons.addView(recordButton);
+    // Community feature: disable record button
+    if (!CommunityConfig.disableRecordButton) {
+      attachButtons.addView(recordButton);
+    }
     attachButtons.updatePivot();
 
     params = new RelativeLayout.LayoutParams(Screen.dp(55f), Screen.dp(49f));
@@ -2102,6 +2106,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else if (viewId == R.id.btn_silent) {
       if (tdlib.isChannel(chat.id)) {
         boolean silent = silentButton.toggle();
+        // Community feature: remember send options
+        if (CommunityConfig.rememberSendOptions) {
+          CommunityConfig.setLastSilentMode(silent);
+        }
         tdlib.client().send(new TdApi.ToggleChatDefaultDisableNotification(chat.id, silent), tdlib.okHandler());
         int[] pos = new int[2];
         Views.getPosition(bottomWrap, pos);
@@ -5875,6 +5883,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
           tdlib.ui().saveGifs(((List<TD.DownloadedFile>) selectedMessageTag));
         }
         return true;
+      } else if (id == R.id.btn_messageChangeMessageFilterVisibility) {
+        selectedMessage.setIsHiddenByMessagesFilter(!selectedMessage.isHiddenByMessagesFilter(), true);
+        return true;
       } else if (id == R.id.btn_saveFile) {
         if (selectedMessageTag != null) {
           if (!selectedMessage.canBeSaved()) {
@@ -8058,7 +8069,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
         attachButtons.updatePivot();
       }
       if (visible) {
-        silentButton.forceState(tdlib.chatDefaultDisableNotifications(getChatId()));
+        // Community feature: remember send options
+        boolean silentState = CommunityConfig.rememberSendOptions
+          ? CommunityConfig.getLastSilentMode()
+          : tdlib.chatDefaultDisableNotifications(getChatId());
+        silentButton.forceState(silentState);
       }
     }
   }
@@ -12064,6 +12079,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public boolean isCameraButtonVisibleOnAttachPanel () {
+    // Community feature: disable camera button
+    if (CommunityConfig.disableCameraButton) {
+      return false;
+    }
     return !canSelectSender();
   }
 
