@@ -2803,6 +2803,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     tdlib.contacts().removeListener(this);
     tdlib.context().dateManager().removeListener(this);
     tdlib.listeners().removeChatFolderListener(chatFolderId(), this);
+    storyListListener = null; // drop the strong ref so the weak story-list listener can be collected
+    storyBarView = null;
   }
 
   // Updates
@@ -3252,6 +3254,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   private void loadActiveStories () {
     if (adapter == null) {
+      return;
+    }
+    // Subscribe only once: SortedList has no removeListener, so re-initializing on
+    // every story-bar toggle would stack duplicate (weakly-held) listeners.
+    if (storyListListener != null) {
       return;
     }
     // Get the main story list and subscribe to updates

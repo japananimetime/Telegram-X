@@ -17,7 +17,6 @@ package org.thunderdog.challegram.ui;
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -30,7 +29,6 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.Screen;
-import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.AttachDelegate;
 import org.thunderdog.challegram.widget.GiftView;
@@ -74,6 +72,13 @@ public class GiftAuctionsController extends RecyclerViewController<Void> impleme
     adapter = new AuctionsAdapter();
 
     GridLayoutManager manager = new GridLayoutManager(context, SPAN_COUNT);
+    manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+      @Override
+      public int getSpanSize (int position) {
+        // The empty-state row spans the full width.
+        return auctions.isEmpty() ? SPAN_COUNT : 1;
+      }
+    });
     recyclerView.setLayoutManager(manager);
     recyclerView.setAdapter(adapter);
 
@@ -92,9 +97,6 @@ public class GiftAuctionsController extends RecyclerViewController<Void> impleme
     }
     if (adapter != null) {
       adapter.notifyDataSetChanged();
-    }
-    if (auctions.isEmpty()) {
-      UI.showToast(R.string.GiftAuctionsEmpty, Toast.LENGTH_SHORT);
     }
   }
 
@@ -179,10 +181,27 @@ public class GiftAuctionsController extends RecyclerViewController<Void> impleme
     }
   }
 
+  private static final int VIEW_TYPE_AUCTION = 0;
+  private static final int VIEW_TYPE_EMPTY = 1;
+
   private class AuctionsAdapter extends RecyclerView.Adapter<AuctionHolder> {
+    @Override
+    public int getItemViewType (int position) {
+      return auctions.isEmpty() ? VIEW_TYPE_EMPTY : VIEW_TYPE_AUCTION;
+    }
+
     @NonNull
     @Override
     public AuctionHolder onCreateViewHolder (@NonNull ViewGroup parent, int viewType) {
+      if (viewType == VIEW_TYPE_EMPTY) {
+        android.widget.TextView emptyView = new android.widget.TextView(context());
+        emptyView.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(180)));
+        emptyView.setGravity(android.view.Gravity.CENTER);
+        emptyView.setText(Lang.getString(R.string.GiftAuctionsEmpty));
+        emptyView.setTextColor(org.thunderdog.challegram.theme.Theme.textDecentColor());
+        addThemeTextDecentColorListener(emptyView);
+        return new AuctionHolder(emptyView);
+      }
       GiftView view = new GiftView(context());
       view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(112)));
       view.setOnClickListener(v -> {
@@ -196,28 +215,36 @@ public class GiftAuctionsController extends RecyclerViewController<Void> impleme
 
     @Override
     public void onBindViewHolder (@NonNull AuctionHolder holder, int position) {
-      TdApi.GiftAuctionState s = auctions.get(position);
-      ((GiftView) holder.itemView).setAuctionGift(tdlib, s, bidLabel(s));
+      if (holder.itemView instanceof GiftView && !auctions.isEmpty()) {
+        TdApi.GiftAuctionState s = auctions.get(position);
+        ((GiftView) holder.itemView).setAuctionGift(tdlib, s, bidLabel(s));
+      }
     }
 
     @Override
     public void onViewAttachedToWindow (@NonNull AuctionHolder holder) {
-      ((AttachDelegate) holder.itemView).attach();
+      if (holder.itemView instanceof AttachDelegate) {
+        ((AttachDelegate) holder.itemView).attach();
+      }
     }
 
     @Override
     public void onViewDetachedFromWindow (@NonNull AuctionHolder holder) {
-      ((AttachDelegate) holder.itemView).detach();
+      if (holder.itemView instanceof AttachDelegate) {
+        ((AttachDelegate) holder.itemView).detach();
+      }
     }
 
     @Override
     public void onViewRecycled (@NonNull AuctionHolder holder) {
-      ((GiftView) holder.itemView).setAuctionGift(tdlib, null, null);
+      if (holder.itemView instanceof GiftView) {
+        ((GiftView) holder.itemView).setAuctionGift(tdlib, null, null);
+      }
     }
 
     @Override
     public int getItemCount () {
-      return auctions.size();
+      return auctions.isEmpty() ? 1 : auctions.size();
     }
   }
 

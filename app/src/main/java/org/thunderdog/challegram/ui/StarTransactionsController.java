@@ -95,6 +95,17 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
     });
   }
 
+  /** Formats a Star balance, including the fractional nanostar part when present (1 star = 1e9 nanostars). */
+  private static CharSequence formatStarAmount (TdApi.StarAmount amount) {
+    if (amount.nanostarCount == 0) {
+      return Lang.plural(R.string.xStars, amount.starCount);
+    }
+    java.math.BigDecimal value = java.math.BigDecimal.valueOf(amount.starCount)
+      .add(java.math.BigDecimal.valueOf(amount.nanostarCount, 9))
+      .stripTrailingZeros();
+    return Lang.getString(R.string.StarsBalanceFormat, value.toPlainString());
+  }
+
   private void buildLoadingCells() {
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.StarTransactions));
@@ -153,8 +164,7 @@ public class StarTransactionsController extends RecyclerViewController<Void> imp
     // Balance header
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.StarsBalance));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    String balanceText = Lang.plural(R.string.xStars, transactions.starAmount.starCount);
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, balanceText));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, formatStarAmount(transactions.starAmount)));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     // Transactions
