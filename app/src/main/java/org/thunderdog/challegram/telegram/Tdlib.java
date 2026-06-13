@@ -9347,7 +9347,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateSpeechRecognitionTrial (TdApi.UpdateSpeechRecognitionTrial update) {
-    // TODO
+    SpeechRecognitionManager.instance().updateTrialInfo(
+      update.maxMediaDuration,
+      update.weeklyCount,
+      update.leftCount,
+      update.nextResetDate
+    );
   }
 
   @TdlibThread
@@ -10277,7 +10282,6 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       case TdApi.UpdateLiveStoryTopDonors.CONSTRUCTOR:
       case TdApi.UpdateGiftAuctionState.CONSTRUCTOR:
       case TdApi.UpdateActiveGiftAuctions.CONSTRUCTOR:
-      case TdApi.UpdateStakeDiceState.CONSTRUCTOR:
         break;
 
       // for bots only.
@@ -10641,7 +10645,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
     final String hashtag;
     if (!BuildConfig.LATEST_FLAVOR) {
-      hashtag = abiFlavor + StringUtils.ucfirst(BuildConfig.FLAVOR_SDK);
+      hashtag = abiFlavor + StringUtils.ucfirst(BuildConfig.FLAVOR_SDK, null);
     } else {
       hashtag = abiFlavor;
     }

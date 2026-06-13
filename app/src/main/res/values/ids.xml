@@ -252,6 +252,8 @@
   <item type="id" name="controller_chatFolderInviteLink" />
   <item type="id" name="controller_editChatFolders" />
   <item type="id" name="controller_selectChats" />
+  <item type="id" name="controller_voiceTranscription" />
+  <item type="id" name="controller_editTranscriptionProvider" />
 
   <item type="id" name="separator" />
 
@@ -298,6 +300,9 @@
   <item type="id" name="btn_date" />
   <item type="id" name="btn_buyPremium" />
   <item type="id" name="input_customTitle" />
+  <item type="id" name="input_providerName" />
+  <item type="id" name="input_apiEndpoint" />
+  <item type="id" name="input_apiKey" />
   <item type="id" name="avatar" />
   <item type="id" name="chat" />
   <item type="id" name="message" />
@@ -618,6 +623,10 @@
   <item type="id" name="btn_proxyTelegram" />
   <item type="id" name="btn_proxyHttp" />
   <item type="id" name="btn_proxyQr" />
+  <item type="id" name="btn_transcriptionProvider" />
+  <item type="id" name="btn_addTranscriptionProvider" />
+  <item type="id" name="btn_autoTranscribe" />
+  <item type="id" name="btn_voiceTranscription" />
   <item type="id" name="btn_showAdvanced" />
   <item type="id" name="btn_autoplayGIFs" />
   <item type="id" name="btn_quickTranslate" />
