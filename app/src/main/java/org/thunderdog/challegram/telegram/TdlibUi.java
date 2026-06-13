@@ -7540,6 +7540,26 @@ public class TdlibUi extends Handler {
     context.navigateTo(c);
   }
 
+  /**
+   * Joins a video chat with two-way audio, gating on the RECORD_AUDIO permission.
+   * Drives {@link GroupCallManager}; the microphone starts muted.
+   */
+  public void joinVideoChat (ViewController<?> context, int groupCallId) {
+    if (groupCallId == 0) {
+      return;
+    }
+    org.thunderdog.challegram.util.Permissions permissions = context.context().permissions();
+    if (permissions.canRecordAudio()) {
+      tdlib.groupCalls().joinVideoChat(groupCallId);
+    } else {
+      permissions.requestRecordAudioPermissions(granted -> {
+        if (granted) {
+          tdlib.groupCalls().joinVideoChat(groupCallId);
+        }
+      });
+    }
+  }
+
   // Suggestions by emoji
 
   @Retention(RetentionPolicy.SOURCE)
