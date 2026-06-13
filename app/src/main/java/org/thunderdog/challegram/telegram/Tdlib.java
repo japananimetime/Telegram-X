@@ -9784,14 +9784,35 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     // TODO ?
   }
 
+  private TdApi.StarAmount ownedStarCount;
+  private long ownedTonCount;
+
   @TdlibThread
   private void updateOwnedStarCount (TdApi.UpdateOwnedStarCount update) {
-    // TODO(stars)
+    synchronized (dataLock) {
+      this.ownedStarCount = update.starAmount;
+    }
   }
 
   @TdlibThread
   private void updateOwnedTonCount (TdApi.UpdateOwnedTonCount update) {
-    // TODO(ton)
+    synchronized (dataLock) {
+      this.ownedTonCount = update.tonAmount;
+    }
+  }
+
+  /** The account's current owned Star balance (UpdateOwnedStarCount), or null if unknown. */
+  public TdApi.StarAmount getOwnedStarCount () {
+    synchronized (dataLock) {
+      return ownedStarCount;
+    }
+  }
+
+  /** The account's current owned TON balance in nanotons (UpdateOwnedTonCount). */
+  public long getOwnedTonCount () {
+    synchronized (dataLock) {
+      return ownedTonCount;
+    }
   }
 
   @TdlibThread
