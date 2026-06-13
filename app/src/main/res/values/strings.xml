@@ -6457,4 +6457,5 @@
   <string name="MessageEffectPremium">Premium</string>
   <string name="SummarizeProgress">Generating summary…</string>
   <string name="ViewForum">View forum</string>
+  <string name="Summarize">Summarize</string>
 </resources>

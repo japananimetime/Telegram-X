@@ -6095,6 +6095,18 @@ public class MessagesController extends ViewController<MessagesController.Argume
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
         startTranslateMessages(selectedMessage);
         return true;
+      } else if (id == R.id.btn_messageSummarize) {
+        cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        summarizeMessage(selectedMessage.getNewestMessage());
+        return true;
+      } else if (id == R.id.btn_messageTranscribe) {
+        cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        selectedMessage.recognizeSpeech();
+        return true;
+      } else if (id == R.id.btn_messageFactCheck) {
+        cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        editFactCheck(selectedMessage);
+        return true;
       } else if (id == R.id.btn_chatTranslateOff) {
         stopTranslateMessages(selectedMessage);
         return true;
@@ -13015,6 +13027,46 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // Translate
 
   TranslationControllerV2.Wrapper translationPopup;
+
+  private void editFactCheck (TGMessage message) {
+    if (message == null) {
+      return;
+    }
+    TdApi.FactCheck current = message.getFactCheck();
+    CharSequence value = current != null && current.text != null ? TD.toCharSequence(current.text) : null;
+    openInputAlert(
+      Lang.getString(current != null ? R.string.FactCheckEdit : R.string.FactCheckAdd),
+      Lang.getString(R.string.FactCheckHint),
+      R.string.Save, R.string.Cancel, value,
+      (inputView, result) -> {
+        String trimmed = result != null ? result.trim() : "";
+        message.setFactCheck(StringUtils.isEmpty(trimmed) ? null : new TdApi.FormattedText(trimmed, new TdApi.TextEntity[0]));
+        return true;
+      },
+      false
+    );
+  }
+
+  private void summarizeMessage (TdApi.Message message) {
+    if (message == null) {
+      return;
+    }
+    UI.showToast(R.string.SummarizeProgress, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.SummarizeMessage(message.chatId, message.id, "", ""), (summary, error) -> runOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        showOptions(
+          TD.toCharSequence(summary),
+          new int[] {R.id.btn_close},
+          new String[] {Lang.getString(R.string.OK)},
+          null,
+          new int[] {R.drawable.baseline_check_circle_24},
+          null
+        );
+      }
+    }));
+  }
 
   public void startTranslateMessages (TGMessage message) {
     startTranslateMessages(message, false);

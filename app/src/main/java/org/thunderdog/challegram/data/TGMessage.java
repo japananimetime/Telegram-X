@@ -8642,6 +8642,33 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     });
   }
 
+  private TdApi.SpeechRecognitionResult getSpeechRecognitionResult () {
+    switch (msg.content.getConstructor()) {
+      case TdApi.MessageVoiceNote.CONSTRUCTOR:
+        return ((TdApi.MessageVoiceNote) msg.content).voiceNote.speechRecognitionResult;
+      case TdApi.MessageVideoNote.CONSTRUCTOR:
+        return ((TdApi.MessageVideoNote) msg.content).videoNote.speechRecognitionResult;
+      default:
+        return null;
+    }
+  }
+
+  public final boolean canRecognizeSpeech () {
+    TdApi.SpeechRecognitionResult result = getSpeechRecognitionResult();
+    // Offer transcription for voice/video notes that don't already have final text.
+    switch (msg.content.getConstructor()) {
+      case TdApi.MessageVoiceNote.CONSTRUCTOR:
+      case TdApi.MessageVideoNote.CONSTRUCTOR:
+        return result == null || result.getConstructor() == TdApi.SpeechRecognitionResultError.CONSTRUCTOR;
+      default:
+        return false;
+    }
+  }
+
+  public final boolean canSetFactCheck () {
+    return lastMessageProperties().canSetFactCheck;
+  }
+
   public static TGMessage valueOfError (MessagesManager context, TdApi.Message msg, Throwable error) {
     String text = Lang.getString(R.string.FailureMessageText);
 
