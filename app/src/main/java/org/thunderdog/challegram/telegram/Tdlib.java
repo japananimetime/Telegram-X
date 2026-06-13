@@ -126,6 +126,7 @@ import me.vkryl.core.lambda.CancellableRunnable;
 import me.vkryl.core.lambda.Future;
 import me.vkryl.core.lambda.RunnableBool;
 import me.vkryl.core.lambda.RunnableData;
+import me.vkryl.core.reference.ReferenceList;
 import me.vkryl.core.lambda.RunnableInt;
 import me.vkryl.core.lambda.RunnableLong;
 import me.vkryl.core.util.ConditionalExecutor;
@@ -7079,6 +7080,93 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     ui().sendMessage(ui().obtainMessage(MSG_ACTION_CALL_BARS, callId, barsCount));
   }
 
+  // Updates: GIFT AUCTIONS (Slice 6)
+
+  /**
+   * Listener for gift-auction updates. Mirrors the lightweight, feature-scoped
+   * listener approach used by {@link #webAppMessageSentListeners}: the listeners
+   * are kept directly on Tdlib (rather than via the heavyweight
+   * {@link TdlibListeners}/global system) because auctions are a narrow,
+   * self-contained surface. Callbacks are dispatched on the UI thread.
+   */
+  public interface GiftAuctionListener {
+    /** One auction's state changed ({@link TdApi.UpdateGiftAuctionState}). */
+    default void onGiftAuctionStateChanged (TdApi.GiftAuctionState state) { }
+    /** The set of active auctions the user takes part in changed ({@link TdApi.UpdateActiveGiftAuctions}). */
+    default void onActiveGiftAuctionsChanged (TdApi.GiftAuctionState[] states) { }
+  }
+
+  private final ReferenceList<GiftAuctionListener> giftAuctionListeners = new ReferenceList<>();
+  // Most recent UpdateActiveGiftAuctions snapshot. There is no "get active
+  // auctions" function in TDLib, so the list controller seeds itself from this
+  // snapshot and then keeps in sync via live updates.
+  private @Nullable TdApi.GiftAuctionState[] activeGiftAuctions;
+  private final Object giftAuctionLock = new Object();
+
+  public void addGiftAuctionListener (GiftAuctionListener listener) {
+    giftAuctionListeners.add(listener);
+  }
+
+  public void removeGiftAuctionListener (GiftAuctionListener listener) {
+    giftAuctionListeners.remove(listener);
+  }
+
+  /** Returns the latest active-auctions snapshot (never null), for seeding the list screen. */
+  public TdApi.GiftAuctionState[] activeGiftAuctions () {
+    synchronized (giftAuctionLock) {
+      return activeGiftAuctions != null ? activeGiftAuctions : new TdApi.GiftAuctionState[0];
+    }
+  }
+
+  @TdlibThread
+  private void updateGiftAuctionState (TdApi.UpdateGiftAuctionState update) {
+    if (update == null || update.state == null) {
+      return;
+    }
+    final TdApi.GiftAuctionState state = update.state;
+    // Keep the cached active-auctions snapshot in sync for the list screen.
+    synchronized (giftAuctionLock) {
+      if (activeGiftAuctions != null) {
+        String auctionId = auctionIdOf(state);
+        if (auctionId != null) {
+          for (int i = 0; i < activeGiftAuctions.length; i++) {
+            if (auctionId.equals(auctionIdOf(activeGiftAuctions[i]))) {
+              activeGiftAuctions[i] = state;
+              break;
+            }
+          }
+        }
+      }
+    }
+    UI.post(() -> {
+      for (GiftAuctionListener listener : giftAuctionListeners) {
+        listener.onGiftAuctionStateChanged(state);
+      }
+    });
+  }
+
+  @TdlibThread
+  private void updateActiveGiftAuctions (TdApi.UpdateActiveGiftAuctions update) {
+    final TdApi.GiftAuctionState[] states = update != null && update.states != null
+      ? update.states : new TdApi.GiftAuctionState[0];
+    synchronized (giftAuctionLock) {
+      this.activeGiftAuctions = states;
+    }
+    UI.post(() -> {
+      for (GiftAuctionListener listener : giftAuctionListeners) {
+        listener.onActiveGiftAuctionsChanged(states);
+      }
+    });
+  }
+
+  private static @Nullable String auctionIdOf (@Nullable TdApi.GiftAuctionState state) {
+    if (state != null && state.gift != null && state.gift.auctionInfo != null) {
+      return state.gift.auctionInfo.id;
+    }
+    return null;
+  }
+
+
   // Updates: NOTIFICATIONS
 
   private boolean havePendingNotifications, haveInitializedNotifications;
@@ -10274,9 +10362,15 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
 
 
+      case TdApi.UpdateGiftAuctionState.CONSTRUCTOR: {
+        updateGiftAuctionState((TdApi.UpdateGiftAuctionState) update);
+        break;
+      }
+      case TdApi.UpdateActiveGiftAuctions.CONSTRUCTOR: {
+        updateActiveGiftAuctions((TdApi.UpdateActiveGiftAuctions) update);
+        break;
+      }
       case TdApi.UpdateLiveStoryTopDonors.CONSTRUCTOR:
-      case TdApi.UpdateGiftAuctionState.CONSTRUCTOR:
-      case TdApi.UpdateActiveGiftAuctions.CONSTRUCTOR:
       case TdApi.UpdateStakeDiceState.CONSTRUCTOR:
         break;
 

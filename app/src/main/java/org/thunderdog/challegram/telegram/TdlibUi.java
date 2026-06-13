@@ -3887,6 +3887,28 @@ public class TdlibUi extends Handler {
     }
   }
 
+  public static boolean isStarsBalanceLowError (@Nullable TdApi.Error error) {
+    if (error == null || error.message == null) {
+      return false;
+    }
+    String m = error.message;
+    return m.equals("BALANCE_TOO_LOW") || m.contains("not enough stars") || m.contains("STARS_BALANCE_TOO_LOW");
+  }
+
+  /**
+   * Shows an "insufficient Stars" prompt for a failed Stars purchase. The actual
+   * top-up flow lives in the premium-billing feature (SettingsStarsController), so the
+   * standalone gifts branch just surfaces the message; the combined build wires the
+   * buy-Stars action.
+   */
+  public boolean showStarsBalanceLowPrompt (ViewController<?> context, @Nullable TdApi.Error error, long requiredStarCount) {
+    if (!isStarsBalanceLowError(error)) {
+      return false;
+    }
+    UI.showToast(R.string.GiftStarsTooLow, Toast.LENGTH_LONG);
+    return true;
+  }
+
   public void editLoginEmail (ViewController<?> context) {
     context.tdlib().send(new TdApi.GetPasswordState(), (passwordState, error) -> {
       if (passwordState != null) {
