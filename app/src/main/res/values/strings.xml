@@ -5666,4 +5666,16 @@
   <string name="RestrictedContent">Restricted Content</string>
   <string name="SensitiveContent">Sensitive Content</string>
 
+  <string name="Reload">Reload</string>
+  <string name="WebApp">Web App</string>
+  <string name="WebAppCloseConfirmation">Are you sure you want to close this app?</string>
+  <string name="WebAppDownloadFile">Download %1$s?</string>
+  <string name="WebAppEmojiStatusAccess">Allow this bot to set your emoji status?</string>
+  <string name="WebAppLocationAccess">Allow this bot to access your location?</string>
+  <string name="Close">Close</string>
+  <string name="CloseTopic">Close Topic</string>
+  <string name="Download">Download</string>
+  <string name="ShareYourPhoneNumberBot">Share your phone number with this bot?</string>
+  <string name="StarsPayConfirm">Pay %1$s Stars</string>
+  <string name="StarsPayConfirmMessage">Do you want to pay %1$s Stars for this item?</string>
 </resources>

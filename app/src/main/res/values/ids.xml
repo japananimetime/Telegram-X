@@ -1415,4 +1415,7 @@
   <item type="id" name="btn_playback_speed_1_2" />
   <item type="id" name="btn_playback_speed_1_5" />
   <item type="id" name="btn_playback_speed_2_0" />
+  <item type="id" name="menu_webApp" />
+  <item type="id" name="controller_webApp" />
+  <item type="id" name="btn_reload" />
 </resources>
