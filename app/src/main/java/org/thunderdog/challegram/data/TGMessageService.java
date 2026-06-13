@@ -488,8 +488,6 @@ public final class TGMessageService extends TGMessageServiceImpl {
             case TdApi.MessageGift.CONSTRUCTOR:
             case TdApi.MessageUpgradedGift.CONSTRUCTOR:
             case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-            case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-            case TdApi.MessageStakeDice.CONSTRUCTOR:
             case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
             case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
             case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
