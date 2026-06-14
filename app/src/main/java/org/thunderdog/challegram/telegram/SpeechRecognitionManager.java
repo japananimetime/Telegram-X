@@ -105,7 +105,10 @@ public class SpeechRecognitionManager {
    * @param provider The provider to register
    */
   public void registerProvider (@NonNull SpeechRecognitionProvider provider) {
-    providers.put(provider.getId(), provider);
+    SpeechRecognitionProvider previous = providers.put(provider.getId(), provider);
+    if (previous != null && previous != provider) {
+      previous.destroy();
+    }
   }
 
   /**
@@ -114,7 +117,10 @@ public class SpeechRecognitionManager {
    */
   public void unregisterProvider (@NonNull String providerId) {
     if (!providerId.equals(TDLIB_PROVIDER_ID)) {
-      providers.remove(providerId);
+      SpeechRecognitionProvider removed = providers.remove(providerId);
+      if (removed != null) {
+        removed.destroy();
+      }
       providerConfigs.remove(providerId);
       saveProviderConfigs();
 

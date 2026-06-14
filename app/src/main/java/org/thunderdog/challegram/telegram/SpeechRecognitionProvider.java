@@ -104,6 +104,12 @@ public interface SpeechRecognitionProvider {
   }
 
   /**
+   * Release any resources held by this provider (e.g. background executors).
+   * Called when the provider is unregistered or replaced.
+   */
+  default void destroy () { }
+
+  /**
    * Callback interface for transcription results
    */
   interface Callback {

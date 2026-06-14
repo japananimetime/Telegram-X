@@ -129,6 +129,11 @@ public class HttpSpeechRecognitionProvider implements SpeechRecognitionProvider 
   }
 
   @Override
+  public void destroy () {
+    executor.shutdownNow();
+  }
+
+  @Override
   public void transcribe (@NonNull Tdlib tdlib, long chatId, long messageId, @NonNull Callback callback) {
     String key = makeKey(chatId, messageId);
     synchronized (pendingRequests) {
