@@ -150,6 +150,7 @@ public class LocalSpeechRecognitionProvider implements SpeechRecognitionProvider
     tdlib.client().send(new TdApi.GetMessage(chatId, messageId), result -> {
       if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
         TdApi.Error error = (TdApi.Error) result;
+        synchronized (pendingRequests) { pendingRequests.remove(key); }
         notifyError(callback, "GET_MESSAGE_FAILED", error.message);
         return;
       }
@@ -158,6 +159,7 @@ public class LocalSpeechRecognitionProvider implements SpeechRecognitionProvider
       TdApi.File file = getAudioFile(message);
 
       if (file == null) {
+        synchronized (pendingRequests) { pendingRequests.remove(key); }
         notifyError(callback, "NO_AUDIO_FILE", "Message does not contain audio");
         return;
       }
@@ -169,6 +171,7 @@ public class LocalSpeechRecognitionProvider implements SpeechRecognitionProvider
             performTranscription(downloaded.local.path, chatId, messageId, callback);
           } else {
             String errorMsg = error != null ? error.message : "Failed to download audio file";
+            synchronized (pendingRequests) { pendingRequests.remove(key); }
             notifyError(callback, "DOWNLOAD_FAILED", errorMsg);
           }
         });
