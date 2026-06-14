@@ -487,8 +487,14 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
         @Override
         public void onSuccess (@NonNull String text) {
-          // Results come through message content update, not directly here for TDLib
-          // This callback is for non-TDLib providers
+          // Non-TDLib providers (HTTP / on-device) deliver their result here directly.
+          // The TDLib provider instead rides UpdateMessageContent and never calls this,
+          // so rendering here does not double up.
+          UI.post(() -> {
+            isTranscribing = false;
+            buildTranscriptionText(text);
+            context.invalidate();
+          });
         }
 
         @Override
