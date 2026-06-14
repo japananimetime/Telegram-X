@@ -34,6 +34,8 @@ import com.android.billingclient.api.QueryPurchasesParams;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibAccount;
+import org.thunderdog.challegram.telegram.TdlibManager;
 import org.thunderdog.challegram.tool.UI;
 
 import java.text.NumberFormat;
@@ -402,6 +404,9 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
         if (BillingConfig.DEBUG_BILLING) {
           Log.w(TAG, "CanPurchaseFromStore failed: %d %s", error.code, error.message);
         }
+        // Terminal failure before any purchase exists: drop the controller's listener so it
+        // isn't leaked through this singleton.
+        notifyResultListener(option.storeProductId, BillingClient.BillingResponseCode.ERROR);
         if (onCanceled != null) {
           onCanceled.run();
         }
@@ -433,6 +438,7 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
           Log.w(TAG, "Failed to query Stars product details: %s",
             getResponseCodeString(billingResult.getResponseCode()));
         }
+        notifyResultListener(option.storeProductId, BillingClient.BillingResponseCode.ERROR);
         if (onCanceled != null) {
           onCanceled.run();
         }
@@ -451,6 +457,7 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
         if (BillingConfig.DEBUG_BILLING) {
           Log.w(TAG, "Stars product not found in Play Store");
         }
+        notifyResultListener(option.storeProductId, BillingClient.BillingResponseCode.ITEM_UNAVAILABLE);
         if (onCanceled != null) {
           onCanceled.run();
         }
@@ -496,6 +503,7 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
           getResponseCodeString(result.getResponseCode()));
       }
       pendingStarsPurposes.remove(payload.second);
+      notifyResultListener(starsDetails.getProductId(), result.getResponseCode());
       if (onCanceled != null) {
         onCanceled.run();
       }
@@ -592,22 +600,40 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
     payloadHandler.clearPayload(purchase);
   }
 
-  private void assignPurchaseToServer(Purchase purchase) {
+  /**
+   * Attempts to assign a completed purchase to the server. Returns {@code false} when the
+   * purchase's payload could not be resolved (so the caller may decide to consume an
+   * otherwise-orphaned recovered purchase directly); {@code true} once the assign request
+   * has been dispatched.
+   */
+  private boolean assignPurchaseToServer(Purchase purchase) {
     Pair<Integer, TdApi.StorePaymentPurpose> payload = resolvePayload(purchase);
 
     if (payload == null) {
       if (BillingConfig.DEBUG_BILLING) {
         Log.w(TAG, "Failed to extract payload from purchase");
       }
-      return;
+      return false;
     }
 
-    Tdlib tdlib = currentTdlib;
+    // Prefer the account resolved from the payload over the (possibly stale) currentTdlib,
+    // so a purchase is always assigned to the account that initiated it — important when
+    // recovering a purchase across an app restart, where currentTdlib reflects whichever
+    // account happens to be active now, not the buyer. Fall back to currentTdlib only if
+    // the resolved account has no live Tdlib instance.
+    Tdlib tdlib = null;
+    int resolvedAccountId = payload.first != null ? payload.first : TdlibAccount.NO_ID;
+    if (resolvedAccountId != TdlibAccount.NO_ID && TdlibManager.instance().hasAccount(resolvedAccountId)) {
+      tdlib = TdlibManager.instance().tdlib(resolvedAccountId);
+    }
+    if (tdlib == null) {
+      tdlib = currentTdlib;
+    }
     if (tdlib == null) {
       if (BillingConfig.DEBUG_BILLING) {
         Log.w(TAG, "No TDLib instance available for purchase assignment");
       }
-      return;
+      return false;
     }
 
     String token = purchase.getPurchaseToken();
@@ -640,7 +666,7 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
           // Stars are sold as one-time consumable INAPP products. After the server has
           // credited them, the Google Play purchase must be consumed so it can be bought
           // again (and is not auto-refunded). Premium SUBS purchases are never consumable.
-          boolean consumable = isConsumablePurchase(purchase);
+          boolean consumable = isConsumablePurchase(purchase, payload.second);
 
           // Clear stored payload (on-disk + in-memory Stars purpose)
           clearResolvedPayload(purchase);
@@ -651,17 +677,18 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
 
           // Notify success listeners
           for (String product : purchase.getProducts()) {
-            Consumer<BillingResult> listener = resultListeners.remove(product);
-            if (listener != null) {
-              listener.accept(BillingResult.newBuilder()
-                .setResponseCode(BillingClient.BillingResponseCode.OK)
-                .build());
-            }
+            notifyResultListener(product, BillingClient.BillingResponseCode.OK);
           }
         } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
           TdApi.Error error = (TdApi.Error) result;
           if (BillingConfig.DEBUG_BILLING) {
             Log.w(TAG, "Failed to assign purchase: %d %s", error.code, error.message);
+          }
+
+          // Terminal failure: notify + drop any listeners so the destroyed controller is not
+          // retained, then fire the cancel callback.
+          for (String product : purchase.getProducts()) {
+            notifyResultListener(product, BillingClient.BillingResponseCode.ERROR);
           }
 
           if (onPurchaseCanceled != null) {
@@ -671,17 +698,27 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
         }
       });
     });
+    return true;
   }
 
   /**
-   * Returns whether a completed purchase is a consumable (Stars / INAPP) product rather than
-   * the Premium subscription. A purchase is treated as consumable when we tracked its purpose
-   * as Stars in the in-memory map, or when it does not contain the Premium product id.
+   * Returns whether a completed purchase is a consumable Stars (INAPP) product that must be
+   * consumed after the server credits it. Consumability is decided EXPLICITLY from the purpose
+   * that was actually assigned (a {@link TdApi.StorePaymentPurposeStars}), or from the in-memory
+   * Stars tracking map — never defaulted on for arbitrary non-Premium products, so an unrelated
+   * future store product is not wrongly consumed (and thereby lost) here.
+   *
+   * @param resolvedPurpose the purpose resolved/assigned for this purchase, if known
    */
-  private boolean isConsumablePurchase(@NonNull Purchase purchase) {
+  private boolean isConsumablePurchase(@NonNull Purchase purchase, @Nullable TdApi.StorePaymentPurpose resolvedPurpose) {
     if (purchase.getProducts().contains(BillingConfig.PREMIUM_PRODUCT_ID)) {
       return false;
     }
+    // Primary signal: the purpose we just assigned to the server is a Stars purchase.
+    if (resolvedPurpose instanceof TdApi.StorePaymentPurposeStars) {
+      return true;
+    }
+    // Secondary signal: we still have the purpose tracked in memory as Stars.
     com.android.billingclient.api.AccountIdentifiers identifiers = purchase.getAccountIdentifiers();
     if (identifiers != null) {
       String obfuscatedData = identifiers.getObfuscatedProfileId();
@@ -692,20 +729,53 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
         }
       }
     }
-    // Any non-Premium product reaching this point is an in-app consumable (Stars).
-    return true;
+    // Not provably a Stars consumable: leave it unconsumed rather than risk consuming an
+    // unrelated product. (Premium is already excluded above.)
+    return false;
   }
 
   private void consumePurchase(@NonNull Purchase purchase) {
+    consumePurchase(purchase, 0);
+  }
+
+  /**
+   * Consumes a completed (Stars) purchase so Google Play does not auto-refund it and it can be
+   * bought again. Made robust against transient failures: a non-OK consume is retried with
+   * backoff up to {@link BillingConfig#MAX_RETRY_ATTEMPTS} times. Leaving a credited Stars
+   * purchase unconsumed risks an auto-refund that reverses Stars already added to the account.
+   */
+  private void consumePurchase(@NonNull Purchase purchase, int attempt) {
     if (!billingClient.isReady()) {
+      // Retry once billing reconnects so the purchase is not left unconsumed.
+      if (attempt < BillingConfig.MAX_RETRY_ATTEMPTS) {
+        whenConnected(() -> consumePurchase(purchase, attempt + 1));
+      } else if (BillingConfig.DEBUG_BILLING) {
+        Log.w(TAG, "Billing not ready; giving up consuming purchase after %d attempts", attempt);
+      }
       return;
     }
     ConsumeParams consumeParams = ConsumeParams.newBuilder()
       .setPurchaseToken(purchase.getPurchaseToken())
       .build();
     billingClient.consumeAsync(consumeParams, (billingResult, purchaseToken) -> {
+      int code = billingResult.getResponseCode();
       if (BillingConfig.DEBUG_BILLING) {
-        Log.d(TAG, "Consume finished: %s", getResponseCodeString(billingResult.getResponseCode()));
+        Log.d(TAG, "Consume finished: %s (attempt %d)", getResponseCodeString(code), attempt);
+      }
+      if (code == BillingClient.BillingResponseCode.OK ||
+          code == BillingClient.BillingResponseCode.ITEM_NOT_OWNED) {
+        // Success, or already consumed/owned elsewhere — nothing more to do.
+        return;
+      }
+      if (attempt < BillingConfig.MAX_RETRY_ATTEMPTS) {
+        long delay = Math.min(
+          BillingConfig.INITIAL_RETRY_DELAY_MS * (1L << attempt),
+          BillingConfig.MAX_RETRY_DELAY_MS
+        );
+        UI.post(() -> consumePurchase(purchase, attempt + 1), delay);
+      } else if (BillingConfig.DEBUG_BILLING) {
+        Log.w(TAG, "Failed to consume purchase after %d attempts: %s",
+          attempt, getResponseCodeString(code));
       }
     });
   }
@@ -757,8 +827,24 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
         }
         for (Purchase purchase : purchases) {
           // Premium is a SUBS product; INAPP results here are Stars (consumables).
-          if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-            handlePurchase(purchase);
+          if (purchase.getPurchaseState() != Purchase.PurchaseState.PURCHASED) {
+            continue;
+          }
+          String token = purchase.getPurchaseToken();
+          if (pendingTokens.contains(token)) {
+            continue;
+          }
+          // Try to (re)assign to the server. If the payload can no longer be resolved — e.g.
+          // the in-memory Stars purpose was lost across an app restart AND no disk fallback
+          // exists — the purchase would otherwise sit unconsumed until Google Play auto-refunds
+          // it (~3 days), reversing any Stars already credited. Consume it directly so it can't
+          // linger. With the BillingPayloadHandler now persisting Stars purposes, resolution
+          // should normally succeed and this is a defensive last resort.
+          if (!assignPurchaseToServer(purchase)) {
+            if (BillingConfig.DEBUG_BILLING) {
+              Log.w(TAG, "Recovered in-app purchase has unresolvable payload; consuming directly");
+            }
+            consumePurchase(purchase);
           }
         }
       }
@@ -815,10 +901,49 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
   }
 
   /**
-   * Adds a result listener for a product purchase.
+   * Adds a result listener for a product purchase. The listener is invoked once with the
+   * terminal {@link BillingResult} (OK on success, an error code on any failure / cancel) and
+   * then removed, so a destroyed controller is not retained by this singleton.
    */
   public void addResultListener(String productId, Consumer<BillingResult> listener) {
-    resultListeners.put(productId, listener);
+    if (productId == null) {
+      return;
+    }
+    synchronized (resultListeners) {
+      resultListeners.put(productId, listener);
+    }
+  }
+
+  /**
+   * Removes a previously registered result listener without invoking it. Safe to call from a
+   * controller's onCanceled / destroy path to avoid leaking it through the singleton.
+   */
+  public void removeResultListener(String productId) {
+    if (productId == null) {
+      return;
+    }
+    synchronized (resultListeners) {
+      resultListeners.remove(productId);
+    }
+  }
+
+  /**
+   * Removes and invokes (if present) the result listener for a product with the given response
+   * code, so the UI can react to both success and failure and the listener is never leaked.
+   */
+  private void notifyResultListener(String productId, int responseCode) {
+    if (productId == null) {
+      return;
+    }
+    Consumer<BillingResult> listener;
+    synchronized (resultListeners) {
+      listener = resultListeners.remove(productId);
+    }
+    if (listener != null) {
+      listener.accept(BillingResult.newBuilder()
+        .setResponseCode(responseCode)
+        .build());
+    }
   }
 
   private static String getResponseCodeString(int code) {

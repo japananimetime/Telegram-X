@@ -161,24 +161,56 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
   // Sticker picker
 
   private @Nullable PopupLayout stickerPickerPopup;
+  // Transient popup views that have theme-invalidate listeners registered against them; they
+  // must be unregistered when the popup is dismissed/destroyed so the listener list doesn't
+  // retain the recycled views.
+  private @Nullable View stickerPopupShadowView;
+  private @Nullable View stickerPopupContentView;
 
   private void openStickerPicker () {
     if (stickerPickerPopup != null) {
       return;
     }
     // Greeting stickers must belong to a sticker set (not custom emoji);
-    // recent stickers are an ideal, lightweight source for the chooser.
+    // recent stickers are an ideal, lightweight source for the chooser. If the user has no
+    // recent stickers, fall back to their installed sticker sets so the chooser still works.
     tdlib.client().send(new TdApi.GetRecentStickers(false), result -> runOnUiThreadOptional(() -> {
-      if (result.getConstructor() != TdApi.Stickers.CONSTRUCTOR) {
+      if (result.getConstructor() == TdApi.Stickers.CONSTRUCTOR) {
+        TdApi.Sticker[] stickers = ((TdApi.Stickers) result).stickers;
+        if (stickers.length > 0) {
+          showStickerPickerPopup(stickers);
+          return;
+        }
+      }
+      // No recent stickers (or the request failed) — fall back to installed sets.
+      loadInstalledStickersFallback();
+    }));
+  }
+
+  private void loadInstalledStickersFallback () {
+    tdlib.client().send(new TdApi.GetInstalledStickerSets(new TdApi.StickerTypeRegular()), result -> runOnUiThreadOptional(() -> {
+      if (result.getConstructor() != TdApi.StickerSets.CONSTRUCTOR) {
         UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
         return;
       }
-      TdApi.Sticker[] stickers = ((TdApi.Stickers) result).stickers;
-      if (stickers.length == 0) {
+      TdApi.StickerSetInfo[] sets = ((TdApi.StickerSets) result).sets;
+      if (sets.length == 0) {
         UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
         return;
       }
-      showStickerPickerPopup(stickers);
+      // Load the first installed set's stickers to seed the chooser.
+      tdlib.client().send(new TdApi.GetStickerSet(sets[0].id), setResult -> runOnUiThreadOptional(() -> {
+        if (setResult.getConstructor() != TdApi.StickerSet.CONSTRUCTOR) {
+          UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
+          return;
+        }
+        TdApi.Sticker[] stickers = ((TdApi.StickerSet) setResult).stickers;
+        if (stickers.length == 0) {
+          UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
+          return;
+        }
+        showStickerPickerPopup(stickers);
+      }));
     }));
   }
 
@@ -245,11 +277,29 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
     popupView.addView(recyclerView, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(72f), Gravity.TOP, 0, Screen.dp(7f), 0, 0));
     popupView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
 
+    // Remember the views so their theme listeners can be unregistered when the popup goes away.
+    stickerPopupShadowView = shadowView;
+    stickerPopupContentView = popupView;
+
     stickerPickerPopup = new PopupLayout(context);
     stickerPickerPopup.init(true);
-    stickerPickerPopup.setDismissListener(popup -> stickerPickerPopup = null);
+    stickerPickerPopup.setDismissListener(popup -> {
+      removeStickerPopupThemeListeners();
+      stickerPickerPopup = null;
+    });
     stickerPickerPopup.setNeedRootInsets();
     stickerPickerPopup.showSimplePopupView(popupView, popupHeight);
+  }
+
+  private void removeStickerPopupThemeListeners () {
+    if (stickerPopupShadowView != null) {
+      removeThemeListenerByTarget(stickerPopupShadowView);
+      stickerPopupShadowView = null;
+    }
+    if (stickerPopupContentView != null) {
+      removeThemeListenerByTarget(stickerPopupContentView);
+      stickerPopupContentView = null;
+    }
   }
 
   private void onStickerPicked (TGStickerObj stickerObj) {
@@ -263,18 +313,22 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
       adapter.updateValuedSetting(stickerItem);
     }
     if (stickerPickerPopup != null) {
+      // hideWindow(true) fires the dismiss listener, which unregisters the theme listeners
+      // and clears stickerPickerPopup.
       stickerPickerPopup.hideWindow(true);
-      stickerPickerPopup = null;
     }
   }
 
   @Override
   public void destroy () {
-    super.destroy();
+    // Tear down the transient popup (and its theme listeners) BEFORE super.destroy(), so the
+    // popup window and its views are cleaned up while the controller is still alive.
     if (stickerPickerPopup != null) {
       stickerPickerPopup.hideWindow(false);
       stickerPickerPopup = null;
     }
+    removeStickerPopupThemeListeners();
+    super.destroy();
   }
 
   @Override

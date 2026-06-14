@@ -2516,7 +2516,7 @@ public class TdlibUi extends Handler {
       return;
     }
     // 0 offset, 0 limit -> TDLib chooses an optimal page size and returns from the first album story.
-    tdlib.client().send(new TdApi.GetStoryAlbumStories(chatId, storyAlbumId, 0, 0), result -> {
+    tdlib.client().send(new TdApi.GetStoryAlbumStories(chatId, storyAlbumId, 0, 100), result -> {
       if (result.getConstructor() == TdApi.Stories.CONSTRUCTOR) {
         TdApi.Stories stories = (TdApi.Stories) result;
         if (stories.stories == null || stories.stories.length == 0) {

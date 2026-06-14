@@ -42,7 +42,6 @@ import java.util.List;
 
 import me.vkryl.core.StringUtils;
 import me.vkryl.core.collection.LongList;
-import me.vkryl.core.lambda.RunnableData;
 import tgx.td.Td;
 
 public class StoryPreviewController extends RecyclerViewController<StoryPreviewController.Args>
@@ -161,6 +160,14 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
       captionText = v.getText().toString();
       captionEditor = v;
     }
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    // captionEditor points at a recycled TYPE_EDITTEXT_REUSABLE view; drop the strong
+    // reference so the recycled view isn't leaked through this controller.
+    captionEditor = null;
   }
 
   private void buildCells () {
@@ -450,59 +457,56 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
     // Build the RICH story caption from the caption editor. The editor is an
     // org.thunderdog.challegram.v.EditText subclass, so getOutputText(true) yields a
     // FormattedText with entities (spans + inline Markdown like **bold**, __italic__,
-    // `code`, [text](url)). Whether those entities are actually sent is gated below on
+    // `code`, [text](url)). Whether those entities are actually sent is gated on
     // "can_use_text_entities_in_story_caption"; the length is clamped to
-    // "story_caption_length_max". Neither option has a typed TdlibOptions getter, so both
-    // are fetched via GetOption with sensible fallbacks.
+    // "story_caption_length_max". Both are read synchronously from the cached, typed
+    // TdlibOptions so that pressing "post" never blocks on a network round-trip.
     final TdApi.FormattedText richCaption = captionEditor != null
       ? Td.trim(captionEditor.getEditText().getOutputText(true))
       : (StringUtils.isEmpty(captionText) ? null : new TdApi.FormattedText(captionText.trim(), new TdApi.TextEntity[0]));
+    final TdApi.FormattedText finalCaption = applyCaptionConstraints(richCaption);
 
     UI.showToast(R.string.StoryPosting, Toast.LENGTH_SHORT);
 
     final int finalDuration = duration;
-    fetchCaptionConstraints(richCaption, finalCaption ->
-      sendPostStory(chatId, content, finalCaption, privacy, finalDuration)
-    );
+    sendPostStory(chatId, content, finalCaption, privacy, finalDuration);
   }
 
-  // Fetches story-caption constraints (can_use_text_entities_in_story_caption /
+  // Applies story-caption constraints (can_use_text_entities_in_story_caption /
   // story_caption_length_max) and produces the final caption: entities are dropped when not
-  // permitted, and the text is clamped to the server-side maximum. Falls back to permissive
-  // defaults (entities allowed, 2048-char cap matching TDLib's documented default) if the
-  // options are unavailable.
-  private void fetchCaptionConstraints (@Nullable TdApi.FormattedText caption, RunnableData<TdApi.FormattedText> after) {
+  // permitted, and the text is clamped to the server-side maximum. Both constraints come from
+  // the cached, typed TdlibOptions (no network round-trip), so a missing/late option never
+  // prevents the post — it just falls back to the cached default (entities disallowed until
+  // confirmed, 2048-char cap). The clamp is surrogate-safe: it will not split a UTF-16
+  // surrogate pair. Entity boundaries are already rebased/clamped by Td.substring.
+  private @Nullable TdApi.FormattedText applyCaptionConstraints (@Nullable TdApi.FormattedText caption) {
     if (Td.isEmpty(caption)) {
-      after.runWithData(null);
-      return;
+      return null;
     }
-    tdlib.send(new TdApi.GetOption("can_use_text_entities_in_story_caption"), (entitiesValue, entitiesError) -> {
-      final boolean allowEntities = entitiesValue == null
-        || entitiesValue.getConstructor() != TdApi.OptionValueBoolean.CONSTRUCTOR
-        || ((TdApi.OptionValueBoolean) entitiesValue).value;
-      tdlib.send(new TdApi.GetOption("story_caption_length_max"), (lengthValue, lengthError) -> tdlib.ui().post(() -> {
-        if (isDestroyed()) {
-          return;
-        }
-        int maxLength = 2048; // TDLib documented default for story captions
-        if (lengthValue != null && lengthValue.getConstructor() == TdApi.OptionValueInteger.CONSTRUCTOR) {
-          long optionValue = ((TdApi.OptionValueInteger) lengthValue).value;
-          if (optionValue > 0) {
-            maxLength = (int) Math.min(optionValue, Integer.MAX_VALUE);
-          }
-        }
-        TdApi.FormattedText finalCaption = caption;
-        if (!allowEntities && finalCaption.entities != null && finalCaption.entities.length > 0) {
-          // Entities not permitted in story captions on this server — send plain text.
-          finalCaption = new TdApi.FormattedText(finalCaption.text, new TdApi.TextEntity[0]);
-        }
-        if (finalCaption.text != null && finalCaption.text.length() > maxLength) {
-          finalCaption = Td.substring(finalCaption, 0, maxLength);
-        }
-        finalCaption = Td.trim(finalCaption);
-        after.runWithData(Td.isEmpty(finalCaption) ? null : finalCaption);
-      }));
-    });
+    final boolean allowEntities = tdlib.options().canUseTextEntitiesInStoryCaption;
+    int maxLength = tdlib.options().storyCaptionLengthMax;
+    if (maxLength <= 0) {
+      maxLength = 2048; // TDLib documented default for story captions
+    }
+    TdApi.FormattedText finalCaption = caption;
+    if (!allowEntities && finalCaption.entities != null && finalCaption.entities.length > 0) {
+      // Entities not permitted in story captions on this server — send plain text.
+      finalCaption = new TdApi.FormattedText(finalCaption.text, new TdApi.TextEntity[0]);
+    }
+    if (finalCaption.text != null && finalCaption.text.length() > maxLength) {
+      int cut = maxLength;
+      // Never cut in the middle of a UTF-16 surrogate pair: if the char at the cut index is
+      // a low surrogate, the preceding char is its high surrogate — back off by one so the
+      // pair stays whole (a clean clamp rather than an invalid lone surrogate).
+      if (cut > 0 && cut < finalCaption.text.length()
+        && Character.isLowSurrogate(finalCaption.text.charAt(cut))
+        && Character.isHighSurrogate(finalCaption.text.charAt(cut - 1))) {
+        cut--;
+      }
+      finalCaption = Td.substring(finalCaption, 0, cut);
+    }
+    finalCaption = Td.trim(finalCaption);
+    return Td.isEmpty(finalCaption) ? null : finalCaption;
   }
 
   private void sendPostStory (long chatId, TdApi.InputStoryContent content, @Nullable TdApi.FormattedText caption, @Nullable TdApi.StoryPrivacySettings privacy, int finalDuration) {

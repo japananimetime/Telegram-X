@@ -250,20 +250,40 @@ public final class BillingPayloadHandler {
 
   @Nullable
   private byte[] serializePurpose(TdApi.StorePaymentPurpose purpose) {
-    // Simple serialization: store constructor ID and relevant data
-    // For StorePaymentPurposePremiumSubscription, we mainly need the flags
+    // Wire format: the first 4 bytes are the TDLib constructor id (little-endian), which
+    // doubles as the discriminator between purpose types. The Premium subscription format
+    // (constructor + 2 flag bytes) is kept byte-for-byte so older on-disk payloads written
+    // before Stars support still deserialize. Stars purposes append currency + amount +
+    // starCount + chatId so the purpose can be reconstructed across an app restart.
     if (purpose instanceof TdApi.StorePaymentPurposePremiumSubscription) {
       TdApi.StorePaymentPurposePremiumSubscription sub =
         (TdApi.StorePaymentPurposePremiumSubscription) purpose;
       // Store: constructor ID (4 bytes) + isRestore flag (1 byte) + isUpgrade flag (1 byte)
       byte[] data = new byte[6];
-      int constructor = TdApi.StorePaymentPurposePremiumSubscription.CONSTRUCTOR;
-      data[0] = (byte) (constructor & 0xFF);
-      data[1] = (byte) ((constructor >> 8) & 0xFF);
-      data[2] = (byte) ((constructor >> 16) & 0xFF);
-      data[3] = (byte) ((constructor >> 24) & 0xFF);
+      writeInt(data, 0, TdApi.StorePaymentPurposePremiumSubscription.CONSTRUCTOR);
       data[4] = (byte) (sub.isRestore ? 1 : 0);
       data[5] = (byte) (sub.isUpgrade ? 1 : 0);
+      return data;
+    }
+    if (purpose instanceof TdApi.StorePaymentPurposeStars) {
+      TdApi.StorePaymentPurposeStars stars = (TdApi.StorePaymentPurposeStars) purpose;
+      byte[] currencyBytes = stars.currency != null
+        ? stars.currency.getBytes(StandardCharsets.UTF_8)
+        : new byte[0];
+      // constructor (4) + currency length (4) + currency + amount (8) + starCount (8) + chatId (8)
+      byte[] data = new byte[4 + 4 + currencyBytes.length + 8 + 8 + 8];
+      int offset = 0;
+      writeInt(data, offset, TdApi.StorePaymentPurposeStars.CONSTRUCTOR);
+      offset += 4;
+      writeInt(data, offset, currencyBytes.length);
+      offset += 4;
+      System.arraycopy(currencyBytes, 0, data, offset, currencyBytes.length);
+      offset += currencyBytes.length;
+      writeLong(data, offset, stars.amount);
+      offset += 8;
+      writeLong(data, offset, stars.starCount);
+      offset += 8;
+      writeLong(data, offset, stars.chatId);
       return data;
     }
     // Add other purpose types as needed
@@ -276,10 +296,7 @@ public final class BillingPayloadHandler {
       return null;
     }
 
-    int constructor = (data[0] & 0xFF) |
-                     ((data[1] & 0xFF) << 8) |
-                     ((data[2] & 0xFF) << 16) |
-                     ((data[3] & 0xFF) << 24);
+    int constructor = readInt(data, 0);
 
     if (constructor == TdApi.StorePaymentPurposePremiumSubscription.CONSTRUCTOR) {
       TdApi.StorePaymentPurposePremiumSubscription purpose =
@@ -291,7 +308,57 @@ public final class BillingPayloadHandler {
       return purpose;
     }
 
+    if (constructor == TdApi.StorePaymentPurposeStars.CONSTRUCTOR) {
+      try {
+        int offset = 4;
+        int currencyLength = readInt(data, offset);
+        offset += 4;
+        if (currencyLength < 0 || offset + currencyLength + 24 > data.length) {
+          return null;
+        }
+        String currency = new String(data, offset, currencyLength, StandardCharsets.UTF_8);
+        offset += currencyLength;
+        long amount = readLong(data, offset);
+        offset += 8;
+        long starCount = readLong(data, offset);
+        offset += 8;
+        long chatId = readLong(data, offset);
+        return new TdApi.StorePaymentPurposeStars(currency, amount, starCount, chatId);
+      } catch (Exception e) {
+        Log.e(TAG, "Failed to deserialize Stars purpose", e);
+        return null;
+      }
+    }
+
     // Add other purpose types as needed
     return null;
+  }
+
+  private static void writeInt(byte[] data, int offset, int value) {
+    data[offset] = (byte) (value & 0xFF);
+    data[offset + 1] = (byte) ((value >> 8) & 0xFF);
+    data[offset + 2] = (byte) ((value >> 16) & 0xFF);
+    data[offset + 3] = (byte) ((value >> 24) & 0xFF);
+  }
+
+  private static int readInt(byte[] data, int offset) {
+    return (data[offset] & 0xFF) |
+           ((data[offset + 1] & 0xFF) << 8) |
+           ((data[offset + 2] & 0xFF) << 16) |
+           ((data[offset + 3] & 0xFF) << 24);
+  }
+
+  private static void writeLong(byte[] data, int offset, long value) {
+    for (int i = 0; i < 8; i++) {
+      data[offset + i] = (byte) ((value >> (8 * i)) & 0xFF);
+    }
+  }
+
+  private static long readLong(byte[] data, int offset) {
+    long value = 0;
+    for (int i = 0; i < 8; i++) {
+      value |= ((long) (data[offset + i] & 0xFF)) << (8 * i);
+    }
+    return value;
   }
 }

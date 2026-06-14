@@ -266,6 +266,9 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
     billing.launchStarsPurchase(context(), tdlib, option, () -> runOnUiThreadOptional(() -> {
       // Purchase canceled or could not be started: keep the screen as-is. A toast would be
       // noisy for an intentional user cancel, matching the Premium store flow's behavior.
+      // Drop the success listener registered above so the (possibly destroyed) controller is
+      // not retained by the BillingManager singleton on cancel / launch-failure paths.
+      billing.removeResultListener(option.storeProductId);
     }));
   }
 
