@@ -135,29 +135,56 @@ public class SettingsBusinessController extends RecyclerViewController<Void> imp
     } else if (id == R.id.btn_businessChatLinks) {
       navigateTo(new BusinessChatLinksController(context, tdlib));
     } else if (id == R.id.btn_businessOpeningHours) {
-      showTurnOffOptions(businessInfo != null && businessInfo.openingHours != null,
+      openOrEdit(businessInfo != null && businessInfo.openingHours != null,
+        this::openOpeningHoursEditor,
         () -> tdlib.send(new TdApi.SetBusinessOpeningHours(null), okHandler()));
     } else if (id == R.id.btn_businessGreeting) {
-      showTurnOffOptions(businessInfo != null && businessInfo.greetingMessageSettings != null,
+      openOrEdit(businessInfo != null && businessInfo.greetingMessageSettings != null,
+        this::openGreetingEditor,
         () -> tdlib.send(new TdApi.SetBusinessGreetingMessageSettings(null), okHandler()));
     } else if (id == R.id.btn_businessAway) {
-      showTurnOffOptions(businessInfo != null && businessInfo.awayMessageSettings != null,
+      openOrEdit(businessInfo != null && businessInfo.awayMessageSettings != null,
+        this::openAwayEditor,
         () -> tdlib.send(new TdApi.SetBusinessAwayMessageSettings(null), okHandler()));
     }
   }
 
-  private void showTurnOffOptions (boolean isOn, Runnable turnOff) {
+  private void openOpeningHoursEditor () {
+    BusinessOpeningHoursController c = new BusinessOpeningHoursController(context, tdlib);
+    c.setArguments(businessInfo != null ? businessInfo.openingHours : null);
+    navigateTo(c);
+  }
+
+  private void openGreetingEditor () {
+    BusinessGreetingController c = new BusinessGreetingController(context, tdlib);
+    c.setArguments(businessInfo != null ? businessInfo.greetingMessageSettings : null);
+    navigateTo(c);
+  }
+
+  private void openAwayEditor () {
+    BusinessAwayController c = new BusinessAwayController(context, tdlib);
+    c.setArguments(businessInfo != null ? businessInfo.awayMessageSettings : null);
+    navigateTo(c);
+  }
+
+  /**
+   * When the feature is off, open the editor directly. When it is on, offer "Edit"
+   * (open the editor) or "Turn off" (send the corresponding Set*(null)).
+   */
+  private void openOrEdit (boolean isOn, Runnable openEditor, Runnable turnOff) {
     if (!isOn) {
-      UI.showToast(R.string.BusinessEditUnavailable, Toast.LENGTH_SHORT);
+      openEditor.run();
       return;
     }
-    showOptions(Lang.getString(R.string.BusinessEditUnavailable),
-      new int[] {R.id.btn_done, R.id.btn_cancel},
-      new String[] {Lang.getString(R.string.BusinessTurnOff), Lang.getString(R.string.Cancel)},
-      new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL},
-      new int[] {R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24},
+    showOptions(null,
+      new int[] {R.id.btn_edit, R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.BusinessEdit), Lang.getString(R.string.BusinessTurnOff), Lang.getString(R.string.Cancel)},
+      new int[] {ViewController.OptionColor.NORMAL, ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_edit_24, R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24},
       (itemView, optionId) -> {
-        if (optionId == R.id.btn_done) {
+        if (optionId == R.id.btn_edit) {
+          openEditor.run();
+        } else if (optionId == R.id.btn_done) {
           turnOff.run();
         }
         return true;

@@ -1668,6 +1668,33 @@
   <item type="id" name="btn_businessLocation" />
   <item type="id" name="btn_businessOpeningHours" />
   <item type="id" name="btn_businessStartPage" />
+  <item type="id" name="btn_businessTimeZone" />
+  <item type="id" name="btn_businessTimeZoneOption" />
+  <item type="id" name="btn_businessDay" />
+  <item type="id" name="btn_businessDayOpen" />
+  <item type="id" name="btn_businessDayHours" />
+  <item type="id" name="btn_businessDayClosed" />
+  <item type="id" name="btn_businessRecipients" />
+  <item type="id" name="btn_businessGreetingShortcut" />
+  <item type="id" name="btn_businessInactivity" />
+  <item type="id" name="btn_businessInactivityOption" />
+  <item type="id" name="btn_businessAwayShortcut" />
+  <item type="id" name="btn_businessSchedule" />
+  <item type="id" name="btn_businessScheduleAlways" />
+  <item type="id" name="btn_businessScheduleOutside" />
+  <item type="id" name="btn_businessScheduleCustom" />
+  <item type="id" name="btn_businessOfflineOnly" />
+  <item type="id" name="btn_businessShortcut" />
+  <item type="id" name="btn_businessShortcutOption" />
+  <item type="id" name="btn_recipientsExistingChats" />
+  <item type="id" name="btn_recipientsNewChats" />
+  <item type="id" name="btn_recipientsContacts" />
+  <item type="id" name="btn_recipientsNonContacts" />
+  <item type="id" name="btn_recipientsExcludeSelected" />
+  <item type="id" name="controller_businessOpeningHours" />
+  <item type="id" name="controller_businessGreeting" />
+  <item type="id" name="controller_businessAway" />
+  <item type="id" name="controller_businessRecipients" />
   <item type="id" name="btn_clearDownloads" />
   <item type="id" name="btn_download" />
   <item type="id" name="btn_pauseDownload" />
