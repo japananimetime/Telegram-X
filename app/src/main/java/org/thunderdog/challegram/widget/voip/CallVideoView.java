@@ -21,9 +21,9 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.telegram.messenger.voip.VideoCameraCapturer;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.tool.Screen;
-import org.webrtc.EglBase;
 import org.webrtc.RendererCommon;
 import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoSink;
@@ -34,17 +34,17 @@ import me.vkryl.android.widget.FrameLayoutFix;
  * Renders both sides of a 1:1 video call: the remote stream fills the background and the local
  * camera preview sits in a small draggable corner card.
  *
- * <p>Both renderers share a single {@link EglBase} context (created here). The local capture
- * pipeline in {@code org.telegram.messenger.voip.VideoCameraCapturer} currently creates its own
- * {@link EglBase} for the {@code SurfaceTextureHelper}; sharing that context with these renderers
- * would be a minor optimisation (avoids an extra GL context) but is not required for correctness,
- * since frames cross the renderer boundary as decoded {@code VideoFrame}s.
+ * <p>Both renderers are initialised against the process-wide shared root EGL context
+ * ({@link VideoCameraCapturer#getRootEglBaseContext()}), the SAME context the capture pipeline's
+ * {@code SurfaceTextureHelper} uses. This is REQUIRED for correctness of the local preview: local
+ * frames carry an OES camera texture whose name is only valid in the capturer's GL context, so a
+ * renderer in a separate (non-shared) context would render them black. The root context is
+ * long-lived and is NOT released here.
  *
  * <p>CRITICAL: {@link #release()} must be called exactly once when the call ends / the controller
  * is destroyed, otherwise the {@link SurfaceViewRenderer}s leak their EGL surfaces.
  */
 public class CallVideoView extends FrameLayoutFix {
-  private final EglBase eglBase;
   private final SurfaceViewRenderer remoteRenderer;
   private final SurfaceViewRenderer localRenderer;
 
@@ -53,8 +53,6 @@ public class CallVideoView extends FrameLayoutFix {
 
   public CallVideoView (@NonNull Context context) {
     super(context);
-
-    this.eglBase = EglBase.create();
 
     remoteRenderer = new SurfaceViewRenderer(context);
     remoteRenderer.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -106,7 +104,9 @@ public class CallVideoView extends FrameLayoutFix {
 
   private float clampTranslationX (float translationX) {
     View parent = (View) getParent();
-    if (parent == null) {
+    // Skip clamping until both the preview and its parent are laid out; otherwise the
+    // bounds are degenerate (min > max) and would snap the preview off-screen on first touch.
+    if (parent == null || parent.getWidth() == 0 || localRenderer.getWidth() == 0) {
       return translationX;
     }
     float min = -localRenderer.getLeft();
@@ -116,7 +116,7 @@ public class CallVideoView extends FrameLayoutFix {
 
   private float clampTranslationY (float translationY) {
     View parent = (View) getParent();
-    if (parent == null) {
+    if (parent == null || parent.getHeight() == 0 || localRenderer.getHeight() == 0) {
       return translationY;
     }
     float min = -localRenderer.getTop();
@@ -129,11 +129,15 @@ public class CallVideoView extends FrameLayoutFix {
       return;
     }
     try {
-      remoteRenderer.init(eglBase.getEglBaseContext(), null);
+      // Share the process-wide root EGL context (same one the capturer's SurfaceTextureHelper
+      // uses) so the local OES camera-texture preview renders correctly instead of black.
+      final org.webrtc.EglBase.Context rootContext = VideoCameraCapturer.getRootEglBaseContext();
+
+      remoteRenderer.init(rootContext, null);
       remoteRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL);
       remoteRenderer.setEnableHardwareScaler(true);
 
-      localRenderer.init(eglBase.getEglBaseContext(), null);
+      localRenderer.init(rootContext, null);
       localRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL);
       localRenderer.setEnableHardwareScaler(true);
       localRenderer.setMirror(true);
@@ -183,8 +187,9 @@ public class CallVideoView extends FrameLayoutFix {
   }
 
   /**
-   * Releases both renderers and the shared EGL context. Idempotent. Must be called once at the
-   * end of the call's lifecycle.
+   * Releases both renderers. Idempotent. Must be called once at the end of the call's lifecycle.
+   * The shared root EGL context is process-wide and long-lived, so it is intentionally NOT
+   * released here.
    */
   public void release () {
     if (released) {
@@ -195,6 +200,5 @@ public class CallVideoView extends FrameLayoutFix {
       remoteRenderer.release();
       localRenderer.release();
     }
-    eglBase.release();
   }
 }

@@ -673,6 +673,17 @@ public class TGCallService extends Service implements
     this.videoStateListener = listener;
   }
 
+  /**
+   * Clears the video-state listener only if it is still the given instance. Prevents a second
+   * CallController (bound to this service) from being unregistered when an earlier controller
+   * tears down.
+   */
+  public void removeVideoStateListener (@Nullable VideoStateListener listener) {
+    if (this.videoStateListener == listener) {
+      this.videoStateListener = null;
+    }
+  }
+
   public @Nullable VoIPInstance getVoip () {
     return tgcalls;
   }
@@ -1386,9 +1397,16 @@ public class TGCallService extends Service implements
       if (tdlib == null) {
         tdlib = tgcalls.tdlib();
       }
+      // Proactively drop the video sinks and notify the listener that video ended, so a
+      // CallController that outlives this service (e.g. still on screen) releases its renderers
+      // and stops showing stale frames cleanly.
+      tgcalls.setIncomingVideoOutput(null);
+      tgcalls.setLocalVideoOutput(null);
       lastDebugLog = tgcalls.collectDebugLog();
       tgcalls.performDestroy();
       tgcalls = null;
+      remoteVideoState = VideoState.INACTIVE;
+      notifyVideoStateChanged();
     }
     if (callListener != null && tdlib != null && call != null) {
       tdlib.listeners().unsubscribeFromCallUpdates(call.id, callListener);

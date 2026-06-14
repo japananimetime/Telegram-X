@@ -133,7 +133,8 @@ public class TgCallsController extends VoIPInstance {
   // the VoIPInstance overrides). These expose the camera + remote-video pipeline.
 
   private @Nullable org.webrtc.VideoSink pendingLocalSink;
-  private @VideoState int remoteVideoState = VideoState.INACTIVE;
+  // Written on the native VoIP thread (handleRemoteMediaStateChange), read on the UI thread.
+  private volatile @VideoState int remoteVideoState = VideoState.INACTIVE;
 
   @Override
   public boolean isVideoOutgoing () {
