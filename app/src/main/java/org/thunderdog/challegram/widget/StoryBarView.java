@@ -361,9 +361,13 @@ public class StoryBarView extends RecyclerView {
         int width = getWidth();
         int height = getHeight();
         if (width > 0 && height > 0) {
+          int[] ringColors = Settings.instance().getStoryRingColors();
+          if (ringColors == null || ringColors.length < 2) {
+            ringColors = GRADIENT_COLORS;
+          }
           LinearGradient gradient = new LinearGradient(
             0, 0, width, height,
-            GRADIENT_COLORS,
+            ringColors,
             null,
             Shader.TileMode.CLAMP
           );
@@ -495,9 +499,13 @@ public class StoryBarView extends RecyclerView {
       int width = getWidth();
       int height = getHeight();
       if (width > 0 && height > 0) {
+        int[] ringColors = Settings.instance().getStoryRingColors();
+        if (ringColors == null || ringColors.length < 2) {
+          ringColors = GRADIENT_COLORS;
+        }
         LinearGradient gradient = new LinearGradient(
           0, 0, width, height,
-          GRADIENT_COLORS,
+          ringColors,
           null,
           Shader.TileMode.CLAMP
         );
