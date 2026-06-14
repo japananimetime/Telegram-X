@@ -30,6 +30,7 @@
 
 #include "video_capture_context.h"
 
+#include <android/log.h>
 #include <jni.h>
 #include <pthread.h>
 #include <functional>
@@ -306,7 +307,11 @@ JNI_OBJECT_FUNC(void, voip_GroupCallInstance, nativeAddIncomingVideoOutput, jlon
   std::string endpointId = jni::from_jstring(env, jEndpointId);
   std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink =
     webrtc::JavaToNativeVideoSink(env, jSink);
+  // Guard the owned-sink map with the same mutex callOnJava uses, so the
+  // shared_ptr lifetime is safe against concurrent remove/stop.
+  pthread_mutex_lock(&context->mutex);
   context->incomingVideoSinks[endpointId] = sink;
+  pthread_mutex_unlock(&context->mutex);
   context->instance->addIncomingVideoOutput(endpointId, sink);
 }
 
@@ -319,7 +324,9 @@ JNI_OBJECT_FUNC(void, voip_GroupCallInstance, nativeRemoveIncomingVideoOutput, j
     return;
   }
   std::string endpointId = jni::from_jstring(env, jEndpointId);
+  pthread_mutex_lock(&context->mutex);
   context->incomingVideoSinks.erase(endpointId);
+  pthread_mutex_unlock(&context->mutex);
 }
 
 // Builds std::vector<VideoChannelDescription> from parallel Java arrays and hands
@@ -334,11 +341,24 @@ JNI_OBJECT_FUNC(void, voip_GroupCallInstance, nativeSetRequestedVideoChannels, j
     return;
   }
   jsize count = env->GetArrayLength(jEndpointIds);
+
+  // Validate parallel-array shape up front: when present, qualities/ssrcGroups
+  // must match the endpoint count. A mismatch means a caller bug; bail rather
+  // than silently using defaults for the tail.
+  jsize ssrcGroupsLen = jSsrcGroups != nullptr ? env->GetArrayLength(jSsrcGroups) : 0;
+  jsize qualitiesLen = jQualities != nullptr ? env->GetArrayLength(jQualities) : 0;
+  if ((jQualities != nullptr && qualitiesLen != count) ||
+      (jSsrcGroups != nullptr && ssrcGroupsLen != count)) {
+    __android_log_print(ANDROID_LOG_ERROR, "tgx",
+                        "nativeSetRequestedVideoChannels: array length mismatch (endpoints=%d qualities=%d ssrcGroups=%d)",
+                        (int) count, (int) qualitiesLen, (int) ssrcGroupsLen);
+    return;
+  }
+
   std::vector<tgcalls::VideoChannelDescription> channels;
   channels.reserve(count);
 
   jint *qualities = jQualities != nullptr ? env->GetIntArrayElements(jQualities, nullptr) : nullptr;
-  jsize qualitiesLen = jQualities != nullptr ? env->GetArrayLength(jQualities) : 0;
 
   for (jsize i = 0; i < count; i++) {
     auto jEndpointId = (jstring) env->GetObjectArrayElement(jEndpointIds, i);
@@ -360,7 +380,7 @@ JNI_OBJECT_FUNC(void, voip_GroupCallInstance, nativeSetRequestedVideoChannels, j
     channel.minQuality = tgcalls::VideoChannelDescription::Quality::Thumbnail;
     channel.maxQuality = quality;
 
-    if (jSsrcGroups != nullptr && i < env->GetArrayLength(jSsrcGroups)) {
+    if (jSsrcGroups != nullptr && i < ssrcGroupsLen) {
       auto jGroups = (jstring) env->GetObjectArrayElement(jSsrcGroups, i);
       if (jGroups != nullptr) {
         std::string encoded = jni::from_jstring(env, jGroups);
@@ -426,6 +446,11 @@ JNI_OBJECT_FUNC(void, voip_GroupCallInstance, stopNative, jlong ptr) {
   if (javaClass != nullptr) {
     env->DeleteGlobalRef(javaClass);
   }
+  // Drop the owned incoming sinks under the mutex before the instance teardown,
+  // so any in-flight add/remove on another thread sees a consistent map.
+  pthread_mutex_lock(&context->mutex);
+  context->incomingVideoSinks.clear();
+  pthread_mutex_unlock(&context->mutex);
   if (context->instance != nullptr) {
     context->instance->stop([] {});
   }

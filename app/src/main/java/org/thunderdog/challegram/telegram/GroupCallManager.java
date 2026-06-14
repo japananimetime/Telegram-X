@@ -54,7 +54,7 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   private final Tdlib tdlib;
   private final ReferenceList<Listener> listeners = new ReferenceList<>();
 
-  private @Nullable GroupCallInstance instance;
+  private @Nullable volatile GroupCallInstance instance;
   private int groupCallId;
   private int state = STATE_NONE;
   private boolean micMuted = true;
@@ -167,6 +167,7 @@ public class GroupCallManager implements GroupCallInstance.Listener {
 
   @AnyThread
   public boolean isVideoEnabled () {
+    final GroupCallInstance instance = this.instance;
     return instance != null && instance.isVideoEnabled();
   }
 
@@ -197,6 +198,21 @@ public class GroupCallManager implements GroupCallInstance.Listener {
       tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, false), tdlib.typedOkHandler());
     }
     notifyVideoListeners();
+  }
+
+  /** Re-routes the local camera preview into a (new) sink without restarting capture. */
+  @MainThread
+  public void setLocalPreviewSink (@Nullable org.webrtc.VideoSink localSink) {
+    if (instance != null) {
+      instance.setLocalPreviewSink(localSink);
+    }
+  }
+
+  /** Whether the local camera is front-facing (for self-tile mirroring). */
+  @AnyThread
+  public boolean isFrontCamera () {
+    final GroupCallInstance instance = this.instance;
+    return instance == null || instance.isFrontCamera();
   }
 
   @MainThread

@@ -48,6 +48,14 @@ public class GroupCallInstance {
   // Owns the camera capturer (a native VideoCaptureContext, same type as
   // TgCallsController's), created on demand and handed to the instance.
   private long videoCapturePtr;
+  // Mirrors videoCapturePtr != 0 but readable from any thread without seeing a
+  // torn long. Set in enableOutgoingVideo, cleared in disableOutgoingVideo/stop.
+  private volatile boolean videoEnabled;
+  // Current camera facing, tracked so re-routes / mirroring don't hardcode front.
+  private boolean frontCamera = true;
+  // Set once stop() has run; all public video methods become no-ops afterwards
+  // so a late call can't touch a torn-down native instance.
+  private volatile boolean destroyed;
   private @Nullable Listener listener;
 
   /**
@@ -96,27 +104,50 @@ public class GroupCallInstance {
   // region outgoing camera video
 
   public boolean isVideoEnabled () {
-    return videoCapturePtr != 0;
+    return videoEnabled;
+  }
+
+  /** Whether the camera is currently front-facing (for self-tile mirroring). */
+  public boolean isFrontCamera () {
+    return frontCamera;
   }
 
   /**
-   * Creates (if needed) the camera capturer and attaches it to the running call,
-   * starting capture. Pass the local-preview sink to mirror the self tile.
+   * First-time start of the outgoing camera: creates the capturer, attaches it to
+   * the running call and starts capture, routing the local preview into
+   * {@code localSink}. If video is already on this only re-routes the preview sink
+   * (use {@link #setLocalPreviewSink} for an explicit re-route).
    */
   public void enableOutgoingVideo (boolean useFrontCamera, @Nullable org.webrtc.VideoSink localSink) {
-    if (nativePtr == 0) {
+    if (destroyed || nativePtr == 0) {
       return;
     }
-    if (videoCapturePtr == 0) {
-      videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
-    }
     if (videoCapturePtr != 0) {
+      // Already capturing — don't recreate / re-attach, just re-route the preview.
+      setLocalPreviewSink(localSink);
+      return;
+    }
+    videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
+    if (videoCapturePtr != 0) {
+      frontCamera = useFrontCamera;
       if (localSink != null) {
         nativeSetVideoCaptureLocalOutput(videoCapturePtr, localSink);
       }
       nativeSetVideoState(videoCapturePtr, 2 /* VideoState.ACTIVE */);
       nativeSetVideoCapture(nativePtr, videoCapturePtr);
+      videoEnabled = true;
     }
+  }
+
+  /**
+   * Re-routes the local camera preview into a (possibly new) sink without
+   * recreating the capturer. No-op if the camera isn't running.
+   */
+  public void setLocalPreviewSink (@Nullable org.webrtc.VideoSink localSink) {
+    if (destroyed || videoCapturePtr == 0) {
+      return;
+    }
+    nativeSetVideoCaptureLocalOutput(videoCapturePtr, localSink);
   }
 
   /** Detaches and releases the camera capturer from the running call. */
@@ -129,11 +160,16 @@ public class GroupCallInstance {
       nativeDestroyVideoCapturer(videoCapturePtr);
       videoCapturePtr = 0;
     }
+    videoEnabled = false;
   }
 
   public void switchCamera (boolean useFrontCamera) {
+    if (destroyed) {
+      return;
+    }
     if (videoCapturePtr != 0) {
       nativeSwitchCamera(videoCapturePtr, useFrontCamera);
+      frontCamera = useFrontCamera;
     }
   }
 
@@ -146,14 +182,14 @@ public class GroupCallInstance {
    * {@code endpointId} (from {@code GroupCallParticipantVideoInfo.endpointId}).
    */
   public void addIncomingVideoOutput (String endpointId, org.webrtc.VideoSink sink) {
-    if (nativePtr != 0 && endpointId != null && sink != null) {
+    if (!destroyed && nativePtr != 0 && endpointId != null && sink != null) {
       nativeAddIncomingVideoOutput(nativePtr, endpointId, sink);
     }
   }
 
   /** Drops the renderer for {@code endpointId} (participant stopped video / tile gone). */
   public void removeIncomingVideoOutput (String endpointId) {
-    if (nativePtr != 0 && endpointId != null) {
+    if (!destroyed && nativePtr != 0 && endpointId != null) {
       nativeRemoveIncomingVideoOutput(nativePtr, endpointId);
     }
   }
@@ -164,7 +200,7 @@ public class GroupCallInstance {
    * {@code ssrcGroups[i]} encoded as {@code "SEMANTICS:ssrc,ssrc;..."}.
    */
   public void setRequestedVideoChannels (String[] endpointIds, int[] qualities, String[] ssrcGroups) {
-    if (nativePtr != 0 && endpointIds != null) {
+    if (!destroyed && nativePtr != 0 && endpointIds != null) {
       nativeSetRequestedVideoChannels(nativePtr, endpointIds, qualities, ssrcGroups);
     }
   }
@@ -172,6 +208,10 @@ public class GroupCallInstance {
   // endregion
 
   public void stop () {
+    if (destroyed) {
+      return;
+    }
+    destroyed = true;
     disableOutgoingVideo();
     if (nativePtr != 0) {
       stopNative(nativePtr);

@@ -143,13 +143,25 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     super.destroy();
     tdlib.listeners().unsubscribeFromGroupCallUpdates(groupCallId, this);
     tdlib.groupCalls().removeListener(this);
-    // Detach all native sinks BEFORE releasing the renderers (frames must stop first).
-    if (tdlib.groupCalls().getState(groupCallId) != GroupCallManager.STATE_NONE) {
+    // Detach all native sinks BEFORE releasing the renderers (frames must stop
+    // first), including the SELF camera preview. The capturer is kept alive by
+    // GroupCallService after this controller closes, so if the self sink were left
+    // attached it would keep pushing frames into the released SurfaceViewRenderer
+    // (UAF). Routing the local output to null drops the self sink.
+    final GroupCallManager calls = tdlib.groupCalls();
+    if (calls.getState(groupCallId) != GroupCallManager.STATE_NONE) {
       for (String endpointId : attachedEndpoints) {
-        tdlib.groupCalls().removeIncomingVideoOutput(endpointId);
+        calls.removeIncomingVideoOutput(endpointId);
+      }
+      // Drop only the self-preview sink — keep broadcasting the camera to the call
+      // (the call survives this read-only screen via GroupCallService); we just must
+      // stop feeding the renderer that is about to be released.
+      if (calls.isVideoEnabled()) {
+        calls.setLocalPreviewSink(null);
       }
     }
     attachedEndpoints.clear();
+    participants.clear();
     if (videoView != null) {
       videoView.release();
       videoView = null;
@@ -159,6 +171,11 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
   @Override
   public void onGroupCallJoinStateChanged (int groupCallId, int state, boolean micMuted) {
     if (groupCall != null && (groupCallId == this.groupCallId || state == GroupCallManager.STATE_NONE)) {
+      // On (re-)joining this call, rebuild the roster from scratch — syncVideoTiles
+      // cleared it on the previous leave, so request a fresh participant load.
+      if (groupCallId == this.groupCallId && state != GroupCallManager.STATE_NONE && participants.isEmpty()) {
+        loadParticipants();
+      }
       buildCells();
       syncVideoTiles();
     }
@@ -246,9 +263,12 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         for (String endpointId : new ArrayList<>(attachedEndpoints)) {
           videoView.removeTile(endpointId);
         }
-        attachedEndpoints.clear();
         videoView.removeTile(GroupCallVideoView.SELF_ENDPOINT);
       }
+      attachedEndpoints.clear();
+      // Drop the roster so a re-join doesn't replay stale tiles / requested
+      // channels; it is rebuilt from a fresh LoadGroupCallParticipants on re-join.
+      participants.clear();
       return;
     }
 
@@ -300,10 +320,13 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     if (view != null) {
       if (calls.isVideoEnabled()) {
         if (!view.hasTile(GroupCallVideoView.SELF_ENDPOINT)) {
-          VideoSink selfSink = view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, true);
+          // Mirror only for the front camera (matches a natural selfie view).
+          VideoSink selfSink = view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, calls.isFrontCamera());
           if (selfSink != null) {
-            // Re-route the capture preview into the freshly-created self tile.
-            calls.enableOutgoingVideo(true, selfSink);
+            // Video is already on (the capturer survives this controller), so only
+            // re-route the preview into the freshly-created self tile — don't
+            // recreate the capturer.
+            calls.setLocalPreviewSink(selfSink);
           }
         }
       } else {
