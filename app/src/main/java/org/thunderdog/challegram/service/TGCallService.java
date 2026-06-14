@@ -78,6 +78,7 @@ import org.thunderdog.challegram.voip.NetworkStats;
 import org.thunderdog.challegram.voip.Socks5Proxy;
 import org.thunderdog.challegram.voip.VoIP;
 import org.thunderdog.challegram.voip.VoIPInstance;
+import org.thunderdog.challegram.voip.VoIPScreenCapture;
 import org.thunderdog.challegram.voip.annotation.CallNetworkType;
 import org.thunderdog.challegram.voip.annotation.CallState;
 import org.thunderdog.challegram.voip.annotation.VideoState;
@@ -705,6 +706,12 @@ public class TGCallService extends Service implements
       return;
     }
     boolean wasScreencast = tgcalls.isScreenSharing();
+    if (wasScreencast) {
+      // Leaving the screencast (switch to camera or off): stop listening for its teardown and
+      // drop the stale projection permission token so a later capture can't reuse it.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+      VoIPScreenCapture.clear();
+    }
     if (enabled) {
       tgcalls.enableOutgoingVideo(useFrontCamera);
     } else {
@@ -723,35 +730,84 @@ public class TGCallService extends Service implements
    * in {@link org.thunderdog.challegram.voip.VoIPScreenCapture}, and the foreground service
    * must be running with the {@code mediaProjection} type.
    */
-  public void setScreenSharingEnabled (boolean enabled) {
+  /**
+   * Starts or stops outgoing screen sharing. Returns {@code true} on success. When starting,
+   * returns {@code false} (without enabling) if the {@code mediaProjection} FGS type couldn't
+   * be re-asserted, or if the screencast capturer failed to come up — the caller must surface
+   * an error / re-prompt rather than proceeding into a doomed startCapture. State (FGS type,
+   * UI toggle) is reconciled on every failure path.
+   */
+  public boolean setScreenSharingEnabled (boolean enabled) {
     if (tgcalls == null) {
-      return;
+      return false;
     }
     if (enabled) {
       // Android 10+: the service must be foreground with the mediaProjection type BEFORE
       // MediaProjectionManager.getMediaProjection() is called inside the screen capturer.
-      updateScreenSharingForegroundType(true);
+      // If the FGS re-assert fails, ABORT — don't run into a startCapture that will throw.
+      if (!updateScreenSharingForegroundType(true)) {
+        Log.e("Aborting screen share: failed to assert mediaProjection foreground type");
+        VoIPScreenCapture.clear();
+        notifyVideoStateChanged();
+        return false;
+      }
+      // Register the teardown callback (system-revoke / start-failure) before starting.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(this::onScreencastUnavailable);
       tgcalls.enableOutgoingScreencast();
+      // Reconcile: if creation failed, the capturer's failure path already cleared things; drop
+      // the FGS type back and report failure so we don't pretend screen sharing is live.
+      if (!tgcalls.isScreenSharing()) {
+        org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+        VoIPScreenCapture.clear();
+        updateScreenSharingForegroundType(false);
+        notifyVideoStateChanged();
+        return false;
+      }
+      notifyVideoStateChanged();
+      return true;
     } else {
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
       tgcalls.disableOutgoingVideo();
+      VoIPScreenCapture.clear();
       // Drop the projection FGS type once screen sharing stops.
       updateScreenSharingForegroundType(false);
+      notifyVideoStateChanged();
+      return true;
     }
-    notifyVideoStateChanged();
+  }
+
+  /**
+   * Drives screen-share teardown when the source becomes unavailable below the controller layer
+   * (system revoked the projection, or the screencast capturer failed to start). Invoked on the
+   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}.
+   */
+  private void onScreencastUnavailable () {
+    if (tgcalls != null && tgcalls.isScreenSharing()) {
+      setScreenSharingEnabled(false);
+    } else {
+      // Already torn down natively; just reconcile FGS type / UI.
+      VoIPScreenCapture.clear();
+      updateScreenSharingForegroundType(false);
+      notifyVideoStateChanged();
+    }
   }
 
   /**
    * Re-asserts the foreground-service type, optionally adding {@code mediaProjection}. Called
-   * around screen-share start/stop so the runtime FGS type matches the active capture; a no-op
-   * before the ongoing-call notification exists.
+   * around screen-share start/stop so the runtime FGS type matches the active capture.
+   * Returns {@code true} if the type was (re-)asserted successfully, {@code false} if the
+   * service wasn't foreground yet or the OS rejected the type change.
    */
-  private void updateScreenSharingForegroundType (boolean includeMediaProjection) {
-    if (ongoingCallNotification != null) {
-      try {
-        U.startForeground(this, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, ongoingCallNotification, includeMediaProjection);
-      } catch (Throwable t) {
-        Log.e("Failed to update call foreground service type for screen sharing", t);
-      }
+  private boolean updateScreenSharingForegroundType (boolean includeMediaProjection) {
+    if (ongoingCallNotification == null) {
+      return false;
+    }
+    try {
+      U.startForeground(this, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, ongoingCallNotification, includeMediaProjection);
+      return true;
+    } catch (Throwable t) {
+      Log.e("Failed to update call foreground service type for screen sharing", t);
+      return false;
     }
   }
 

@@ -16,6 +16,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjection;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.Keep;
@@ -111,11 +113,65 @@ public class VideoCameraCapturer {
     sNextCaptureIsScreencast = v;
   }
 
+  /**
+   * Out-of-band handoff for screen-share teardown originating below the controller layer:
+   * either the {@link ScreenCapturerAndroid}'s {@link MediaProjection.Callback#onStop} fired
+   * (system revoked the projection / user hit "Stop sharing" in the system UI) or the
+   * screencast {@link #init} failed to start capture. The capturer doesn't hold a reference to
+   * the controller/service, so the start-of-screencast flow registers a callback here and the
+   * capturer drives the SAME teardown as a user stop (native source torn down, FGS type
+   * dropped, UI toggle reflected). Routed via this static field rather than a back-reference
+   * because the capturer is constructed on tgcalls' media thread.
+   *
+   * <p>Relies on a single outgoing screencast capturer at a time (camera/screen are mutually
+   * exclusive here), the same invariant the screencast handoff flag depends on.
+   */
+  public interface ScreencastStateCallback {
+    /**
+     * Screen sharing is no longer available (revoked by the system or failed to start).
+     * Invoked on the main thread; must run the full stop-screencast teardown.
+     */
+    void onScreencastUnavailable ();
+  }
+
+  private static volatile @Nullable ScreencastStateCallback sScreencastStateCallback;
+
+  /**
+   * Registers (or clears, with {@code null}) the callback driven when a screencast is revoked
+   * by the system or fails to start. Set right before starting a screencast; cleared on stop.
+   */
+  public static void setScreencastStateCallback (@Nullable ScreencastStateCallback callback) {
+    sScreencastStateCallback = callback;
+  }
+
+  private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+
+  /** Posts the screencast-unavailable teardown to the main thread (single-use; clears the callback). */
+  private static void dispatchScreencastUnavailable () {
+    final ScreencastStateCallback callback = sScreencastStateCallback;
+    if (callback == null) {
+      return;
+    }
+    MAIN_HANDLER.post(() -> {
+      // Re-read and clear so a later capture can't re-trigger a stale teardown.
+      final ScreencastStateCallback cb = sScreencastStateCallback;
+      sScreencastStateCallback = null;
+      if (cb != null) {
+        cb.onScreencastUnavailable();
+      }
+    });
+  }
+
   private VideoCapturer videoCapturer;
   private SurfaceTextureHelper surfaceTextureHelper;
+  // The MediaProjection.Callback registered with a ScreenCapturerAndroid; kept so it can be
+  // unregistered before the capturer is disposed (avoids touching a half-torn projection).
+  private @Nullable MediaProjection.Callback projectionCallback;
   private boolean useFrontCamera = true;
-  private boolean isScreencast;
   private boolean isRunning;
+  // Synchronises capturer/isRunning access between the media thread (init/onStateChanged/
+  // onDestroy) and the MediaProjection.Callback.onStop thread.
+  private final Object captureLock = new Object();
 
   // Native pointer to the C++ tgcalls::VideoCameraCapturer that owns this instance, used by
   // nativeGetJavaVideoCapturerObserver to retrieve the matching native CapturerObserver.
@@ -142,7 +198,6 @@ public class VideoCameraCapturer {
 
     this.nativePtr = ptr;
     this.useFrontCamera = useFrontCamera;
-    this.isScreencast = isScreencast;
 
     final Context context = ContextUtils.getApplicationContext();
     if (context == null) {
@@ -167,27 +222,56 @@ public class VideoCameraCapturer {
         // rather than crashing; the UI flow re-requests permission on the next toggle.
         Log.w(TAG, "Screencast requested but no MediaProjection permission result available");
         cleanup();
+        // Signal failure so the controller/service can reconcile state (drop the FGS type,
+        // reset the UI toggle) instead of believing screen sharing is live.
+        dispatchScreencastUnavailable();
         return;
       }
-    } else {
-      final boolean useCamera2 = Camera2Enumerator.isSupported(context);
-      final CameraEnumerator enumerator = useCamera2
-        ? new Camera2Enumerator(context)
-        : new Camera1Enumerator(false);
-
-      final String deviceName = selectDevice(enumerator, useFrontCamera);
-      if (deviceName == null) {
+      // GUARDED screencast start: ScreenCapturerAndroid.startCapture() synchronously calls
+      // MediaProjectionManager.getMediaProjection() / createVirtualDisplay(), which THROW
+      // SecurityException (Android 10+) / IllegalStateException (Android 14) if the
+      // mediaProjection FGS type isn't live or the token is invalid. This runs on tgcalls'
+      // media thread, so an uncaught throw would unwind into native @Keep init() and crash
+      // the process. Catch everything, tear down cleanly, and signal failure so the call
+      // survives and the UI re-prompts.
+      try {
+        videoCapturer.initialize(surfaceTextureHelper, context, observer);
+        videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
+        isRunning = true;
+      } catch (Throwable t) {
+        Log.e(TAG, "Failed to start screen capture", t);
+        try {
+          videoCapturer.dispose();
+        } catch (Throwable ignored) {
+          // best-effort: dispose may throw if initialize() didn't complete.
+        }
+        videoCapturer = null;
+        isRunning = false;
         cleanup();
-        return;
+        dispatchScreencastUnavailable();
       }
-
-      if (useCamera2) {
-        this.videoCapturer = new Camera2Capturer(context, deviceName, null);
-      } else {
-        this.videoCapturer = new Camera1Capturer(deviceName, null, true);
-      }
+      return;
     }
 
+    final boolean useCamera2 = Camera2Enumerator.isSupported(context);
+    final CameraEnumerator enumerator = useCamera2
+      ? new Camera2Enumerator(context)
+      : new Camera1Enumerator(false);
+
+    final String deviceName = selectDevice(enumerator, useFrontCamera);
+    if (deviceName == null) {
+      cleanup();
+      return;
+    }
+
+    if (useCamera2) {
+      this.videoCapturer = new Camera2Capturer(context, deviceName, null);
+    } else {
+      this.videoCapturer = new Camera1Capturer(deviceName, null, true);
+    }
+
+    // Camera path keeps the historical unguarded call: Camera2/Camera1 capturers don't throw
+    // the projection-token exceptions the screencast path must defend against.
     videoCapturer.initialize(surfaceTextureHelper, context, observer);
     videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
     isRunning = true;
@@ -207,22 +291,28 @@ public class VideoCameraCapturer {
     if (permissionResult == null) {
       return null;
     }
-    return new ScreenCapturerAndroid(permissionResult, new MediaProjection.Callback() {
+    this.projectionCallback = new MediaProjection.Callback() {
       @Override
       public void onStop () {
-        // The user revoked screen capture from the system UI (or it was torn down).
-        // Stop streaming so we don't leak the virtual display; the call's video stays
-        // off until the user re-enables it.
-        try {
-          if (videoCapturer != null && isRunning) {
-            videoCapturer.stopCapture();
+        // The system revoked screen capture (or the user hit "Stop sharing" in the system
+        // UI). Stop streaming so we don't leak the virtual display, THEN drive the same
+        // teardown as a user stop through the service/controller (native source torn down,
+        // FGS type dropped, UI toggle reset) — the local capturer alone can't reconcile that.
+        synchronized (captureLock) {
+          try {
+            if (videoCapturer != null && isRunning) {
+              videoCapturer.stopCapture();
+            }
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          } finally {
             isRunning = false;
           }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
         }
+        dispatchScreencastUnavailable();
       }
-    });
+    };
+    return new ScreenCapturerAndroid(permissionResult, projectionCallback);
   }
 
   /**
@@ -254,21 +344,23 @@ public class VideoCameraCapturer {
    */
   @Keep
   public void onStateChanged (long ptr, int state) {
-    if (videoCapturer == null) {
-      return;
-    }
     // VideoState.Active == 2 (see org.thunderdog.challegram.voip.annotation.VideoState).
     final boolean shouldCapture = state == 2;
-    try {
-      if (shouldCapture && !isRunning) {
-        videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
-        isRunning = true;
-      } else if (!shouldCapture && isRunning) {
-        videoCapturer.stopCapture();
-        isRunning = false;
+    synchronized (captureLock) {
+      if (videoCapturer == null) {
+        return;
       }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+      try {
+        if (shouldCapture && !isRunning) {
+          videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
+          isRunning = true;
+        } else if (!shouldCapture && isRunning) {
+          videoCapturer.stopCapture();
+          isRunning = false;
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
@@ -299,16 +391,31 @@ public class VideoCameraCapturer {
    */
   @Keep
   public void onDestroy () {
-    if (videoCapturer != null) {
-      try {
-        videoCapturer.stopCapture();
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+    synchronized (captureLock) {
+      // Unregister the screen-projection callback BEFORE disposing the capturer so a late
+      // onStop() can't touch a half-torn ScreenCapturerAndroid / re-trigger teardown.
+      if (projectionCallback != null && videoCapturer instanceof ScreenCapturerAndroid) {
+        try {
+          MediaProjection projection = ((ScreenCapturerAndroid) videoCapturer).getMediaProjection();
+          if (projection != null) {
+            projection.unregisterCallback(projectionCallback);
+          }
+        } catch (Throwable ignored) {
+          // Projection may already be stopped / never started; ignore.
+        }
       }
-      videoCapturer.dispose();
-      videoCapturer = null;
+      projectionCallback = null;
+      if (videoCapturer != null) {
+        try {
+          videoCapturer.stopCapture();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        videoCapturer.dispose();
+        videoCapturer = null;
+      }
+      isRunning = false;
     }
-    isRunning = false;
     if (surfaceTextureHelper != null) {
       surfaceTextureHelper.dispose();
       surfaceTextureHelper = null;

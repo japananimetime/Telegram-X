@@ -62,21 +62,27 @@ public class GroupCallService extends Service implements AudioManager.OnAudioFoc
 
   // Holds the running service so GroupCallManager can re-assert the foreground type for
   // screen sharing (Android 10+ requires the mediaProjection FGS type before getMediaProjection).
-  private static @Nullable GroupCallService currentInstance;
+  // volatile: written on the service's main thread, read from GroupCallManager callers.
+  private static volatile @Nullable GroupCallService currentInstance;
 
   /**
    * Re-asserts the group-call foreground-service type, optionally adding {@code mediaProjection}.
    * Must be called (with true) before the group screen capturer obtains a MediaProjection, and
-   * with false once screen sharing stops. No-op if the service isn't foreground.
+   * with false once screen sharing stops. Returns {@code true} if the type was (re-)asserted
+   * successfully, {@code false} if the service isn't foreground or the OS rejected the change —
+   * in which case the caller must NOT proceed into a screencast startCapture (it would throw).
    */
-  public static void setScreenSharing (boolean screenSharing) {
+  public static boolean setScreenSharing (boolean screenSharing) {
     GroupCallService service = currentInstance;
-    if (service != null && service.inForeground) {
-      try {
-        U.startForeground(service, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, service.buildNotification(), screenSharing);
-      } catch (Throwable t) {
-        Log.e(Log.TAG_VOIP, "Unable to update group call foreground type for screen sharing", t);
-      }
+    if (service == null || !service.inForeground) {
+      return false;
+    }
+    try {
+      U.startForeground(service, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, service.buildNotification(), screenSharing);
+      return true;
+    } catch (Throwable t) {
+      Log.e(Log.TAG_VOIP, "Unable to update group call foreground type for screen sharing", t);
+      return false;
     }
   }
 

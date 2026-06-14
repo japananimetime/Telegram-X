@@ -1304,7 +1304,12 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void toggleOutgoingVideo () {
-    if (outgoingVideoEnabled) {
+    // The camera button toggles the CAMERA source specifically: if a screen-share is currently
+    // active, switch the source to the camera (mutually exclusive) rather than just stopping
+    // the share; if the camera is already the source, turn it off; otherwise turn it on.
+    if (screenSharing) {
+      requestCameraPermissionThen(() -> setOutgoingVideoEnabled(true));
+    } else if (outgoingVideoEnabled) {
       setOutgoingVideoEnabled(false);
     } else {
       requestCameraPermissionThen(() -> setOutgoingVideoEnabled(true));
@@ -1364,10 +1369,15 @@ public class CallController extends ViewController<CallController.Arguments> imp
       return;
     }
     attachVideoServiceListener();
-    service.setScreenSharingEnabled(enabled);
+    boolean success = service.setScreenSharingEnabled(enabled);
     this.outgoingVideoEnabled = service.isVideoOutgoing();
     this.screenSharing = service.isScreenSharing();
     updateVideoVisibility();
+    if (enabled && !success) {
+      // FGS re-assert or screencast creation failed: surface an error so the user can retry
+      // (the toggle has already reset above to reflect that screen sharing isn't live).
+      UI.showToast(R.string.VoipScreenShareFailed, android.widget.Toast.LENGTH_SHORT);
+    }
   }
 
   @Override

@@ -1810,6 +1810,7 @@
   <string name="VoipRinging">Ringing</string>
   <string name="VoipWaiting">Waiting</string>
   <string name="VoipFailed">Failed to connect</string>
+  <string name="VoipScreenShareFailed">Couldn\'t start screen sharing</string>
   <string name="VoipExchangingKeys">Exchanging encryption keys</string>
   <string name="VoipExchangingKeysShort">Exchanging keys</string>
   <string name="VoipEstablishing">Connecting…</string>

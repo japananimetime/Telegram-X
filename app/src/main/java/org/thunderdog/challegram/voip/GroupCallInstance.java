@@ -263,6 +263,10 @@ public class GroupCallInstance {
       return;
     }
     destroyed = true;
+    // Clear any stale screen-capture permission token + teardown callback so a later call
+    // can't pick up this call's projection grant or fire a teardown against a dead instance.
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+    org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
     disableOutgoingVideo();
     if (nativePtr != 0) {
       stopNative(nativePtr);

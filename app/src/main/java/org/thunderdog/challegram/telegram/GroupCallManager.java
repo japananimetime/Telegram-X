@@ -181,6 +181,12 @@ public class GroupCallManager implements GroupCallInstance.Listener {
       return;
     }
     boolean wasScreencast = instance.isScreencast();
+    if (wasScreencast) {
+      // Leaving the screencast: stop listening for its teardown and drop the stale projection
+      // token so a later capture can't reuse it.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+    }
     instance.enableOutgoingVideo(useFrontCamera, localSink);
     if (wasScreencast) {
       // Switched screen -> camera: drop the mediaProjection FGS type.
@@ -200,22 +206,66 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   }
 
   /**
-   * Enables outgoing screen sharing as the broadcast video source (replacing the camera)
-   * and notifies TDLib that video is on. The MediaProjection permission result must already
-   * be stored in {@link org.thunderdog.challegram.voip.VoIPScreenCapture}.
+   * Enables outgoing screen sharing as the broadcast video source (replacing the camera).
+   * The MediaProjection permission result must already be stored in
+   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture}. Returns {@code true} on success;
+   * {@code false} (without enabling) if the mediaProjection FGS type couldn't be asserted or the
+   * screencast capturer failed to come up — the caller must surface an error / re-prompt.
+   *
+   * <p>NOTE: screen sharing in a group call is a DISTINCT TDLib concept from camera video
+   * ({@link TdApi.StartGroupCallScreenSharing} / {@link TdApi.EndGroupCallScreenSharing}, which
+   * require a SEPARATE tgcalls screencast endpoint producing its own {@code audioSourceId} +
+   * join {@code payload}). The native bridge here reuses the main call's single outgoing-video
+   * slot and does NOT produce a screencast join payload, so the full
+   * {@code StartGroupCallScreenSharing} handshake is OUT OF SCOPE. We therefore do NOT announce
+   * screen sharing to TDLib at all here (rather than MISusing
+   * {@code ToggleGroupCallIsMyVideoEnabled}, which is the CAMERA-video toggle): the local
+   * screencast still streams as the outgoing video, but it is not registered as a separate
+   * presentation source server-side. See {@code TODO(group-screencast)} when wiring the full API.
    */
   @MainThread
-  public void enableOutgoingScreencast (@Nullable org.webrtc.VideoSink localSink) {
+  public boolean enableOutgoingScreencast (@Nullable org.webrtc.VideoSink localSink) {
     if (instance == null || state == STATE_NONE) {
-      return;
+      return false;
     }
     // Android 10+: add the mediaProjection FGS type before the capturer obtains a MediaProjection.
-    org.thunderdog.challegram.service.GroupCallService.setScreenSharing(true);
+    // If it fails, ABORT — don't run into a startCapture that will throw on the media thread.
+    if (!org.thunderdog.challegram.service.GroupCallService.setScreenSharing(true)) {
+      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+      notifyVideoListeners();
+      return false;
+    }
+    // Register the teardown callback (system-revoke / start-failure) before starting.
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(this::onScreencastUnavailable);
     instance.enableOutgoingScreencast(localSink);
-    if (groupCallId != 0) {
-      tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, true), tdlib.typedOkHandler());
+    // Reconcile: if creation failed, drop the FGS type back and report failure so we don't
+    // pretend screen sharing is live. Do NOT announce camera-video to TDLib (see note above).
+    if (!instance.isScreencast()) {
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
+      notifyVideoListeners();
+      return false;
     }
     notifyVideoListeners();
+    return true;
+  }
+
+  /**
+   * Drives screen-share teardown when the source becomes unavailable below the controller layer
+   * (system revoked the projection, or the screencast capturer failed to start). Invoked on the
+   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}.
+   */
+  @MainThread
+  private void onScreencastUnavailable () {
+    if (instance != null && instance.isScreencast()) {
+      disableOutgoingVideo();
+    } else {
+      // Already torn down natively; reconcile FGS type / preview state.
+      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
+      notifyVideoListeners();
+    }
   }
 
   @MainThread
@@ -225,12 +275,21 @@ public class GroupCallManager implements GroupCallInstance.Listener {
     }
     boolean wasEnabled = instance.isVideoEnabled();
     boolean wasScreencast = instance.isScreencast();
+    if (wasScreencast) {
+      // Leaving the screencast: stop listening for its teardown and drop the stale projection
+      // token so a later capture can't reuse it.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+    }
     instance.disableOutgoingVideo();
     if (wasScreencast) {
       // Drop the mediaProjection FGS type once screen sharing stops.
       org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
     }
-    if (wasEnabled && groupCallId != 0 && state != STATE_NONE) {
+    // Only un-announce camera video if the camera (not a screencast) was the announced source:
+    // screen sharing is never announced via ToggleGroupCallIsMyVideoEnabled (see
+    // enableOutgoingScreencast note), so don't send a spurious video-off for it.
+    if (wasEnabled && !wasScreencast && groupCallId != 0 && state != STATE_NONE) {
       tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, false), tdlib.typedOkHandler());
     }
     notifyVideoListeners();

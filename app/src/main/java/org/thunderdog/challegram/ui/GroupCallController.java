@@ -573,7 +573,15 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
       }
       VideoSink selfSink = view != null ? view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, false) : null;
-      calls.enableOutgoingScreencast(selfSink);
+      boolean started = calls.enableOutgoingScreencast(selfSink);
+      if (!started) {
+        // FGS re-assert or screencast creation failed: clear the self tile we provisioned and
+        // surface an error so the user can retry.
+        if (view != null) {
+          view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+        }
+        UI.showToast(R.string.VoipScreenShareFailed, android.widget.Toast.LENGTH_SHORT);
+      }
       buildCells();
     }, null);
   }

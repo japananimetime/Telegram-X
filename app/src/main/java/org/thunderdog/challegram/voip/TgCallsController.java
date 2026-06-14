@@ -270,6 +270,10 @@ public class TgCallsController extends VoIPInstance {
 
   @Override
   public void performDestroy () {
+    // Clear any stale screen-capture permission token + teardown callback so a later call
+    // can't pick up this call's projection grant or fire a teardown against a dead instance.
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+    VoIPScreenCapture.clear();
     if (videoCapturePtr != 0) {
       if (nativePtr != 0) {
         nativeSetVideoCapture(nativePtr, 0);
@@ -277,6 +281,7 @@ public class TgCallsController extends VoIPInstance {
       nativeDestroyVideoCapturer(videoCapturePtr);
       videoCapturePtr = 0;
     }
+    outgoingScreencast = false;
     if (nativePtr != 0) {
       destroyInstance(nativePtr);
       nativePtr = 0;
