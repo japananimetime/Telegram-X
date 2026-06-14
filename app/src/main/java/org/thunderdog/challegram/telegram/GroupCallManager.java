@@ -180,7 +180,38 @@ public class GroupCallManager implements GroupCallInstance.Listener {
     if (instance == null || state == STATE_NONE) {
       return;
     }
+    boolean wasScreencast = instance.isScreencast();
     instance.enableOutgoingVideo(useFrontCamera, localSink);
+    if (wasScreencast) {
+      // Switched screen -> camera: drop the mediaProjection FGS type.
+      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
+    }
+    if (groupCallId != 0) {
+      tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, true), tdlib.typedOkHandler());
+    }
+    notifyVideoListeners();
+  }
+
+  /** Whether the current outgoing video source is a screen-share (vs. camera). */
+  @AnyThread
+  public boolean isScreencast () {
+    final GroupCallInstance instance = this.instance;
+    return instance != null && instance.isScreencast();
+  }
+
+  /**
+   * Enables outgoing screen sharing as the broadcast video source (replacing the camera)
+   * and notifies TDLib that video is on. The MediaProjection permission result must already
+   * be stored in {@link org.thunderdog.challegram.voip.VoIPScreenCapture}.
+   */
+  @MainThread
+  public void enableOutgoingScreencast (@Nullable org.webrtc.VideoSink localSink) {
+    if (instance == null || state == STATE_NONE) {
+      return;
+    }
+    // Android 10+: add the mediaProjection FGS type before the capturer obtains a MediaProjection.
+    org.thunderdog.challegram.service.GroupCallService.setScreenSharing(true);
+    instance.enableOutgoingScreencast(localSink);
     if (groupCallId != 0) {
       tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, true), tdlib.typedOkHandler());
     }
@@ -193,7 +224,12 @@ public class GroupCallManager implements GroupCallInstance.Listener {
       return;
     }
     boolean wasEnabled = instance.isVideoEnabled();
+    boolean wasScreencast = instance.isScreencast();
     instance.disableOutgoingVideo();
+    if (wasScreencast) {
+      // Drop the mediaProjection FGS type once screen sharing stops.
+      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
+    }
     if (wasEnabled && groupCallId != 0 && state != STATE_NONE) {
       tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, false), tdlib.typedOkHandler());
     }

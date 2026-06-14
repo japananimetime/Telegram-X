@@ -126,13 +126,25 @@ public abstract class VoIPInstance implements Destroyable {
   // Video (1:1 calls). Default no-ops so non-tgcalls backends stay audio-only;
   // TgCallsController overrides these to drive the native camera + render pipeline.
 
-  /** Whether the local camera is currently being captured and sent. */
+  /** Whether the local camera or screen is currently being captured and sent. */
   public boolean isVideoOutgoing () {
+    return false;
+  }
+
+  /** Whether the current outgoing video source is a screen-share (vs. camera). */
+  public boolean isScreenSharing () {
     return false;
   }
 
   /** Starts capturing + sending the local camera. */
   public void enableOutgoingVideo (boolean useFrontCamera) { }
+
+  /**
+   * Starts capturing + sending the screen (mutually exclusive with the camera).
+   * Requires the MediaProjection permission result to be stored in
+   * {@link VoIPScreenCapture} beforehand.
+   */
+  public void enableOutgoingScreencast () { }
 
   /** Stops capturing + sending the local camera. */
   public void disableOutgoingVideo () { }

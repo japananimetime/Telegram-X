@@ -36,6 +36,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -2382,6 +2383,44 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       activityResultHandlers.put(requestCode, handler);
     } else {
       activityResultHandlers.remove(requestCode);
+    }
+  }
+
+  /**
+   * Launches the system MediaProjection screen-capture permission dialog. On a granted
+   * ({@code RESULT_OK}) result the permission Intent is stored in
+   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture} and {@code onGranted} runs;
+   * on denial / failure {@code onDenied} runs (may be null). Used by the call screen-share
+   * toggles (1:1 and group). Requires API 21+.
+   */
+  public void requestScreenCapturePermission (@Nullable Runnable onGranted, @Nullable Runnable onDenied) {
+    MediaProjectionManager manager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+    if (manager == null) {
+      if (onDenied != null) {
+        onDenied.run();
+      }
+      return;
+    }
+    putActivityResultHandler(org.thunderdog.challegram.tool.Intents.ACTIVITY_RESULT_SCREEN_CAPTURE, (requestCode, resultCode, data) -> {
+      if (resultCode == RESULT_OK && data != null) {
+        org.thunderdog.challegram.voip.VoIPScreenCapture.setPendingPermissionResult(data);
+        if (onGranted != null) {
+          onGranted.run();
+        }
+      } else {
+        org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+        if (onDenied != null) {
+          onDenied.run();
+        }
+      }
+    });
+    try {
+      startActivityForResult(manager.createScreenCaptureIntent(), org.thunderdog.challegram.tool.Intents.ACTIVITY_RESULT_SCREEN_CAPTURE);
+    } catch (Throwable t) {
+      putActivityResultHandler(org.thunderdog.challegram.tool.Intents.ACTIVITY_RESULT_SCREEN_CAPTURE, null);
+      if (onDenied != null) {
+        onDenied.run();
+      }
     }
   }
 

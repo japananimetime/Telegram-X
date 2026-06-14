@@ -60,6 +60,26 @@ public class GroupCallService extends Service implements AudioManager.OnAudioFoc
     }
   }
 
+  // Holds the running service so GroupCallManager can re-assert the foreground type for
+  // screen sharing (Android 10+ requires the mediaProjection FGS type before getMediaProjection).
+  private static @Nullable GroupCallService currentInstance;
+
+  /**
+   * Re-asserts the group-call foreground-service type, optionally adding {@code mediaProjection}.
+   * Must be called (with true) before the group screen capturer obtains a MediaProjection, and
+   * with false once screen sharing stops. No-op if the service isn't foreground.
+   */
+  public static void setScreenSharing (boolean screenSharing) {
+    GroupCallService service = currentInstance;
+    if (service != null && service.inForeground) {
+      try {
+        U.startForeground(service, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, service.buildNotification(), screenSharing);
+      } catch (Throwable t) {
+        Log.e(Log.TAG_VOIP, "Unable to update group call foreground type for screen sharing", t);
+      }
+    }
+  }
+
   public static void stop (Context context) {
     // Use stopService (allowed from the background) rather than startService with a
     // STOP action — a background startService throws on Android 8+/12+ and would
@@ -89,6 +109,7 @@ public class GroupCallService extends Service implements AudioManager.OnAudioFoc
     if (!inForeground) {
       U.startForeground(this, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, buildNotification());
       inForeground = true;
+      currentInstance = this;
       acquireAudio();
     }
   }
@@ -97,6 +118,9 @@ public class GroupCallService extends Service implements AudioManager.OnAudioFoc
     releaseAudio();
     U.stopForeground(this, true, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION);
     inForeground = false;
+    if (currentInstance == this) {
+      currentInstance = null;
+    }
     stopSelf();
   }
 
@@ -157,6 +181,9 @@ public class GroupCallService extends Service implements AudioManager.OnAudioFoc
   @Override
   public void onDestroy () {
     releaseAudio();
+    if (currentInstance == this) {
+      currentInstance = null;
+    }
     super.onDestroy();
   }
 

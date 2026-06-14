@@ -53,6 +53,8 @@ public class GroupCallInstance {
   private volatile boolean videoEnabled;
   // Current camera facing, tracked so re-routes / mirroring don't hardcode front.
   private boolean frontCamera = true;
+  // Whether the current outgoing capturer is a screen-share (vs. camera).
+  private volatile boolean screencast;
   // Set once stop() has run; all public video methods become no-ops afterwards
   // so a late call can't touch a torn-down native instance.
   private volatile boolean destroyed;
@@ -112,6 +114,49 @@ public class GroupCallInstance {
     return frontCamera;
   }
 
+  /** Whether the current outgoing video source is a screen-share (vs. camera). */
+  public boolean isScreencast () {
+    return screencast;
+  }
+
+  /**
+   * First-time start of outgoing screen sharing: creates a screencast capturer, attaches it
+   * and starts capture, routing the local preview into {@code localSink}. Mutually exclusive
+   * with the camera — an active camera capturer is torn down first. The MediaProjection
+   * permission result must already be stored in
+   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture}.
+   */
+  public void enableOutgoingScreencast (@Nullable org.webrtc.VideoSink localSink) {
+    if (destroyed || nativePtr == 0) {
+      return;
+    }
+    if (videoCapturePtr != 0) {
+      if (screencast) {
+        // Already screen-sharing — just re-route the preview.
+        setLocalPreviewSink(localSink);
+        return;
+      }
+      // Switching camera -> screen: tear down the camera capturer first.
+      disableOutgoingVideo();
+    }
+    // Hand off the screencast intent to the Java VideoCameraCapturer out-of-band: upstream
+    // tgcalls only passes useFrontCamera to init(), so the volatile flag (set immediately
+    // before the native create, which constructs the capturer on tgcalls' media thread) tells
+    // init() to build a ScreenCapturerAndroid instead of a camera. Relies on a single outgoing
+    // capturer being created at a time (camera/screen are mutually exclusive here).
+    org.telegram.messenger.voip.VideoCameraCapturer.setNextCaptureIsScreencast(true);
+    videoCapturePtr = nativeCreateVideoCapturer("screen", true);
+    if (videoCapturePtr != 0) {
+      screencast = true;
+      if (localSink != null) {
+        nativeSetVideoCaptureLocalOutput(videoCapturePtr, localSink);
+      }
+      nativeSetVideoState(videoCapturePtr, 2 /* VideoState.ACTIVE */);
+      nativeSetVideoCapture(nativePtr, videoCapturePtr);
+      videoEnabled = true;
+    }
+  }
+
   /**
    * First-time start of the outgoing camera: creates the capturer, attaches it to
    * the running call and starts capture, routing the local preview into
@@ -123,12 +168,17 @@ public class GroupCallInstance {
       return;
     }
     if (videoCapturePtr != 0) {
-      // Already capturing — don't recreate / re-attach, just re-route the preview.
-      setLocalPreviewSink(localSink);
-      return;
+      if (!screencast) {
+        // Already capturing the camera — don't recreate / re-attach, just re-route the preview.
+        setLocalPreviewSink(localSink);
+        return;
+      }
+      // Switching screen -> camera: tear down the screencast capturer first.
+      disableOutgoingVideo();
     }
     videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
     if (videoCapturePtr != 0) {
+      screencast = false;
       frontCamera = useFrontCamera;
       if (localSink != null) {
         nativeSetVideoCaptureLocalOutput(videoCapturePtr, localSink);
@@ -161,6 +211,7 @@ public class GroupCallInstance {
       videoCapturePtr = 0;
     }
     videoEnabled = false;
+    screencast = false;
   }
 
   public void switchCamera (boolean useFrontCamera) {

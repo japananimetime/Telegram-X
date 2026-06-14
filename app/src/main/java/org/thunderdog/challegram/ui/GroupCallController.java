@@ -202,6 +202,8 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       tdlib.groupCalls().setMicMuted(!tdlib.groupCalls().isMicMuted());
     } else if (id == R.id.btn_groupCallVideo) {
       toggleOutgoingVideo();
+    } else if (id == R.id.btn_groupCallScreenShare) {
+      toggleScreenShare();
     } else {
       handleAdminClick(id);
     }
@@ -320,8 +322,9 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     if (view != null) {
       if (calls.isVideoEnabled()) {
         if (!view.hasTile(GroupCallVideoView.SELF_ENDPOINT)) {
-          // Mirror only for the front camera (matches a natural selfie view).
-          VideoSink selfSink = view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, calls.isFrontCamera());
+          // Mirror only for the front camera (matches a natural selfie view); never for a screen-share.
+          boolean mirror = !calls.isScreencast() && calls.isFrontCamera();
+          VideoSink selfSink = view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, mirror);
           if (selfSink != null) {
             // Video is already on (the capturer survives this controller), so only
             // re-route the preview into the freshly-created self tile — don't
@@ -451,8 +454,12 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         if (groupCall.isVideoChat) {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
           boolean videoOn = tdlib.groupCalls().isVideoEnabled();
+          boolean screenOn = tdlib.groupCalls().isScreencast();
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallVideo, R.drawable.baseline_videocam_24,
-            videoOn ? R.string.GroupCallStopVideo : R.string.GroupCallStartVideo));
+            (videoOn && !screenOn) ? R.string.GroupCallStopVideo : R.string.GroupCallStartVideo));
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallScreenShare, R.drawable.baseline_devices_other_24,
+            screenOn ? R.string.GroupCallStopScreen : R.string.GroupCallStartScreen));
         }
       }
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -516,7 +523,9 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     if (calls.getState(groupCallId) == GroupCallManager.STATE_NONE) {
       return;
     }
-    if (calls.isVideoEnabled()) {
+    // The camera toggle turns video OFF only when the active source is the camera; if a
+    // screen-share is active it switches to the camera instead (mutually exclusive).
+    if (calls.isVideoEnabled() && !calls.isScreencast()) {
       calls.disableOutgoingVideo();
       if (videoView != null) {
         videoView.removeTile(GroupCallVideoView.SELF_ENDPOINT);
@@ -529,10 +538,44 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         return;
       }
       GroupCallVideoView view = ensureVideoView();
+      // Switching from screen to camera replaces the self tile (mirror for front camera).
+      if (view != null) {
+        view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+      }
       VideoSink selfSink = view != null ? view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, true) : null;
       calls.enableOutgoingVideo(true, selfSink);
       buildCells();
     });
+  }
+
+  private void toggleScreenShare () {
+    final GroupCallManager calls = tdlib.groupCalls();
+    if (calls.getState(groupCallId) == GroupCallManager.STATE_NONE) {
+      return;
+    }
+    if (calls.isScreencast()) {
+      calls.disableOutgoingVideo();
+      if (videoView != null) {
+        videoView.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+      }
+      buildCells();
+      return;
+    }
+    // Request MediaProjection permission; on grant the result is stored in VoIPScreenCapture
+    // and we start the screencast capturer (replacing the camera).
+    context().requestScreenCapturePermission(() -> {
+      if (isDestroyed() || calls.getState(groupCallId) == GroupCallManager.STATE_NONE) {
+        return;
+      }
+      GroupCallVideoView view = ensureVideoView();
+      // Screen-share self preview is never mirrored.
+      if (view != null) {
+        view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+      }
+      VideoSink selfSink = view != null ? view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, false) : null;
+      calls.enableOutgoingScreencast(selfSink);
+      buildCells();
+    }, null);
   }
 
   private void requestCameraPermissionThen (Runnable onGranted) {

@@ -13,11 +13,15 @@
 package org.telegram.messenger.voip;
 
 import android.content.Context;
+import android.content.Intent;
+import android.media.projection.MediaProjection;
 import android.os.Build;
+import android.util.Log;
 
 import androidx.annotation.Keep;
 import androidx.annotation.Nullable;
 
+import org.thunderdog.challegram.voip.VoIPScreenCapture;
 import org.webrtc.Camera1Capturer;
 import org.webrtc.Camera1Enumerator;
 import org.webrtc.Camera2Capturer;
@@ -27,6 +31,7 @@ import org.webrtc.CameraVideoCapturer;
 import org.webrtc.CapturerObserver;
 import org.webrtc.ContextUtils;
 import org.webrtc.EglBase;
+import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.VideoCapturer;
 
@@ -74,9 +79,42 @@ public class VideoCameraCapturer {
     return rootEglBase.getEglBaseContext();
   }
 
+  private static final String TAG = "VideoCameraCapturer";
+
+  /**
+   * Out-of-band handoff flag telling the next {@link #init} to build a
+   * {@link ScreenCapturerAndroid} (screen sharing) instead of a camera capturer.
+   *
+   * <p>Upstream tgcalls' native {@code VideoCameraCapturer.cpp} only invokes Java
+   * {@code init(long, boolean)} — it derives {@code useFrontCamera} from the deviceId and has
+   * no parameter for the screencast intent. Rather than patch the (unpushable) tgcalls
+   * submodule to add a parameter, the screencast-create callers set this static flag
+   * immediately before the {@code nativeCreateVideoCapturer("screen", true)} call. tgcalls
+   * constructs the capturer asynchronously on its own media thread and then calls back into
+   * {@link #init}; the field is {@code volatile} and written before the native call, so the
+   * write happens-before and is visible to that thread. {@link #init} reads it once at the top
+   * and clears it, so a stale {@code true} can never leak into a later camera capture.
+   *
+   * <p>This relies on there being at most ONE outgoing capturer being created at a time
+   * (Telegram X creates outgoing camera/screen capturers serially from the UI thread and they
+   * are mutually exclusive), which holds for the VoIP / group-call flows here.
+   */
+  private static volatile boolean sNextCaptureIsScreencast;
+
+  /**
+   * Marks the next {@link #init} (i.e. the capturer about to be created by the immediately
+   * following {@code nativeCreateVideoCapturer}) as a screen-share capturer. Must be called on
+   * the same logical flow right before the native create call; the camera path leaves it
+   * {@code false}.
+   */
+  public static void setNextCaptureIsScreencast (boolean v) {
+    sNextCaptureIsScreencast = v;
+  }
+
   private VideoCapturer videoCapturer;
   private SurfaceTextureHelper surfaceTextureHelper;
   private boolean useFrontCamera = true;
+  private boolean isScreencast;
   private boolean isRunning;
 
   // Native pointer to the C++ tgcalls::VideoCameraCapturer that owns this instance, used by
@@ -96,15 +134,22 @@ public class VideoCameraCapturer {
    */
   @Keep
   public void init (long ptr, boolean useFrontCamera) {
+    // Read AND clear the screencast handoff flag up front (see sNextCaptureIsScreencast):
+    // capture it into a local immediately so a stale true can never leak into a later camera
+    // capture, and so concurrent reads on the media thread can't see it twice.
+    final boolean isScreencast = sNextCaptureIsScreencast;
+    sNextCaptureIsScreencast = false;
+
     this.nativePtr = ptr;
     this.useFrontCamera = useFrontCamera;
+    this.isScreencast = isScreencast;
 
     final Context context = ContextUtils.getApplicationContext();
     if (context == null) {
       return;
     }
 
-    // Share the process-wide root EGL context so the local camera OES texture is
+    // Share the process-wide root EGL context so the local camera/screen OES texture is
     // valid in the CallVideoView renderers (which init() against the same context).
     this.surfaceTextureHelper = SurfaceTextureHelper.create("VideoCameraCapturerThread", getRootEglBaseContext());
 
@@ -114,26 +159,70 @@ public class VideoCameraCapturer {
       return;
     }
 
-    final boolean useCamera2 = Camera2Enumerator.isSupported(context);
-    final CameraEnumerator enumerator = useCamera2
-      ? new Camera2Enumerator(context)
-      : new Camera1Enumerator(false);
-
-    final String deviceName = selectDevice(enumerator, useFrontCamera);
-    if (deviceName == null) {
-      cleanup();
-      return;
-    }
-
-    if (useCamera2) {
-      this.videoCapturer = new Camera2Capturer(context, deviceName, null);
+    if (isScreencast) {
+      this.videoCapturer = createScreenCapturer();
+      if (videoCapturer == null) {
+        // No pending MediaProjection permission result (request not granted / already
+        // consumed). Fail gracefully — the native side keeps a capturer with no frames
+        // rather than crashing; the UI flow re-requests permission on the next toggle.
+        Log.w(TAG, "Screencast requested but no MediaProjection permission result available");
+        cleanup();
+        return;
+      }
     } else {
-      this.videoCapturer = new Camera1Capturer(deviceName, null, true);
+      final boolean useCamera2 = Camera2Enumerator.isSupported(context);
+      final CameraEnumerator enumerator = useCamera2
+        ? new Camera2Enumerator(context)
+        : new Camera1Enumerator(false);
+
+      final String deviceName = selectDevice(enumerator, useFrontCamera);
+      if (deviceName == null) {
+        cleanup();
+        return;
+      }
+
+      if (useCamera2) {
+        this.videoCapturer = new Camera2Capturer(context, deviceName, null);
+      } else {
+        this.videoCapturer = new Camera1Capturer(deviceName, null, true);
+      }
     }
 
     videoCapturer.initialize(surfaceTextureHelper, context, observer);
     videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
     isRunning = true;
+  }
+
+  /**
+   * Builds an {@link ScreenCapturerAndroid} from the pending MediaProjection permission
+   * result held in {@link VoIPScreenCapture}. Returns {@code null} when no grant is
+   * available (so the caller can fail gracefully instead of crashing).
+   *
+   * <p>Requires the call foreground service to already be running with the
+   * {@code mediaProjection} foreground-service type (see AndroidManifest), otherwise
+   * {@code MediaProjectionManager.getMediaProjection} throws on Android 10+.
+   */
+  private @Nullable VideoCapturer createScreenCapturer () {
+    final Intent permissionResult = VoIPScreenCapture.consumePendingPermissionResult();
+    if (permissionResult == null) {
+      return null;
+    }
+    return new ScreenCapturerAndroid(permissionResult, new MediaProjection.Callback() {
+      @Override
+      public void onStop () {
+        // The user revoked screen capture from the system UI (or it was torn down).
+        // Stop streaming so we don't leak the virtual display; the call's video stays
+        // off until the user re-enables it.
+        try {
+          if (videoCapturer != null && isRunning) {
+            videoCapturer.stopCapture();
+            isRunning = false;
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    });
   }
 
   /**

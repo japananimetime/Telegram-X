@@ -1457,6 +1457,7 @@
   <item type="id" name="right_addNewAdmins" />-->
 
   <item type="id" name="btn_camera_switch" />
+  <item type="id" name="btn_screenShare" />
   <item type="id" name="btn_camera_flash" />
 
   <item type="id" name="paint_mode_path" />
@@ -1635,6 +1636,7 @@
   <item type="id" name="btn_groupCallJoinLeave" />
   <item type="id" name="btn_groupCallMute" />
   <item type="id" name="btn_groupCallVideo" />
+  <item type="id" name="btn_groupCallScreenShare" />
   <item type="id" name="btn_groupCallInvite" />
   <item type="id" name="btn_groupCallRename" />
   <item type="id" name="btn_groupCallStart" />

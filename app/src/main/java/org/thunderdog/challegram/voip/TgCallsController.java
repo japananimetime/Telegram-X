@@ -133,12 +133,20 @@ public class TgCallsController extends VoIPInstance {
   // the VoIPInstance overrides). These expose the camera + remote-video pipeline.
 
   private @Nullable org.webrtc.VideoSink pendingLocalSink;
+  // Whether the current outgoing capturer is a screen-share (vs. camera). Mirrors the
+  // deviceId used to create videoCapturePtr.
+  private boolean outgoingScreencast;
   // Written on the native VoIP thread (handleRemoteMediaStateChange), read on the UI thread.
   private volatile @VideoState int remoteVideoState = VideoState.INACTIVE;
 
   @Override
   public boolean isVideoOutgoing () {
     return videoCapturePtr != 0;
+  }
+
+  @Override
+  public boolean isScreenSharing () {
+    return videoCapturePtr != 0 && outgoingScreencast;
   }
 
   /**
@@ -148,8 +156,14 @@ public class TgCallsController extends VoIPInstance {
    */
   @Override
   public void enableOutgoingVideo (boolean useFrontCamera) {
+    // Switching from screen-share to camera: tear down the screencast capturer first,
+    // since the outgoing source is mutually exclusive.
+    if (videoCapturePtr != 0 && outgoingScreencast) {
+      disableOutgoingVideo();
+    }
     if (videoCapturePtr == 0) {
       videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
+      outgoingScreencast = false;
       if (videoCapturePtr != 0 && pendingLocalSink != null) {
         nativeSetVideoCaptureLocalOutput(videoCapturePtr, pendingLocalSink);
       }
@@ -161,7 +175,38 @@ public class TgCallsController extends VoIPInstance {
   }
 
   /**
-   * Detaches and releases the camera capturer from the running call.
+   * Creates (if needed) a screen-capture capturer and attaches it to the running call.
+   * The MediaProjection permission result must already be stored in
+   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture} (the Java
+   * {@code VideoCameraCapturer} reads it back when building the screen capturer).
+   * Mutually exclusive with the camera: an active camera capturer is torn down first.
+   */
+  @Override
+  public void enableOutgoingScreencast () {
+    if (videoCapturePtr != 0 && !outgoingScreencast) {
+      disableOutgoingVideo();
+    }
+    if (videoCapturePtr == 0) {
+      // Hand off the screencast intent to the Java VideoCameraCapturer out-of-band: upstream
+      // tgcalls only passes useFrontCamera to init(), so the volatile flag (set immediately
+      // before the native create, which constructs the capturer on tgcalls' media thread)
+      // tells init() to build a ScreenCapturerAndroid instead of a camera. Relies on a single
+      // outgoing capturer being created at a time (camera/screen are mutually exclusive here).
+      org.telegram.messenger.voip.VideoCameraCapturer.setNextCaptureIsScreencast(true);
+      videoCapturePtr = nativeCreateVideoCapturer("screen", true);
+      outgoingScreencast = true;
+      if (videoCapturePtr != 0 && pendingLocalSink != null) {
+        nativeSetVideoCaptureLocalOutput(videoCapturePtr, pendingLocalSink);
+      }
+    }
+    if (videoCapturePtr != 0) {
+      nativeSetVideoState(videoCapturePtr, VideoState.ACTIVE);
+      nativeSetVideoCapture(nativePtr(), videoCapturePtr);
+    }
+  }
+
+  /**
+   * Detaches and releases the camera/screen capturer from the running call.
    */
   @Override
   public void disableOutgoingVideo () {
@@ -173,6 +218,7 @@ public class TgCallsController extends VoIPInstance {
       nativeDestroyVideoCapturer(videoCapturePtr);
       videoCapturePtr = 0;
     }
+    outgoingScreencast = false;
   }
 
   /**

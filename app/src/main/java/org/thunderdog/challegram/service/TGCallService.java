@@ -696,16 +696,63 @@ public class TGCallService extends Service implements
     return tgcalls != null && tgcalls.isVideoOutgoing();
   }
 
+  public boolean isScreenSharing () {
+    return tgcalls != null && tgcalls.isScreenSharing();
+  }
+
   public void setOutgoingVideoEnabled (boolean enabled, boolean useFrontCamera) {
     if (tgcalls == null) {
       return;
     }
+    boolean wasScreencast = tgcalls.isScreenSharing();
     if (enabled) {
       tgcalls.enableOutgoingVideo(useFrontCamera);
     } else {
       tgcalls.disableOutgoingVideo();
     }
+    if (wasScreencast) {
+      // Either switched screen -> camera or turned video off: drop the mediaProjection FGS type.
+      updateScreenSharingForegroundType(false);
+    }
     notifyVideoStateChanged();
+  }
+
+  /**
+   * Starts screen sharing as the outgoing video source (replacing the camera), or stops
+   * outgoing video entirely. The MediaProjection permission result must already be stored
+   * in {@link org.thunderdog.challegram.voip.VoIPScreenCapture}, and the foreground service
+   * must be running with the {@code mediaProjection} type.
+   */
+  public void setScreenSharingEnabled (boolean enabled) {
+    if (tgcalls == null) {
+      return;
+    }
+    if (enabled) {
+      // Android 10+: the service must be foreground with the mediaProjection type BEFORE
+      // MediaProjectionManager.getMediaProjection() is called inside the screen capturer.
+      updateScreenSharingForegroundType(true);
+      tgcalls.enableOutgoingScreencast();
+    } else {
+      tgcalls.disableOutgoingVideo();
+      // Drop the projection FGS type once screen sharing stops.
+      updateScreenSharingForegroundType(false);
+    }
+    notifyVideoStateChanged();
+  }
+
+  /**
+   * Re-asserts the foreground-service type, optionally adding {@code mediaProjection}. Called
+   * around screen-share start/stop so the runtime FGS type matches the active capture; a no-op
+   * before the ongoing-call notification exists.
+   */
+  private void updateScreenSharingForegroundType (boolean includeMediaProjection) {
+    if (ongoingCallNotification != null) {
+      try {
+        U.startForeground(this, TdlibNotificationManager.ID_ONGOING_CALL_NOTIFICATION, ongoingCallNotification, includeMediaProjection);
+      } catch (Throwable t) {
+        Log.e("Failed to update call foreground service type for screen sharing", t);
+      }
+    }
   }
 
   public void switchCamera (boolean useFrontCamera) {

@@ -280,13 +280,14 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private CallControlsLayout callControlsLayout;
 
   private FrameLayoutFix buttonWrap;
-  private ButtonView muteButtonView, speakerButtonView, videoButtonView, switchCameraButtonView;
+  private ButtonView muteButtonView, speakerButtonView, videoButtonView, switchCameraButtonView, screenShareButtonView;
 
   private CallVideoView callVideoView;
   private boolean videoSinksAttached;
   private boolean useFrontCamera = true;
   private @VideoState int remoteVideoState = VideoState.INACTIVE;
   private boolean outgoingVideoEnabled;
+  private boolean screenSharing;
   private boolean videoStateListenerAttached;
   private boolean autoEnableVideoOnReady;
 
@@ -678,6 +679,20 @@ public class CallController extends ViewController<CallController.Arguments> imp
     switchCameraButtonView.setVisibility(View.GONE);
     contentView.addView(switchCameraButtonView);
 
+    // Screen share toggle. Sits right of centre in the bottom row (mirroring the video
+    // toggle on the left); shown once the call is established. Replaces the camera as the
+    // outgoing source while active.
+    screenShareButtonView = new ButtonView(context);
+    screenShareButtonView.setId(R.id.btn_screenShare);
+    screenShareButtonView.setOnClickListener(this);
+    screenShareButtonView.setIcon(R.drawable.baseline_devices_other_24);
+    screenShareButtonView.setNeedCross(true);
+    FrameLayoutFix.LayoutParams screenShareParams = FrameLayoutFix.newParams(Screen.dp(72f), Screen.dp(72f), Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
+    screenShareParams.leftMargin = Screen.dp(96f);
+    screenShareButtonView.setLayoutParams(screenShareParams);
+    screenShareButtonView.setVisibility(View.GONE);
+    buttonWrap.addView(screenShareButtonView);
+
     // Answer controls
 
     callControlsLayout = new CallControlsLayout(context, this);
@@ -875,6 +890,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
     } else if (viewId == R.id.btn_video) {
       if (!TD.isFinished(call)) {
         toggleOutgoingVideo();
+      }
+    } else if (viewId == R.id.btn_screenShare) {
+      if (!TD.isFinished(call)) {
+        toggleScreenShare();
       }
     } else if (viewId == R.id.btn_camera_switch) {
       if (!TD.isFinished(call) && outgoingVideoEnabled) {
@@ -1318,6 +1337,36 @@ public class CallController extends ViewController<CallController.Arguments> imp
     attachVideoServiceListener();
     service.setOutgoingVideoEnabled(enabled, useFrontCamera);
     this.outgoingVideoEnabled = service.isVideoOutgoing();
+    this.screenSharing = service.isScreenSharing();
+    updateVideoVisibility();
+  }
+
+  private void toggleScreenShare () {
+    if (screenSharing) {
+      setScreenShareEnabled(false);
+    } else {
+      // Request MediaProjection permission; on grant the result is stored in
+      // VoIPScreenCapture and we start the screencast capturer.
+      context().requestScreenCapturePermission(() -> {
+        if (!isDestroyed() && isCallActive() && currentCallService() != null) {
+          setScreenShareEnabled(true);
+        }
+      }, null);
+    }
+  }
+
+  private void setScreenShareEnabled (boolean enabled) {
+    if (isDestroyed()) {
+      return;
+    }
+    TGCallService service = currentCallService();
+    if (service == null) {
+      return;
+    }
+    attachVideoServiceListener();
+    service.setScreenSharingEnabled(enabled);
+    this.outgoingVideoEnabled = service.isVideoOutgoing();
+    this.screenSharing = service.isScreenSharing();
     updateVideoVisibility();
   }
 
@@ -1328,6 +1377,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
     }
     this.remoteVideoState = remoteVideoState;
     this.outgoingVideoEnabled = isVideoOutgoing;
+    TGCallService service = currentCallService();
+    this.screenSharing = service != null && service.isScreenSharing();
     updateVideoVisibility();
   }
 
@@ -1346,13 +1397,21 @@ public class CallController extends ViewController<CallController.Arguments> imp
     callVideoView.setRemoteVisible(remoteVisible);
     callVideoView.setLocalVisible(localVisible);
 
+    // Camera video is "on" only when the outgoing source is the camera (not the screen).
+    boolean cameraOutgoing = outgoingVideoEnabled && !screenSharing;
     if (videoButtonView != null) {
       // Show the video toggle once the call is established (video can be enabled on demand).
       videoButtonView.setVisibility(active ? View.VISIBLE : View.GONE);
-      videoButtonView.setIsActive(outgoingVideoEnabled, isFocused());
+      videoButtonView.setIsActive(cameraOutgoing, isFocused());
+    }
+    if (screenShareButtonView != null) {
+      // Show the screen-share toggle once the call is established.
+      screenShareButtonView.setVisibility(active ? View.VISIBLE : View.GONE);
+      screenShareButtonView.setIsActive(screenSharing, isFocused());
     }
     if (switchCameraButtonView != null) {
-      switchCameraButtonView.setVisibility(localVisible ? View.VISIBLE : View.GONE);
+      // Camera switch only makes sense while the camera (not screen) is the source.
+      switchCameraButtonView.setVisibility(localVisible && cameraOutgoing ? View.VISIBLE : View.GONE);
     }
     // Dim the avatar background behind an active remote video so the stream reads clearly.
     avatarView.setAlpha(remoteVisible ? 0f : 1f);
