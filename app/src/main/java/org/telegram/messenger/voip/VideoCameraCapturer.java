@@ -53,9 +53,29 @@ public class VideoCameraCapturer {
   private static final int CAPTURE_HEIGHT = 720;
   private static final int CAPTURE_FPS = 30;
 
+  // Process-wide shared root EGL context for all VoIP video. The capturer's
+  // SurfaceTextureHelper and the CallVideoView renderers must share ONE context,
+  // otherwise the local-preview OES camera texture (valid only in the capturer's
+  // GL context) renders black in a non-shared renderer context. Created lazily on
+  // the first VoIP-video use and kept for the app lifetime (never released while a
+  // call is active).
+  private static EglBase rootEglBase;
+
+  /**
+   * Returns the shared root {@link EglBase.Context} used across the camera capturer's
+   * {@link SurfaceTextureHelper} and the call-video renderers, creating it lazily.
+   * Must be called on the main thread (or otherwise externally serialised); VoIP
+   * setup runs on the UI thread.
+   */
+  public static synchronized EglBase.Context getRootEglBaseContext () {
+    if (rootEglBase == null) {
+      rootEglBase = EglBase.create();
+    }
+    return rootEglBase.getEglBaseContext();
+  }
+
   private VideoCapturer videoCapturer;
   private SurfaceTextureHelper surfaceTextureHelper;
-  private EglBase eglBase;
   private boolean useFrontCamera = true;
   private boolean isRunning;
 
@@ -84,11 +104,13 @@ public class VideoCameraCapturer {
       return;
     }
 
-    this.eglBase = EglBase.create();
-    this.surfaceTextureHelper = SurfaceTextureHelper.create("VideoCameraCapturerThread", eglBase.getEglBaseContext());
+    // Share the process-wide root EGL context so the local camera OES texture is
+    // valid in the CallVideoView renderers (which init() against the same context).
+    this.surfaceTextureHelper = SurfaceTextureHelper.create("VideoCameraCapturerThread", getRootEglBaseContext());
 
     final CapturerObserver observer = nativeGetJavaVideoCapturerObserver(ptr);
     if (observer == null || surfaceTextureHelper == null) {
+      cleanup();
       return;
     }
 
@@ -99,6 +121,7 @@ public class VideoCameraCapturer {
 
     final String deviceName = selectDevice(enumerator, useFrontCamera);
     if (deviceName == null) {
+      cleanup();
       return;
     }
 
@@ -111,6 +134,18 @@ public class VideoCameraCapturer {
     videoCapturer.initialize(surfaceTextureHelper, context, observer);
     videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
     isRunning = true;
+  }
+
+  /**
+   * Releases partially-initialised capture resources after a failed {@link #init} so a
+   * failed init doesn't leak the SurfaceTextureHelper / its GL thread. Does NOT touch the
+   * shared root EGL context (long-lived, owned statically).
+   */
+  private void cleanup () {
+    if (surfaceTextureHelper != null) {
+      surfaceTextureHelper.dispose();
+      surfaceTextureHelper = null;
+    }
   }
 
   private static @Nullable String selectDevice (CameraEnumerator enumerator, boolean front) {
@@ -189,10 +224,7 @@ public class VideoCameraCapturer {
       surfaceTextureHelper.dispose();
       surfaceTextureHelper = null;
     }
-    if (eglBase != null) {
-      eglBase.release();
-      eglBase = null;
-    }
+    // The root EGL context is process-wide and shared with the renderers; never released here.
     nativePtr = 0;
   }
 }

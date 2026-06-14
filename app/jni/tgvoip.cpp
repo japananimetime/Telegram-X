@@ -904,6 +904,9 @@ JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetVideoCapture, jlong ptr, 
 // clears the output. The Instance holds only a weak_ptr, so the owning
 // shared_ptr is retained in TgCallsContext::incomingVideoSink.
 JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetIncomingVideoOutput, jlong ptr, jobject jSink) {
+  if (!tgcalls::initialize(env)) {
+    return;
+  }
   auto context = jni::jlong_to_ptr<TgCallsContext *>(ptr);
   if (context == nullptr || context->tgcalls == nullptr) {
     return;
@@ -925,6 +928,9 @@ JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetIncomingVideoOutput, jlon
 // VideoCaptureInterface::setOutput takes an owning shared_ptr, so it retains the
 // sink itself; passing nullptr clears the local preview output.
 JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetVideoCaptureLocalOutput, jlong capturePtr, jobject jSink) {
+  if (!tgcalls::initialize(env)) {
+    return;
+  }
   auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
   if (captureContext == nullptr || captureContext->capture == nullptr) {
     return;

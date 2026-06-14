@@ -1247,13 +1247,23 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void attachVideoServiceListener () {
+    if (isDestroyed()) {
+      return;
+    }
     TGCallService service = currentCallService();
     if (service == null) {
       return;
     }
     if (boundVideoService != service) {
       if (boundVideoService != null) {
-        boundVideoService.setVideoStateListener(null);
+        // Detach sinks/listener from the old service before rebinding so the new instance gets
+        // fresh sinks (otherwise remote video stays black after a service swap).
+        if (videoSinksAttached) {
+          boundVideoService.setIncomingVideoOutput(null);
+          boundVideoService.setLocalVideoOutput(null);
+        }
+        boundVideoService.removeVideoStateListener(this);
+        videoSinksAttached = false;
       }
       boundVideoService = service;
       videoStateListenerAttached = true;
@@ -1286,7 +1296,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M &&
         context().checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
       context().requestCustomPermissions(new String[] {Manifest.permission.CAMERA}, (code, permissions, grantResults, grantCount) -> {
-        if (grantCount == permissions.length && !isDestroyed()) {
+        // Ignore a grant that arrives after the controller was destroyed or the call ended /
+        // unbound — enabling video at that point would target a dead service.
+        if (grantCount == permissions.length && !isDestroyed() && isCallActive() && currentCallService() != null) {
           onGranted.run();
         }
       });
@@ -1296,6 +1308,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void setOutgoingVideoEnabled (boolean enabled) {
+    if (isDestroyed()) {
+      return;
+    }
     TGCallService service = currentCallService();
     if (service == null) {
       return;
@@ -1353,8 +1368,11 @@ public class CallController extends ViewController<CallController.Arguments> imp
       if (videoSinksAttached) {
         boundVideoService.setIncomingVideoOutput(null);
         boundVideoService.setLocalVideoOutput(null);
+        videoSinksAttached = false;
       }
-      boundVideoService.setVideoStateListener(null);
+      // Compare-and-clear: only unregister if WE are still the bound listener, so a newer
+      // CallController that took over the service isn't accidentally unhooked.
+      boundVideoService.removeVideoStateListener(this);
       boundVideoService = null;
     }
     if (callVideoView != null) {
