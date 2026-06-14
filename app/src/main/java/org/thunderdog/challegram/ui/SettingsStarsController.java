@@ -18,6 +18,8 @@ import android.widget.Toast;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.billing.BillingConfig;
+import org.thunderdog.challegram.billing.BillingManager;
 import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
@@ -225,20 +227,46 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
 
   private void purchaseStars(TdApi.StarPaymentOption option) {
     if (!StringUtils.isEmpty(option.storeProductId)) {
-      // Store (Google Play) purchase of Telegram Stars.
-      // Mirrors SettingsPremiumController#startPaymentFlow: when only a store
-      // product id is available and there is no out-of-store payment route,
-      // surface the store-unavailable notice. The shared BillingManager is
-      // currently wired exclusively for the Premium SUBS product and exposes
-      // no generic INAPP entry point for StorePaymentPurposeStars, so an
-      // honest notice is shown instead of a fake purchase. See report.
-      UI.showToast(R.string.PremiumStorePaymentNotAvailable, Toast.LENGTH_SHORT);
+      // Store (Google Play) purchase of Telegram Stars via the generic INAPP entry
+      // point on BillingManager. The option's storeProductId is queried as a one-time
+      // INAPP product, the billing flow is launched, and on success the transaction is
+      // assigned to TDLib with a StorePaymentPurposeStars payload (see
+      // BillingManager#launchStarsPurchase / #assignPurchaseToServer).
+      purchaseStarsFromStore(option);
     } else {
       // Out-of-store purchase: build a Telegram invoice for the Stars purpose
       // and route it through the regular GetPaymentForm flow, mirroring
       // SettingsPremiumController#openPaymentForm / #handlePaymentForm.
       purchaseStarsOutOfStore(option);
     }
+  }
+
+  private void purchaseStarsFromStore(TdApi.StarPaymentOption option) {
+    BillingManager billing = BillingManager.getInstance();
+    if (!BillingConfig.BILLING_ENABLED || !billing.isReady()) {
+      // Google Play billing is unavailable (e.g. no Play Services, or not yet connected).
+      // Fall back to the out-of-store Telegram invoice flow when allowed, otherwise show
+      // the standard store-unavailable notice.
+      if (BillingConfig.USE_INVOICE_FALLBACK) {
+        purchaseStarsOutOfStore(option);
+      } else {
+        UI.showToast(R.string.PremiumStorePaymentNotAvailable, Toast.LENGTH_SHORT);
+      }
+      return;
+    }
+
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+
+    // Refresh the balance/options once TDLib confirms the assigned store transaction.
+    billing.addResultListener(option.storeProductId, billingResult -> runOnUiThreadOptional(() -> {
+      UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
+      fetchData();
+    }));
+
+    billing.launchStarsPurchase(context(), tdlib, option, () -> runOnUiThreadOptional(() -> {
+      // Purchase canceled or could not be started: keep the screen as-is. A toast would be
+      // noisy for an intentional user cancel, matching the Premium store flow's behavior.
+    }));
   }
 
   private void purchaseStarsOutOfStore(TdApi.StarPaymentOption option) {

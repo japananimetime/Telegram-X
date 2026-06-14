@@ -24,6 +24,7 @@ import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.ConsumeParams;
 import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.Purchase;
 import com.android.billingclient.api.PurchasesUpdatedListener;
@@ -73,6 +74,16 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
   private boolean isConnected;
   private boolean billingUnavailable;
   private int retryCount;
+
+  // In-memory cache of Stars purchase purposes, keyed by the obfuscated profile id
+  // (payload id) handed to Google Play. The shared BillingPayloadHandler only knows
+  // how to (de)serialize the Premium subscription purpose to disk, so for the generic
+  // INAPP Stars flow we keep the live StorePaymentPurposeStars here and resolve it in
+  // the purchase callback before falling back to the on-disk handler. Consumable Stars
+  // purchases complete within the same app session, so this in-memory map is the
+  // primary resolution path for them. See assignPurchaseToServer() / resolvePayload().
+  private final Map<String, Pair<Integer, TdApi.StorePaymentPurpose>> pendingStarsPurposes =
+    Collections.synchronizedMap(new HashMap<>());
 
   // Purchase flow state
   private Tdlib currentTdlib;
@@ -326,6 +337,171 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
     }
   }
 
+  /**
+   * Launches a generic in-app (consumable) purchase of Telegram Stars through Google Play.
+   *
+   * Unlike {@link #launchPremiumPurchase}, the Stars store products are one-time INAPP
+   * products (not SUBS), so there is no subscription offer token. The product details are
+   * queried on demand from the option's {@code storeProductId} and the resulting transaction
+   * is assigned to TDLib with a {@link TdApi.StorePaymentPurposeStars} purpose via the shared
+   * {@link #onPurchasesUpdated} / {@link #assignPurchaseToServer} callback path.
+   *
+   * @param activity   The activity to launch the flow from
+   * @param tdlib      The TDLib instance for the current account
+   * @param option     The store-purchasable Stars option (must have a non-empty storeProductId)
+   * @param onCanceled Callback when the purchase is canceled or cannot be started
+   */
+  public void launchStarsPurchase(
+    @NonNull Activity activity,
+    @NonNull Tdlib tdlib,
+    @NonNull TdApi.StarPaymentOption option,
+    @Nullable Runnable onCanceled
+  ) {
+    if (!BillingConfig.BILLING_ENABLED) {
+      if (BillingConfig.DEBUG_BILLING) {
+        Log.d(TAG, "Billing disabled");
+      }
+      if (onCanceled != null) {
+        onCanceled.run();
+      }
+      return;
+    }
+
+    if (option.storeProductId == null || option.storeProductId.isEmpty()) {
+      if (BillingConfig.DEBUG_BILLING) {
+        Log.w(TAG, "Stars option has no store product id");
+      }
+      if (onCanceled != null) {
+        onCanceled.run();
+      }
+      return;
+    }
+
+    if (!billingClient.isReady()) {
+      if (BillingConfig.DEBUG_BILLING) {
+        Log.w(TAG, "Billing not ready for Stars purchase");
+      }
+      if (onCanceled != null) {
+        onCanceled.run();
+      }
+      return;
+    }
+
+    // Build the Stars purpose up-front. TDLib requires CanPurchaseFromStore to be called
+    // before any in-store purchase; mirror that contract here.
+    final TdApi.StorePaymentPurposeStars purpose = new TdApi.StorePaymentPurposeStars(
+      option.currency,
+      option.amount,
+      option.starCount,
+      0 /* chatId: buying for self */
+    );
+
+    tdlib.client().send(new TdApi.CanPurchaseFromStore(purpose), canPurchaseResult -> UI.post(() -> {
+      if (canPurchaseResult.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+        TdApi.Error error = (TdApi.Error) canPurchaseResult;
+        if (BillingConfig.DEBUG_BILLING) {
+          Log.w(TAG, "CanPurchaseFromStore failed: %d %s", error.code, error.message);
+        }
+        if (onCanceled != null) {
+          onCanceled.run();
+        }
+        return;
+      }
+      queryAndLaunchStarsProduct(activity, tdlib, option, purpose, onCanceled);
+    }));
+  }
+
+  private void queryAndLaunchStarsProduct(
+    @NonNull Activity activity,
+    @NonNull Tdlib tdlib,
+    @NonNull TdApi.StarPaymentOption option,
+    @NonNull TdApi.StorePaymentPurposeStars purpose,
+    @Nullable Runnable onCanceled
+  ) {
+    QueryProductDetailsParams.Product product = QueryProductDetailsParams.Product.newBuilder()
+      .setProductId(option.storeProductId)
+      .setProductType(BillingClient.ProductType.INAPP)
+      .build();
+
+    QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder()
+      .setProductList(Collections.singletonList(product))
+      .build();
+
+    billingClient.queryProductDetailsAsync(params, (billingResult, productDetailsList) -> UI.post(() -> {
+      if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+        if (BillingConfig.DEBUG_BILLING) {
+          Log.w(TAG, "Failed to query Stars product details: %s",
+            getResponseCodeString(billingResult.getResponseCode()));
+        }
+        if (onCanceled != null) {
+          onCanceled.run();
+        }
+        return;
+      }
+
+      ProductDetails starsDetails = null;
+      for (ProductDetails details : productDetailsList) {
+        if (option.storeProductId.equals(details.getProductId())) {
+          starsDetails = details;
+          break;
+        }
+      }
+
+      if (starsDetails == null) {
+        if (BillingConfig.DEBUG_BILLING) {
+          Log.w(TAG, "Stars product not found in Play Store");
+        }
+        if (onCanceled != null) {
+          onCanceled.run();
+        }
+        return;
+      }
+
+      launchStarsBillingFlow(activity, tdlib, starsDetails, purpose, onCanceled);
+    }));
+  }
+
+  private void launchStarsBillingFlow(
+    @NonNull Activity activity,
+    @NonNull Tdlib tdlib,
+    @NonNull ProductDetails starsDetails,
+    @NonNull TdApi.StorePaymentPurposeStars purpose,
+    @Nullable Runnable onCanceled
+  ) {
+    this.currentTdlib = tdlib;
+    this.onPurchaseCanceled = onCanceled;
+
+    // Create obfuscated payload (account id + payload id). The handler persists what it
+    // can; for Stars we additionally keep the live purpose in memory keyed by payload id.
+    Pair<String, String> payload = payloadHandler.createPayload(purpose, tdlib.id());
+    pendingStarsPurposes.put(payload.second, Pair.create(tdlib.id(), (TdApi.StorePaymentPurpose) purpose));
+
+    // INAPP products have no subscription offer token; set the product details directly.
+    BillingFlowParams.ProductDetailsParams productParams =
+      BillingFlowParams.ProductDetailsParams.newBuilder()
+        .setProductDetails(starsDetails)
+        .build();
+
+    BillingFlowParams flowParams = BillingFlowParams.newBuilder()
+      .setProductDetailsParamsList(Collections.singletonList(productParams))
+      .setObfuscatedAccountId(payload.first)
+      .setObfuscatedProfileId(payload.second)
+      .build();
+
+    BillingResult result = billingClient.launchBillingFlow(activity, flowParams);
+
+    if (result.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+      if (BillingConfig.DEBUG_BILLING) {
+        Log.w(TAG, "Failed to launch Stars billing flow: %s",
+          getResponseCodeString(result.getResponseCode()));
+      }
+      pendingStarsPurposes.remove(payload.second);
+      if (onCanceled != null) {
+        onCanceled.run();
+      }
+    }
+  }
+
   // ==================== Purchase Callbacks ====================
 
   @Override
@@ -384,9 +560,40 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
     }
   }
 
+  /**
+   * Resolves the (accountId, purpose) for a completed purchase. Stars purposes are looked
+   * up first from the in-memory map populated by {@link #launchStarsBillingFlow}; everything
+   * else (and any miss) falls back to the on-disk {@link BillingPayloadHandler}, which is the
+   * Premium subscription path.
+   */
+  @Nullable
+  private Pair<Integer, TdApi.StorePaymentPurpose> resolvePayload(@NonNull Purchase purchase) {
+    com.android.billingclient.api.AccountIdentifiers identifiers = purchase.getAccountIdentifiers();
+    if (identifiers != null) {
+      String obfuscatedData = identifiers.getObfuscatedProfileId();
+      if (obfuscatedData != null && !obfuscatedData.isEmpty()) {
+        Pair<Integer, TdApi.StorePaymentPurpose> starsPayload = pendingStarsPurposes.get(obfuscatedData);
+        if (starsPayload != null) {
+          return starsPayload;
+        }
+      }
+    }
+    return payloadHandler.extractPayload(purchase);
+  }
+
+  private void clearResolvedPayload(@NonNull Purchase purchase) {
+    com.android.billingclient.api.AccountIdentifiers identifiers = purchase.getAccountIdentifiers();
+    if (identifiers != null) {
+      String obfuscatedData = identifiers.getObfuscatedProfileId();
+      if (obfuscatedData != null && !obfuscatedData.isEmpty()) {
+        pendingStarsPurposes.remove(obfuscatedData);
+      }
+    }
+    payloadHandler.clearPayload(purchase);
+  }
+
   private void assignPurchaseToServer(Purchase purchase) {
-    Pair<Integer, TdApi.StorePaymentPurpose> payload =
-      payloadHandler.extractPayload(purchase);
+    Pair<Integer, TdApi.StorePaymentPurpose> payload = resolvePayload(purchase);
 
     if (payload == null) {
       if (BillingConfig.DEBUG_BILLING) {
@@ -429,8 +636,18 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
             Log.d(TAG, "Purchase assigned successfully");
           }
 
-          // Clear stored payload
-          payloadHandler.clearPayload(purchase);
+          // Determine consumability BEFORE clearing the in-memory Stars purpose.
+          // Stars are sold as one-time consumable INAPP products. After the server has
+          // credited them, the Google Play purchase must be consumed so it can be bought
+          // again (and is not auto-refunded). Premium SUBS purchases are never consumable.
+          boolean consumable = isConsumablePurchase(purchase);
+
+          // Clear stored payload (on-disk + in-memory Stars purpose)
+          clearResolvedPayload(purchase);
+
+          if (consumable) {
+            consumePurchase(purchase);
+          }
 
           // Notify success listeners
           for (String product : purchase.getProducts()) {
@@ -453,6 +670,43 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
           }
         }
       });
+    });
+  }
+
+  /**
+   * Returns whether a completed purchase is a consumable (Stars / INAPP) product rather than
+   * the Premium subscription. A purchase is treated as consumable when we tracked its purpose
+   * as Stars in the in-memory map, or when it does not contain the Premium product id.
+   */
+  private boolean isConsumablePurchase(@NonNull Purchase purchase) {
+    if (purchase.getProducts().contains(BillingConfig.PREMIUM_PRODUCT_ID)) {
+      return false;
+    }
+    com.android.billingclient.api.AccountIdentifiers identifiers = purchase.getAccountIdentifiers();
+    if (identifiers != null) {
+      String obfuscatedData = identifiers.getObfuscatedProfileId();
+      if (obfuscatedData != null && !obfuscatedData.isEmpty()) {
+        Pair<Integer, TdApi.StorePaymentPurpose> tracked = pendingStarsPurposes.get(obfuscatedData);
+        if (tracked != null && tracked.second instanceof TdApi.StorePaymentPurposeStars) {
+          return true;
+        }
+      }
+    }
+    // Any non-Premium product reaching this point is an in-app consumable (Stars).
+    return true;
+  }
+
+  private void consumePurchase(@NonNull Purchase purchase) {
+    if (!billingClient.isReady()) {
+      return;
+    }
+    ConsumeParams consumeParams = ConsumeParams.newBuilder()
+      .setPurchaseToken(purchase.getPurchaseToken())
+      .build();
+    billingClient.consumeAsync(consumeParams, (billingResult, purchaseToken) -> {
+      if (BillingConfig.DEBUG_BILLING) {
+        Log.d(TAG, "Consume finished: %s", getResponseCodeString(billingResult.getResponseCode()));
+      }
     });
   }
 
@@ -483,6 +737,28 @@ public class BillingManager implements PurchasesUpdatedListener, BillingClientSt
               // Pending purchase found, process it
               handlePurchase(purchase);
             }
+          }
+        }
+      }
+    });
+
+    // Also recover any in-app (Stars consumable) purchases that were paid for but not yet
+    // delivered to the server / consumed — e.g. the billing flow's onPurchasesUpdated was
+    // missed because the app was backgrounded. These can only be re-assigned while their
+    // Stars purpose is still resolvable (in-memory, same app session); see resolvePayload().
+    QueryPurchasesParams inAppParams = QueryPurchasesParams.newBuilder()
+      .setProductType(BillingClient.ProductType.INAPP)
+      .build();
+
+    billingClient.queryPurchasesAsync(inAppParams, (billingResult, purchases) -> {
+      if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+        if (BillingConfig.DEBUG_BILLING) {
+          Log.d(TAG, "Found %d existing in-app purchases", purchases.size());
+        }
+        for (Purchase purchase : purchases) {
+          // Premium is a SUBS product; INAPP results here are Stars (consumables).
+          if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
+            handlePurchase(purchase);
           }
         }
       }
