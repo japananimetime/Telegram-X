@@ -217,7 +217,10 @@ public class SavedMessagesTagsBarView extends RecyclerView {
 
       countCounter = new Counter.Builder()
         .noBackground()
-        .textColor(ColorId.text, ColorId.text, ColorId.text)
+        // Selected chips are drawn on a fillingPositive fill, so the label/count must use the
+        // matching on-accent content color for readable contrast (mirrors ReactionsSelectorRecyclerView).
+        // Unselected chips sit on the regular filling and use the default text color.
+        .colorSet(() -> Theme.getColor(isSelected ? ColorId.fillingPositiveContent : ColorId.text))
         .textSize(12f)
         .allBold(false)
         .callback(this)

@@ -23,11 +23,14 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
+import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGReaction;
 import org.thunderdog.challegram.data.TGStickerSetInfo;
+import org.thunderdog.challegram.navigation.NavigationController;
 import org.thunderdog.challegram.navigation.SettingsWrapBuilder;
+import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.StickersListener;
 import org.thunderdog.challegram.telegram.TGLegacyManager;
 import org.thunderdog.challegram.telegram.Tdlib;
@@ -277,6 +280,12 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
         Settings.instance().setBigReactionsInChannels(result.get(R.id.btn_bigReactionsChannels) == R.id.btn_bigReactionsChannels);
         Settings.instance().setBigReactionsInChats(result.get(R.id.btn_bigReactionsChats) == R.id.btn_bigReactionsChats);
         adapter.updateValuedSettingById(R.id.btn_big_reactions);
+        // The Big Reactions toggle is stored as plain preference keys and fires no
+        // SettingsChangeListener broadcast, so MessagesManager.refreshBigReactions()
+        // has to be invoked manually here. Walk the current navigation stack and
+        // refresh any open chat so the new reaction style takes effect immediately
+        // instead of only on the next chat re-open.
+        refreshOpenChatsBigReactions();
       });
     } else if (viewId == R.id.btn_emoji) {
       SettingsCloudEmojiController c = new SettingsCloudEmojiController(context, tdlib);
@@ -315,6 +324,21 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
       Settings.instance().setShowAttachWhileTyping(adapter.toggleView(v));
     } else if (viewId == R.id.btn_showVoiceWhileTyping) {
       Settings.instance().setShowVoiceWhileTyping(adapter.toggleView(v));
+    }
+  }
+
+  private void refreshOpenChatsBigReactions () {
+    NavigationController navigation = context.navigation();
+    if (navigation == null) {
+      return;
+    }
+    for (ViewController<?> c : navigation.getStack().getAll()) {
+      if (c instanceof MessagesController) {
+        MessagesManager manager = ((MessagesController) c).getManager();
+        if (manager != null) {
+          manager.refreshBigReactions();
+        }
+      }
     }
   }
 

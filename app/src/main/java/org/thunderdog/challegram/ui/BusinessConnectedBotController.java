@@ -247,7 +247,9 @@ public class BusinessConnectedBotController extends EditBaseController<Void> imp
       promptBotUsername();
     } else if (id == R.id.btn_businessRecipients) {
       BusinessRecipientsController c = new BusinessRecipientsController(context, tdlib);
-      c.setArguments(new BusinessRecipientsController.Args(recipients, this));
+      // Connected bots are the only recipients context that supports an explicit
+      // "always excluded chats" list (TdApi.BusinessRecipients.excludedChatIds).
+      c.setArguments(new BusinessRecipientsController.Args(recipients, this, /* allowExcludedChats */ true));
       navigateTo(c);
     } else if (id == R.id.btn_businessBotRemove) {
       confirmRemove();

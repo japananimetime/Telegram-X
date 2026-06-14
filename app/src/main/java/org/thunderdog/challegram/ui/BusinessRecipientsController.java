@@ -21,25 +21,30 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import me.vkryl.android.widget.FrameLayoutFix;
 
 /**
  * Shared editor for {@link TdApi.BusinessRecipients}. Lets the user pick which
  * private chats automatic messages apply to via category toggles (all existing,
- * all new, contacts, non-contacts) and choose between an "include" and an
- * "exclude" interpretation. Any explicitly-selected chat identifiers from an
- * existing configuration are preserved untouched (picking individual chats is a
- * follow-up). The result is handed back to the launching editor through
- * {@link Delegate}; this controller does not itself send any Set* request.
+ * all new, contacts, non-contacts), choose between an "include" and an "exclude"
+ * interpretation, AND pick explicit per-chat identifiers to include
+ * ({@link TdApi.BusinessRecipients#chatIds}) or exclude
+ * ({@link TdApi.BusinessRecipients#excludedChatIds}). The explicit per-chat
+ * selection reuses {@link SelectChatsController} (the same multi-select chat
+ * picker that powers chat-folder include/exclude editing). The result is handed
+ * back to the launching editor through {@link Delegate}; this controller does
+ * not itself send any Set* request.
  */
-public class BusinessRecipientsController extends EditBaseController<BusinessRecipientsController.Args> implements View.OnClickListener {
+public class BusinessRecipientsController extends EditBaseController<BusinessRecipientsController.Args> implements View.OnClickListener, SelectChatsController.Delegate {
 
   public interface Delegate {
     void onRecipientsChanged (@NonNull TdApi.BusinessRecipients recipients);
@@ -48,10 +53,16 @@ public class BusinessRecipientsController extends EditBaseController<BusinessRec
   public static class Args {
     public final @NonNull TdApi.BusinessRecipients recipients;
     public final @NonNull Delegate delegate;
+    public final boolean allowExcludedChats;
 
     public Args (@Nullable TdApi.BusinessRecipients recipients, @NonNull Delegate delegate) {
+      this(recipients, delegate, false);
+    }
+
+    public Args (@Nullable TdApi.BusinessRecipients recipients, @NonNull Delegate delegate, boolean allowExcludedChats) {
       this.recipients = recipients != null ? recipients : emptyRecipients();
       this.delegate = delegate;
+      this.allowExcludedChats = allowExcludedChats;
     }
   }
 
@@ -61,6 +72,7 @@ public class BusinessRecipientsController extends EditBaseController<BusinessRec
 
   private SettingsAdapter adapter;
   private TdApi.BusinessRecipients recipients;
+  private boolean allowExcludedChats;
 
   public BusinessRecipientsController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -85,11 +97,22 @@ public class BusinessRecipientsController extends EditBaseController<BusinessRec
       src.chatIds != null ? src.chatIds.clone() : new long[0],
       src.excludedChatIds != null ? src.excludedChatIds.clone() : new long[0],
       src.selectExistingChats, src.selectNewChats, src.selectContacts, src.selectNonContacts, src.excludeSelected);
+    this.allowExcludedChats = args.allowExcludedChats;
   }
 
   @Override
   protected void onCreateView (Context context, FrameLayoutFix contentView, RecyclerView recyclerView) {
-    adapter = new SettingsAdapter(this);
+    adapter = new SettingsAdapter(this) {
+      @Override
+      protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
+        final int id = item.getId();
+        if (id == R.id.btn_folderIncludeChats) {
+          view.setData(chatCountSubtitle(recipients.chatIds));
+        } else if (id == R.id.btn_folderExcludeChats) {
+          view.setData(chatCountSubtitle(recipients.excludedChatIds));
+        }
+      }
+    };
 
     List<ListItem> items = new ArrayList<>();
 
@@ -104,6 +127,18 @@ public class BusinessRecipientsController extends EditBaseController<BusinessRec
     items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_recipientsNonContacts, 0, R.string.BusinessRecipientsNonContacts, recipients.selectNonContacts));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
+    // Explicit per-chat selection. "Include Chats" always adds to chatIds; when
+    // excluded chats are supported (businessConnectedBot) a second row edits
+    // excludedChatIds.
+    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.Chats));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_folderIncludeChats, 0, R.string.IncludeChats));
+    if (allowExcludedChats) {
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_folderExcludeChats, 0, R.string.ExcludeChats));
+    }
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_recipientsExcludeSelected, 0, R.string.BusinessRecipientsExclude, recipients.excludeSelected));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -116,9 +151,24 @@ public class BusinessRecipientsController extends EditBaseController<BusinessRec
     setDoneVisible(true);
   }
 
+  private CharSequence chatCountSubtitle (@Nullable long[] chatIds) {
+    int count = chatIds != null ? chatIds.length : 0;
+    if (count == 0) {
+      return Lang.getString(R.string.Nobody);
+    }
+    return Lang.plural(R.string.xChats, count);
+  }
+
   @Override
   public void onClick (View v) {
     final int id = v.getId();
+    if (id == R.id.btn_folderIncludeChats) {
+      openChatPicker(/* excluded */ false);
+      return;
+    } else if (id == R.id.btn_folderExcludeChats) {
+      openChatPicker(/* excluded */ true);
+      return;
+    }
     boolean value = adapter.toggleView(v);
     if (id == R.id.btn_recipientsExistingChats) {
       recipients.selectExistingChats = value;
@@ -130,6 +180,58 @@ public class BusinessRecipientsController extends EditBaseController<BusinessRec
       recipients.selectNonContacts = value;
     } else if (id == R.id.btn_recipientsExcludeSelected) {
       recipients.excludeSelected = value;
+    }
+  }
+
+  /**
+   * Opens the shared {@link SelectChatsController} multi-chat picker, pre-selected
+   * with the current include/exclude chat ids. We reuse the chat-folder
+   * include/exclude modes by handing the picker a throwaway {@link TdApi.ChatFolder}
+   * that carries our ids; the new selection comes back via
+   * {@link #onSelectedChatsChanged(int, Set, Set)} and is read off the {@code chatIds}
+   * we passed (chat types are not shown, so {@code chatTypes} stays empty).
+   */
+  private void openChatPicker (boolean excluded) {
+    long[] currentIds = excluded ? recipients.excludedChatIds : recipients.chatIds;
+    if (currentIds == null) {
+      currentIds = new long[0];
+    }
+    // Throwaway folder used purely as the picker's id carrier. showChatTypes=false
+    // so no chat-type pseudo-entries are offered (BusinessRecipients has no notion
+    // of them — those are the category checkboxes above).
+    TdApi.ChatFolder carrier = new TdApi.ChatFolder(
+      new TdApi.ChatFolderName(new TdApi.FormattedText("", new TdApi.TextEntity[0]), false),
+      null, -1, false,
+      new long[0],
+      excluded ? new long[0] : currentIds.clone(),
+      excluded ? currentIds.clone() : new long[0],
+      false, false, false, false, false, false, false, false);
+    SelectChatsController c = new SelectChatsController(context, tdlib);
+    if (excluded) {
+      c.setArguments(SelectChatsController.Arguments.excludedChats(this, 0, carrier, /* showChatTypes */ false));
+    } else {
+      c.setArguments(SelectChatsController.Arguments.includedChats(this, 0, carrier, /* showChatTypes */ false));
+    }
+    navigateTo(c);
+  }
+
+  @Override
+  public void onSelectedChatsChanged (int mode, Set<Long> chatIds, Set<Integer> chatTypes) {
+    long[] ids = new long[chatIds.size()];
+    int i = 0;
+    for (long chatId : chatIds) {
+      ids[i++] = chatId;
+    }
+    if (mode == SelectChatsController.MODE_FOLDER_EXCLUDE_CHATS) {
+      recipients.excludedChatIds = ids;
+      if (adapter != null) {
+        adapter.updateValuedSettingById(R.id.btn_folderExcludeChats);
+      }
+    } else {
+      recipients.chatIds = ids;
+      if (adapter != null) {
+        adapter.updateValuedSettingById(R.id.btn_folderIncludeChats);
+      }
     }
   }
 

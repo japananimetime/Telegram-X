@@ -4149,11 +4149,68 @@ public class TdlibUi extends Handler {
         return; // async
       }
 
-      case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR:
-        // A live story requires the join-broadcast flow (searchPublicChat -> getChatActiveStories
-        // -> find the live story -> joinLiveStory) and live-playback handling that the current
-        // StoryViewController does not implement. Leaving unsupported rather than shipping a stub
-        // that would silently fail to join the live broadcast. Tracked under #843.
+      case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR: {
+        // Per TDLib: searchPublicChat -> getChatActiveStories -> find the live story among the
+        // chat's active stories. The full live-broadcast experience additionally requires
+        // joinLiveStory(groupCallId, GroupCallJoinParameters) + group-call playback of the
+        // StoryContentLive stream, which StoryViewController does NOT implement (it only renders
+        // StoryContentPhoto/Video). Rather than stub a fake join, we resolve the poster, locate the
+        // live story id and open the existing story viewer at it so the link lands on the correct
+        // poster + story instead of falling through to InternalUrlUnsupported. The live group-call
+        // join/playback itself is intentionally not handled here. Tracked under #843.
+        TdApi.InternalLinkTypeLiveStory liveStory = (TdApi.InternalLinkTypeLiveStory) linkType;
+        tdlib.client().send(new TdApi.SearchPublicChat(liveStory.storyPosterUsername), object -> {
+          if (object.getConstructor() == TdApi.Chat.CONSTRUCTOR) {
+            TdApi.Chat chat = tdlib.objectToChat(object);
+            tdlib.client().send(new TdApi.GetChatActiveStories(chat.id), storiesResult -> {
+              if (storiesResult.getConstructor() == TdApi.ChatActiveStories.CONSTRUCTOR) {
+                TdApi.ChatActiveStories activeStories = (TdApi.ChatActiveStories) storiesResult;
+                int liveStoryId = 0;
+                if (activeStories.stories != null) {
+                  for (TdApi.StoryInfo storyInfo : activeStories.stories) {
+                    if (storyInfo.isLive) {
+                      liveStoryId = storyInfo.storyId;
+                      break;
+                    }
+                  }
+                }
+                if (liveStoryId != 0) {
+                  final int storyIdToOpen = liveStoryId;
+                  post(() -> {
+                    openStory(context, chat.id, storyIdToOpen);
+                    if (after != null) {
+                      after.runWithBool(true);
+                    }
+                  });
+                } else {
+                  // No active live story (broadcast ended or never started).
+                  post(() -> {
+                    showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+                    if (after != null) {
+                      after.runWithBool(false);
+                    }
+                  });
+                }
+              } else {
+                post(() -> {
+                  showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(storiesResult), openParameters);
+                  if (after != null) {
+                    after.runWithBool(false);
+                  }
+                });
+              }
+            });
+          } else {
+            post(() -> {
+              showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(object), openParameters);
+              if (after != null) {
+                after.runWithBool(false);
+              }
+            });
+          }
+        });
+        return; // async
+      }
 
       case TdApi.InternalLinkTypeRestorePurchases.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:

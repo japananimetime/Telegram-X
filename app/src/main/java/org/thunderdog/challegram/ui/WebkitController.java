@@ -190,7 +190,14 @@ public class WebkitController<T> extends ViewController<T> {
     final WebSettings settings = webView.getSettings();
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      // FIXME maybe better to remove?
+      // Decision (resolves former "maybe better to remove?" FIXME): the generic in-app browser
+      // keeps MIXED_CONTENT_ALWAYS_ALLOW and third-party cookies enabled on purpose, for
+      // compatibility with arbitrary remote sites (FAQ pages, HTML5 games, login flows that rely
+      // on cross-site cookies and pages that still serve mixed http(s) sub-resources). Tightening
+      // these globally would visibly break such pages. Hardening is therefore opt-in per surface:
+      // privileged WebViews that inject the JS bridge (WebAppController / Mini Apps) override
+      // allowsMixedContent()/allowsThirdPartyCookies() to return false (NEVER_ALLOW + no
+      // third-party cookies), so the permissive defaults never apply to attacker-influenced pages.
       settings.setMixedContentMode(allowsMixedContent() ? WebSettings.MIXED_CONTENT_ALWAYS_ALLOW : WebSettings.MIXED_CONTENT_NEVER_ALLOW);
       CookieManager.getInstance().setAcceptThirdPartyCookies(webView, allowsThirdPartyCookies());
     }

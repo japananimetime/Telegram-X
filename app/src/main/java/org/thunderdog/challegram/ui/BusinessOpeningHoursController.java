@@ -30,6 +30,8 @@ import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.UI;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.TimeZone;
 
@@ -38,34 +40,42 @@ import me.vkryl.core.StringUtils;
 
 /**
  * Editor for the Telegram Business opening hours. The user picks a time zone and,
- * per week day, marks the business open and edits an open/close time. The per-day
- * intervals are converted to minute-of-week {@link TdApi.BusinessOpeningHoursInterval}
- * entries and saved via {@link TdApi.SetBusinessOpeningHours}; turning every day off
- * sends {@code null} to remove the opening hours entirely.
+ * per week day, marks the business open and edits one or more open/close
+ * intervals. Each interval may run past midnight (an "overnight" interval, e.g.
+ * Fri 18:00 → 02:00). The per-day intervals are converted to minute-of-week
+ * {@link TdApi.BusinessOpeningHoursInterval} entries and saved via
+ * {@link TdApi.SetBusinessOpeningHours}; turning every day off sends {@code null}
+ * to remove the opening hours entirely.
  *
- * <p>Per-day editing here is limited to a single contiguous interval (the common
- * case). Multiple intervals per day from the server are preserved by collapsing to
- * the day's earliest start / latest end when first loaded; richer multi-interval
- * editing is a follow-up.
+ * <p>Intervals are stored relative to the day they start in: {@code start} is a
+ * minute-of-day in {@code [0, 24*60)} and {@code end} is a minute-of-day in
+ * {@code (start, 48*60]} — values above {@code 24*60} represent an overnight
+ * spill into the following day. On save each interval is offset by the day's
+ * base minute-of-week, which reproduces TDLib's representation exactly (including
+ * overnight spill-over) and supports arbitrarily many intervals per day.
  */
 public class BusinessOpeningHoursController extends EditBaseController<TdApi.BusinessOpeningHours> implements View.OnClickListener {
 
   private static final int MINUTES_PER_DAY = 24 * 60;
+  private static final int MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY;
   private static final int DEFAULT_OPEN_MINUTE = 9 * 60;  // 09:00
   private static final int DEFAULT_CLOSE_MINUTE = 17 * 60; // 17:00
 
-  // Per-day state: open flag and a within-day interval [openMinute, closeMinute).
-  private final boolean[] dayOpen = new boolean[7];
-  private final int[] dayOpenMinute = new int[7];
-  private final int[] dayCloseMinute = new int[7];
-  // Tracks which days the user actually touched. Days the user did NOT edit keep
-  // their original server intervals verbatim on save (see onDoneClick), so that
-  // overnight intervals the simplified single-interval-per-day editor cannot
-  // represent (e.g. Fri 18:00 -> Sat 02:00) are preserved rather than truncated.
-  private final boolean[] dayEdited = new boolean[7];
-  // Original server intervals, grouped by the day they START in (0=Mon..6=Sun).
-  // Used to re-emit unedited days exactly, including overnight spill-over.
-  @Nullable private List<TdApi.BusinessOpeningHoursInterval>[] originalIntervalsByDay;
+  /** A within-day interval. start in [0, MINUTES_PER_DAY); end in (start, 2*MINUTES_PER_DAY]. */
+  private static final class Interval {
+    int start;
+    int end;
+
+    Interval (int start, int end) {
+      this.start = start;
+      this.end = end;
+    }
+  }
+
+  // Per-day intervals, relative to the day they START in (0=Mon..6=Sun).
+  // An empty list means the day is closed.
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private final List<Interval>[] dayIntervals = new List[7];
   private String timeZoneId;
 
   private SettingsAdapter adapter;
@@ -88,50 +98,46 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
   public void setArguments (@Nullable TdApi.BusinessOpeningHours args) {
     super.setArguments(args);
     for (int i = 0; i < 7; i++) {
-      dayOpen[i] = false;
-      dayOpenMinute[i] = DEFAULT_OPEN_MINUTE;
-      dayCloseMinute[i] = DEFAULT_CLOSE_MINUTE;
-      dayEdited[i] = false;
+      dayIntervals[i] = new ArrayList<>();
     }
-    //noinspection unchecked
-    originalIntervalsByDay = new List[7];
     if (args != null) {
       this.timeZoneId = args.timeZoneId;
       if (args.openingHours != null) {
         for (TdApi.BusinessOpeningHoursInterval interval : args.openingHours) {
-          // Map the week-minute interval back onto the day it starts in.
-          int day = Math.min(6, Math.max(0, interval.startMinute / MINUTES_PER_DAY));
-          // Remember the original interval verbatim so an unedited day can be
-          // re-emitted exactly on save (TDLib's endMinute spills into the next
-          // day for overnight hours; we must not lose that on save).
-          if (originalIntervalsByDay[day] == null) {
-            originalIntervalsByDay[day] = new ArrayList<>();
+          int start = interval.startMinute;
+          int end = interval.endMinute;
+          if (end <= start) {
+            continue;
           }
-          originalIntervalsByDay[day].add(interval);
-
-          int startInDay = interval.startMinute - day * MINUTES_PER_DAY;
-          int endInDay = interval.endMinute - day * MINUTES_PER_DAY;
-          // For DISPLAY only, the single-interval editor clamps overnight spill to
-          // end-of-day. The original interval above is preserved for save, so the
-          // overnight portion is not actually destroyed unless the user edits this day.
-          if (endInDay > MINUTES_PER_DAY) {
-            endInDay = MINUTES_PER_DAY;
-          }
-          if (!dayOpen[day]) {
-            dayOpen[day] = true;
-            dayOpenMinute[day] = startInDay;
-            dayCloseMinute[day] = endInDay;
-          } else {
-            // Collapse multiple intervals to earliest start / latest end.
-            dayOpenMinute[day] = Math.min(dayOpenMinute[day], startInDay);
-            dayCloseMinute[day] = Math.max(dayCloseMinute[day], endInDay);
-          }
+          // Clamp to the valid week range defensively.
+          start = Math.max(0, Math.min(start, MINUTES_PER_WEEK - 1));
+          end = Math.max(start + 1, Math.min(end, MINUTES_PER_WEEK + MINUTES_PER_DAY));
+          int day = Math.min(6, start / MINUTES_PER_DAY);
+          int base = day * MINUTES_PER_DAY;
+          // Keep relative to the start day, preserving overnight spill (end may
+          // exceed MINUTES_PER_DAY, meaning the interval continues into the next day).
+          dayIntervals[day].add(new Interval(start - base, end - base));
+        }
+        for (int day = 0; day < 7; day++) {
+          sortIntervals(dayIntervals[day]);
         }
       }
     }
     if (StringUtils.isEmpty(timeZoneId)) {
       timeZoneId = TimeZone.getDefault().getID();
     }
+  }
+
+  private static void sortIntervals (List<Interval> intervals) {
+    Collections.sort(intervals, new Comparator<Interval>() {
+      @Override
+      public int compare (Interval a, Interval b) {
+        if (a.start != b.start) {
+          return Integer.compare(a.start, b.start);
+        }
+        return Integer.compare(a.end, b.end);
+      }
+    });
   }
 
   @Override
@@ -145,9 +151,7 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
         } else if (id == R.id.btn_businessDay) {
           int day = item.getIntValue();
           if (day >= 0 && day < 7) {
-            view.setData(dayOpen[day]
-              ? formatRange(dayOpenMinute[day], dayCloseMinute[day])
-              : Lang.getString(R.string.BusinessHoursClosed));
+            view.setData(formatDay(day));
           }
         }
       }
@@ -200,17 +204,40 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
     return String.valueOf(day);
   }
 
+  /** Subtitle shown on a day row: comma-joined intervals, or "Closed". */
+  private String formatDay (int day) {
+    List<Interval> intervals = dayIntervals[day];
+    if (intervals == null || intervals.isEmpty()) {
+      return Lang.getString(R.string.BusinessHoursClosed);
+    }
+    StringBuilder b = new StringBuilder();
+    for (Interval interval : intervals) {
+      if (b.length() > 0) {
+        b.append(", ");
+      }
+      b.append(formatRange(interval.start, interval.end));
+    }
+    return b.toString();
+  }
+
   private static String formatRange (int openMinute, int closeMinute) {
     return formatMinute(openMinute) + " – " + formatMinute(closeMinute);
   }
 
   private static String formatMinute (int minuteOfDay) {
+    if (minuteOfDay >= MINUTES_PER_DAY) {
+      // Overnight spill (or exactly 24:00). Render as a 24h+ clock so the user can
+      // tell apart "ends at 02:00 next day" from "opens at 02:00".
+      int spill = minuteOfDay - MINUTES_PER_DAY;
+      if (spill == 0) {
+        return "24:00";
+      }
+      int h = (spill / 60) % 24;
+      int m = spill % 60;
+      return String.format(java.util.Locale.US, "%02d:%02d⁺¹", h, m);
+    }
     int h = (minuteOfDay / 60) % 24;
     int m = minuteOfDay % 60;
-    if (minuteOfDay >= MINUTES_PER_DAY) { // end-of-day represented as 24:00
-      h = 24;
-      m = 0;
-    }
     return String.format(java.util.Locale.US, "%02d:%02d", h, m);
   }
 
@@ -268,57 +295,156 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
       }, true);
   }
 
+  /**
+   * Opens the per-day options: add a new interval, edit/remove each existing
+   * interval, or mark the whole day closed.
+   */
   private void editDay (int day) {
     if (day < 0 || day >= 7) {
       return;
     }
-    showOptions(weekdayName(day),
-      new int[] {R.id.btn_businessDayOpen, R.id.btn_businessDayHours, R.id.btn_businessDayClosed},
-      new String[] {Lang.getString(R.string.BusinessHoursMarkOpen), Lang.getString(R.string.BusinessHoursSetTime), Lang.getString(R.string.BusinessHoursMarkClosed)},
+    List<Interval> intervals = dayIntervals[day];
+
+    List<Integer> ids = new ArrayList<>();
+    List<String> labels = new ArrayList<>();
+
+    // One entry per existing interval to edit/remove it. The label is the
+    // interval range itself (e.g. "09:00 – 17:00"); tapping it opens edit/remove.
+    for (int i = 0; i < intervals.size(); i++) {
+      Interval interval = intervals.get(i);
+      ids.add(R.id.btn_businessDayHours);
+      labels.add(formatRange(interval.start, interval.end));
+    }
+    ids.add(R.id.btn_businessDayOpen);
+    labels.add(Lang.getString(R.string.BusinessHoursSetTime));
+    if (!intervals.isEmpty()) {
+      ids.add(R.id.btn_businessDayClosed);
+      labels.add(Lang.getString(R.string.BusinessHoursMarkClosed));
+    }
+
+    int[] idArray = new int[ids.size()];
+    for (int i = 0; i < ids.size(); i++) {
+      idArray[i] = ids.get(i);
+    }
+
+    // The first intervalCount option rows correspond 1:1 to existing intervals.
+    // We tag each option view with its position via getTagForItem(), so an
+    // interval-edit tap can recover exactly which interval was pressed (their ids
+    // all share btn_businessDayHours and so cannot be told apart by id alone).
+    final int intervalCount = intervals.size();
+    showOptions(weekdayName(day), idArray, labels.toArray(new String[0]), null, null,
+      new org.thunderdog.challegram.util.OptionDelegate() {
+        @Override
+        public boolean onOptionItemPressed (View optionItemView, int optionId) {
+          if (optionId == R.id.btn_businessDayOpen) {
+            // Add a brand-new interval.
+            promptInterval(day, -1);
+          } else if (optionId == R.id.btn_businessDayClosed) {
+            dayIntervals[day].clear();
+            adapter.updateValuedSettingByPosition(findDayPosition(day));
+          } else if (optionId == R.id.btn_businessDayHours) {
+            Object tag = optionItemView != null ? optionItemView.getTag() : null;
+            int index = (tag instanceof Integer) ? (Integer) tag : -1;
+            if (index >= 0 && index < intervalCount) {
+              editInterval(day, index);
+            }
+          }
+          return true;
+        }
+
+        @Override
+        public Object getTagForItem (int position) {
+          return position;
+        }
+      });
+  }
+
+  /** Offers to edit or remove an existing interval. */
+  private void editInterval (int day, int index) {
+    if (index < 0 || index >= dayIntervals[day].size()) {
+      return;
+    }
+    showOptions(formatRange(dayIntervals[day].get(index).start, dayIntervals[day].get(index).end),
+      new int[] {R.id.btn_businessDayHours, R.id.btn_delete},
+      new String[] {Lang.getString(R.string.BusinessHoursSetTime), Lang.getString(R.string.Remove)},
       null, null,
       (itemView, optionId) -> {
-        if (optionId == R.id.btn_businessDayOpen) {
-          dayOpen[day] = true;
-          dayEdited[day] = true;
-          adapter.updateValuedSettingByPosition(findDayPosition(day));
-        } else if (optionId == R.id.btn_businessDayClosed) {
-          dayOpen[day] = false;
-          dayEdited[day] = true;
-          adapter.updateValuedSettingByPosition(findDayPosition(day));
-        } else if (optionId == R.id.btn_businessDayHours) {
-          promptTime(day, true);
+        if (optionId == R.id.btn_businessDayHours) {
+          promptInterval(day, index);
+        } else if (optionId == R.id.btn_delete) {
+          if (index >= 0 && index < dayIntervals[day].size()) {
+            dayIntervals[day].remove(index);
+            adapter.updateValuedSettingByPosition(findDayPosition(day));
+          }
         }
         return true;
       });
   }
 
-  private void promptTime (int day, boolean openTime) {
-    int current = openTime ? dayOpenMinute[day] : dayCloseMinute[day];
+  /**
+   * Prompts the open time, then chains to the close time, for the interval at
+   * {@code index} ({@code -1} to add a new one). The close time may be "after"
+   * midnight (i.e. less than the open time), in which case it is treated as an
+   * overnight interval and stored as {@code open .. close + 24h}.
+   */
+  private void promptInterval (int day, int index) {
+    boolean isNew = index < 0 || index >= dayIntervals[day].size();
+    int currentOpen = isNew ? DEFAULT_OPEN_MINUTE : dayIntervals[day].get(index).start;
+    promptOpenTime(day, index, currentOpen);
+  }
+
+  private void promptOpenTime (int day, int index, int currentOpen) {
     openInputAlert(
-      Lang.getString(openTime ? R.string.BusinessHoursOpenTime : R.string.BusinessHoursCloseTime),
+      Lang.getString(R.string.BusinessHoursOpenTime),
       Lang.getString(R.string.BusinessHoursTimeFormat),
-      R.string.Continue, R.string.Cancel, formatMinute(current), (inputView, text) -> {
+      R.string.Continue, R.string.Cancel, formatMinuteForInput(currentOpen), (inputView, text) -> {
+        int parsed = parseMinute(text);
+        if (parsed < 0 || parsed >= MINUTES_PER_DAY) {
+          UI.showToast(R.string.BusinessHoursInvalidTime, Toast.LENGTH_SHORT);
+          return false;
+        }
+        final int openMinute = parsed;
+        boolean isNew = index < 0 || index >= dayIntervals[day].size();
+        int currentClose = isNew ? DEFAULT_CLOSE_MINUTE : dayIntervals[day].get(index).end;
+        tdlib.ui().post(() -> promptCloseTime(day, index, openMinute, currentClose));
+        return true;
+      }, true);
+  }
+
+  private void promptCloseTime (int day, int index, int openMinute, int currentClose) {
+    openInputAlert(
+      Lang.getString(R.string.BusinessHoursCloseTime),
+      Lang.getString(R.string.BusinessHoursTimeFormat),
+      R.string.Save, R.string.Cancel, formatMinuteForInput(currentClose), (inputView, text) -> {
         int parsed = parseMinute(text);
         if (parsed < 0) {
           UI.showToast(R.string.BusinessHoursInvalidTime, Toast.LENGTH_SHORT);
           return false;
         }
-        if (openTime) {
-          dayOpenMinute[day] = parsed;
-          // Chain to the close-time prompt.
-          tdlib.ui().post(() -> promptTime(day, false));
-        } else {
-          if (parsed <= dayOpenMinute[day]) {
-            UI.showToast(R.string.BusinessHoursInvalidTime, Toast.LENGTH_SHORT);
-            return false;
-          }
-          dayCloseMinute[day] = parsed;
-          dayOpen[day] = true;
-          dayEdited[day] = true;
-          adapter.updateValuedSettingByPosition(findDayPosition(day));
+        int closeMinute = parsed;
+        // Allow overnight: a close time at/below the open time rolls into the next day.
+        if (closeMinute <= openMinute) {
+          closeMinute += MINUTES_PER_DAY;
         }
+        if (closeMinute <= openMinute || closeMinute > 2 * MINUTES_PER_DAY) {
+          UI.showToast(R.string.BusinessHoursInvalidTime, Toast.LENGTH_SHORT);
+          return false;
+        }
+        applyInterval(day, index, openMinute, closeMinute);
         return true;
       }, true);
+  }
+
+  private void applyInterval (int day, int index, int openMinute, int closeMinute) {
+    if (index < 0 || index >= dayIntervals[day].size()) {
+      dayIntervals[day].add(new Interval(openMinute, closeMinute));
+    } else {
+      Interval interval = dayIntervals[day].get(index);
+      interval.start = openMinute;
+      interval.end = closeMinute;
+    }
+    sortIntervals(dayIntervals[day]);
+    adapter.updateValuedSettingByPosition(findDayPosition(day));
   }
 
   private int findDayPosition (int day) {
@@ -330,6 +456,17 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
       }
     }
     return -1;
+  }
+
+  /** Renders a minute for an input field (overnight spill collapsed to its clock time). */
+  private static String formatMinuteForInput (int minute) {
+    int clock = minute % MINUTES_PER_DAY;
+    if (minute == MINUTES_PER_DAY) {
+      return "24:00";
+    }
+    int h = clock / 60;
+    int m = clock % 60;
+    return String.format(java.util.Locale.US, "%02d:%02d", h, m);
   }
 
   /** Parses an "HH:MM" string into a minute-of-day, or -1 if invalid. Accepts 24:00 as end-of-day. */
@@ -368,18 +505,15 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
 
     List<TdApi.BusinessOpeningHoursInterval> intervals = new ArrayList<>();
     for (int day = 0; day < 7; day++) {
-      boolean hasOriginal = originalIntervalsByDay != null && originalIntervalsByDay[day] != null && !originalIntervalsByDay[day].isEmpty();
-      if (!dayEdited[day] && hasOriginal) {
-        // The user did not touch this day: re-emit the original server intervals
-        // verbatim. This preserves multi-interval days AND overnight spill-over
-        // (endMinute > end-of-day) that the simplified per-day editor cannot
-        // represent. LIMITATION: once the user edits a day, its overnight portion
-        // is collapsed to the single within-day [open, close) interval below; a
-        // full overnight/multi-interval editor is a follow-up.
-        intervals.addAll(originalIntervalsByDay[day]);
-      } else if (dayOpen[day] && dayCloseMinute[day] > dayOpenMinute[day]) {
-        int base = day * MINUTES_PER_DAY;
-        intervals.add(new TdApi.BusinessOpeningHoursInterval(base + dayOpenMinute[day], base + dayCloseMinute[day]));
+      List<Interval> dayList = dayIntervals[day];
+      if (dayList == null) {
+        continue;
+      }
+      int base = day * MINUTES_PER_DAY;
+      for (Interval interval : dayList) {
+        if (interval.end > interval.start) {
+          intervals.add(new TdApi.BusinessOpeningHoursInterval(base + interval.start, base + interval.end));
+        }
       }
     }
 
