@@ -109,6 +109,7 @@ set(TGCALLS_LIB "tgcallsjni")
 
 add_library(${TGCALLS_LIB} SHARED
   tgvoip.cpp
+  group_call.cpp
 
   "${WEBRTC_DIR}/sdk/android/native_api/audio_device_module/audio_device_android.cc"
   "${WEBRTC_DIR}/sdk/android/native_api/base/init.cc"
@@ -281,6 +282,15 @@ list(APPEND TGCALLS_EXCLUDE_LIBS
 Join(TGCALLS_EXCLUDE_LIBS "${TGCALLS_EXCLUDE_LIBS}" ",")
 target_link_options(${TGCALLS_LIB} PUBLIC
   -Wl,--exclude-libs,${TGCALLS_EXCLUDE_LIBS}
+)
+
+# The group-call engine (GroupInstanceCustomImpl -> AudioStreamingPart) pulls in
+# opus FFT objects that are also present in webrtc's vendored opus, producing
+# duplicate-symbol link errors (opus_fft_c / opus_fft_impl / opus_ifft_c). Both
+# copies are the same upstream opus code, so let the first definition win — this
+# is the standard tgcalls/Telegram-Android resolution for the collision.
+target_link_options(${TGCALLS_LIB} PRIVATE
+  -Wl,--allow-multiple-definition
 )
 
 if (${ANDROID_ABI} STREQUAL "arm64-v8a" OR ${ANDROID_ABI} STREQUAL "x86_64")
