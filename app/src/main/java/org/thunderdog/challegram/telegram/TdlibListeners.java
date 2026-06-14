@@ -465,6 +465,26 @@ public class TdlibListeners {
   }
 
   @AnyThread
+  public void subscribeToStoryUpdates (StoryListener listener) {
+    storyListeners.add(listener);
+  }
+
+  @AnyThread
+  public void unsubscribeFromStoryUpdates (StoryListener listener) {
+    storyListeners.remove(listener);
+  }
+
+  @AnyThread
+  public void subscribeToStoryUpdates (long posterChatId, int storyId, StoryListener listener) {
+    specificStoryListeners.add(uniqueStoryKey(posterChatId, storyId), listener);
+  }
+
+  @AnyThread
+  public void unsubscribeFromStoryUpdates (long posterChatId, int storyId, StoryListener listener) {
+    specificStoryListeners.remove(uniqueStoryKey(posterChatId, storyId), listener);
+  }
+
+  @AnyThread
   public void subscribeToForumTopicUpdates (long chatId, long messageThreadId, ForumTopicInfoListener listener) {
     specificForumTopicListeners.add(chatId + "_" + messageThreadId, listener);
   }

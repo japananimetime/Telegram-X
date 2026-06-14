@@ -53,6 +53,7 @@ import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.loader.ImageFile;
 import org.thunderdog.challegram.loader.ImageReceiver;
 import org.thunderdog.challegram.navigation.ViewController;
+import org.thunderdog.challegram.telegram.StoryListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.ui.ShareController;
 import org.thunderdog.challegram.telegram.TdlibFilesManager;
@@ -78,7 +79,8 @@ import me.vkryl.core.ColorUtils;
 
 public class StoryViewController extends ViewController<StoryViewController.Args> implements
   PopupLayout.AnimatedPopupProvider, FactorAnimator.Target, View.OnClickListener,
-  PopupLayout.TouchSectionProvider, Player.Listener, RootFrameLayout.InsetsChangeListener {
+  PopupLayout.TouchSectionProvider, Player.Listener, RootFrameLayout.InsetsChangeListener,
+  StoryListener {
 
   private static final long REVEAL_ANIMATION_DURATION = 280;
   private static final int ANIMATOR_REVEAL = 0;
@@ -124,6 +126,11 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   private long currentChatId;
   private int currentStoryId;
   private TdApi.Story currentStory;
+
+  // Live-update subscription (StoryListener) tracking for the currently displayed story
+  private boolean storySubscribed;
+  private long subscribedStoryChatId;
+  private int subscribedStoryId;
   private List<TdApi.ChatActiveStories> activeStoriesList;
   private int currentUserIndex;
   private int currentStoryIndex;
@@ -563,6 +570,10 @@ public class StoryViewController extends ViewController<StoryViewController.Args
 
   private void displayStory (TdApi.Story story) {
     this.currentStory = story;
+
+    // Subscribe to live updates (reaction/viewer counts, remote edits, deletion) for this specific story.
+    // Re-points the subscription to the new story and drops the previous one to avoid leaks.
+    subscribeToStoryUpdates(story.posterChatId, story.id);
 
     // Hide loading indicator
     loadingContainer.setVisibility(View.GONE);
@@ -1023,6 +1034,64 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     }
   }
 
+  // StoryListener subscription management
+
+  private void subscribeToStoryUpdates (long posterChatId, int storyId) {
+    if (storySubscribed && subscribedStoryChatId == posterChatId && subscribedStoryId == storyId) {
+      return;
+    }
+    unsubscribeFromStoryUpdates();
+    tdlib.listeners().subscribeToStoryUpdates(posterChatId, storyId, this);
+    storySubscribed = true;
+    subscribedStoryChatId = posterChatId;
+    subscribedStoryId = storyId;
+  }
+
+  private void unsubscribeFromStoryUpdates () {
+    if (storySubscribed) {
+      tdlib.listeners().unsubscribeFromStoryUpdates(subscribedStoryChatId, subscribedStoryId, this);
+      storySubscribed = false;
+      subscribedStoryChatId = 0;
+      subscribedStoryId = 0;
+    }
+  }
+
+  // StoryListener
+
+  @Override
+  public void onStoryUpdated (@NonNull TdApi.Story story) {
+    runOnUiThreadOptional(() -> {
+      if (currentStory == null
+        || story.posterChatId != currentStory.posterChatId
+        || story.id != currentStory.id) {
+        return;
+      }
+      this.currentStory = story;
+      this.currentChatId = story.posterChatId;
+      this.currentStoryId = story.id;
+
+      // Refresh viewer count (own stories) and reaction (heart) state.
+      if (storyHeaderView != null && story.interactionInfo != null) {
+        storyHeaderView.setViewerCount(story.interactionInfo.viewCount);
+      }
+      updateHeartButtonState();
+    });
+  }
+
+  @Override
+  public void onStoryDeleted (long storyPosterChatId, int storyId) {
+    runOnUiThreadOptional(() -> {
+      if (currentStory == null
+        || storyPosterChatId != currentStory.posterChatId
+        || storyId != currentStory.id) {
+        return;
+      }
+      // The currently displayed story was deleted remotely (e.g. on another device).
+      // Move to the next story if any, otherwise close the viewer gracefully.
+      navigateNext();
+    });
+  }
+
   private void sendReply (String text) {
     if (currentStory == null || text == null || text.trim().isEmpty()) return;
 
@@ -1129,6 +1198,7 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   @Override
   public void destroy () {
     super.destroy();
+    unsubscribeFromStoryUpdates();
     closeStory();
     releasePlayer();
     setRootView(null);
