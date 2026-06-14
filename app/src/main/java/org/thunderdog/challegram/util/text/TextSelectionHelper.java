@@ -13,6 +13,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import androidx.core.content.ContextCompat;
 import org.drinkless.tdlib.TdApi;
+
+import tgx.td.Td;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Screen;
@@ -343,7 +345,9 @@ public class TextSelectionHelper {
     if (selectionStart > maxLen) selectionStart = maxLen;
     if (selectionEnd > maxLen) selectionEnd = maxLen;
 
-    String sub = full.substring(selectionStart, selectionEnd);
+    // Preserve rich-text entities (bold/italic/link/mention/code...) inside the selection
+    // by slicing + offset-rebasing them, matching official Telegram partial quotes.
+    TdApi.FormattedText quoted = Td.substring(fullFormattedText, selectionStart, selectionEnd);
     int finalPos = selectionStart;
 
     QuoteCallback targetCallback = callback;
@@ -351,7 +355,7 @@ public class TextSelectionHelper {
     finish();
 
     if (targetCallback != null) {
-      targetCallback.onQuoteCreated(new TdApi.FormattedText(sub, new TdApi.TextEntity[0]), finalPos);
+      targetCallback.onQuoteCreated(quoted, finalPos);
     }
   }
 
@@ -364,7 +368,8 @@ public class TextSelectionHelper {
     if (selectionStart > maxLen) selectionStart = maxLen;
     if (selectionEnd > maxLen) selectionEnd = maxLen;
 
-    String sub = full.substring(selectionStart, selectionEnd);
+    // Preserve rich-text entities inside the selection (see createQuote).
+    TdApi.FormattedText quoted = Td.substring(fullFormattedText, selectionStart, selectionEnd);
     int finalPos = selectionStart;
 
     QuoteCallback targetCallback = callback;
@@ -372,7 +377,7 @@ public class TextSelectionHelper {
     finish();
 
     if (targetCallback != null) {
-      targetCallback.onQuoteInOtherChatCreated(new TdApi.FormattedText(sub, new TdApi.TextEntity[0]), finalPos);
+      targetCallback.onQuoteInOtherChatCreated(quoted, finalPos);
     }
   }
 
