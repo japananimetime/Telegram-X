@@ -554,14 +554,23 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
       params = new TdlibUi.UrlOpenParameters().forceInstantView();
     }
     if (tryBrowser != null && !tryBrowser.isEmpty()) {
-      // Request to open in a specific browser — use system intent with browser package
-      Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-      try {
-        context().startActivity(browserIntent);
-      } catch (Exception e) {
-        // Fallback to default handling
-        tdlib.ui().openUrl(this, url, params);
+      // Request to open in an external browser. Only http(s) links are allowed on this path —
+      // a malicious mini app must not be able to launch arbitrary intent/deeplink schemes
+      // (tg://, intent://, file://, custom schemes) with the app's identity (intent redirection).
+      Uri uri = Uri.parse(url);
+      String scheme = uri.getScheme();
+      if (scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+        Intent browserIntent = new Intent(Intent.ACTION_VIEW, uri);
+        browserIntent.addCategory(Intent.CATEGORY_BROWSABLE);
+        try {
+          context().startActivity(browserIntent);
+          return;
+        } catch (Exception e) {
+          // Fall through to TDLib's validated URL handling below.
+        }
       }
+      // Non-http(s) scheme or launch failure: defer to TDLib's validated URL handling.
+      tdlib.ui().openUrl(this, url, params);
       return;
     }
     tdlib.ui().openUrl(this, url, params);
