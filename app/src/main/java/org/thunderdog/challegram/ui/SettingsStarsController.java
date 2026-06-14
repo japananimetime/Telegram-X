@@ -284,10 +284,18 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
       runOnUiThreadOptional(() -> {
         if (error != null) {
           UI.showToast(Lang.getString(R.string.StarsPaymentFailed, TD.toErrorString(error)), Toast.LENGTH_SHORT);
-        } else {
-          UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
-          // Refresh balance and options after a successful purchase.
-          fetchData();
+        } else if (result instanceof TdApi.PaymentResult) {
+          TdApi.PaymentResult paymentResult = (TdApi.PaymentResult) result;
+          if (paymentResult.success) {
+            UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
+            // Refresh balance and options after a successful purchase.
+            fetchData();
+          } else if (!StringUtils.isEmpty(paymentResult.verificationUrl)) {
+            // Some payments require a final verification step (e.g. 3D Secure).
+            tdlib.ui().openUrl(this, paymentResult.verificationUrl, null);
+          } else {
+            UI.showToast(R.string.PaymentVerificationNeeded, Toast.LENGTH_SHORT);
+          }
         }
       });
     });

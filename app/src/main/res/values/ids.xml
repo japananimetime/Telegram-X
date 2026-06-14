@@ -389,6 +389,7 @@
   <item type="id" name="btn_removeChatFromFolder" />
   <item type="id" name="btn_pinTopic" />
   <item type="id" name="btn_unpinTopic" />
+  <item type="id" name="btn_reorderPinnedTopics" />
   <item type="id" name="btn_closeTopic" />
   <item type="id" name="btn_reopenTopic" />
   <item type="id" name="btn_editTopic" />

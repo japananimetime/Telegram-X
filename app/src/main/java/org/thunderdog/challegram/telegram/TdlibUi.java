@@ -3951,12 +3951,22 @@ public class TdlibUi extends Handler {
         tdlib.client().send(new TdApi.SearchPublicChat(story.storyPosterUsername), object -> {
           if (object.getConstructor() == TdApi.Chat.CONSTRUCTOR) {
             TdApi.Chat chat = tdlib.objectToChat(object);
-            post(() -> openStory(context, chat.id, story.storyId));
+            post(() -> {
+              openStory(context, chat.id, story.storyId);
+              if (after != null) {
+                after.runWithBool(true);
+              }
+            });
           } else {
-            showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+            post(() -> {
+              showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(object), openParameters);
+              if (after != null) {
+                after.runWithBool(false);
+              }
+            });
           }
         });
-        break;
+        return; // async
       }
       case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR: {
         TdApi.InternalLinkTypeWebApp webApp = (TdApi.InternalLinkTypeWebApp) linkType;

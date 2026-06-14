@@ -6780,6 +6780,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         checkUserButtons();
         checkGroupsInCommon();
         checkDescription();
+        checkProfileNote();
         if (mode == Mode.EDIT_BOT_USER) {
           updateValuedItem(R.id.btn_botDescription);
         }

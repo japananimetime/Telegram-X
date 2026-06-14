@@ -53,6 +53,10 @@ public class BusinessConnectedBotController extends EditBaseController<Void> imp
   private TdApi.BusinessRecipients recipients;
   private TdApi.BusinessBotRights rights;
   private boolean hadExistingBot;
+  // Set once the user edits recipients or any right toggle. Guards the late
+  // GetBusinessConnectedBot seed from clobbering in-progress edits if the
+  // network round-trip lands after the user has already started changing things.
+  private boolean userTouched;
 
   public BusinessConnectedBotController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -102,6 +106,9 @@ public class BusinessConnectedBotController extends EditBaseController<Void> imp
 
   private void loadConnectedBot () {
     tdlib.send(new TdApi.GetBusinessConnectedBot(), (info, error) -> runOnUiThreadOptional(() -> {
+      if (isDestroyed()) {
+        return;
+      }
       if (error != null) {
         // A 404 simply means no bot is connected yet — that is not an error to surface.
         return;
@@ -109,6 +116,15 @@ public class BusinessConnectedBotController extends EditBaseController<Void> imp
       if (info != null && info.bot != null) {
         this.hadExistingBot = true;
         this.botUserId = info.bot.botUserId;
+        if (userTouched) {
+          // The user already started editing recipients/rights before this late
+          // seed landed; do not clobber their in-progress changes. Only refresh
+          // the bot summary (which they have not touched here) and the now-visible
+          // "Remove bot" row, preserving the current toggle/recipient state.
+          buildCells();
+          adapter.updateValuedSettingById(R.id.btn_businessBot);
+          return;
+        }
         if (info.bot.recipients != null) {
           this.recipients = info.bot.recipients;
         }
@@ -240,6 +256,7 @@ public class BusinessConnectedBotController extends EditBaseController<Void> imp
       for (RightRow row : RIGHT_ROWS) {
         if (id == row.id) {
           boolean value = adapter.toggleView(v);
+          userTouched = true;
           setRightValue(id, value);
           return;
         }
@@ -289,6 +306,7 @@ public class BusinessConnectedBotController extends EditBaseController<Void> imp
   @Override
   public void onRecipientsChanged (TdApi.BusinessRecipients recipients) {
     this.recipients = recipients;
+    userTouched = true;
     if (adapter != null) {
       adapter.updateValuedSettingById(R.id.btn_businessRecipients);
     }

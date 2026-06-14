@@ -491,8 +491,9 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
           // The TDLib provider instead rides UpdateMessageContent and never calls this,
           // so rendering here does not double up.
           UI.post(() -> {
-            isTranscribing = false;
-            buildTranscriptionText(text);
+            // Record a real Text result so hasTranscription() flips and the transcribe
+            // affordance is replaced (setTranscriptionResultInternal also clears isTranscribing).
+            setTranscriptionResultInternal(new TdApi.SpeechRecognitionResultText(text));
             context.invalidate();
           });
         }

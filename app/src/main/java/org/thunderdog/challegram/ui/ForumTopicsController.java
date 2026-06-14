@@ -1011,6 +1011,16 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         strings.add(Lang.getString(R.string.PinTopic));
       }
 
+      // Admin-only: Reorder pinned topics — only meaningful with >1 pinned topic.
+      // This is the explicit affordance that starts drag-reorder, since long-press
+      // itself is reserved for this options menu (#845).
+      if (pinnedTopicCount() > 1) {
+        ids.append(R.id.btn_reorderPinnedTopics);
+        icons.append(R.drawable.dotvhs_baseline_folders_reorder_24);
+        colors.append(OptionColor.NORMAL);
+        strings.add(Lang.getString(R.string.HoldAndDragToReorder));
+      }
+
       // Admin-only: Close/Reopen
       if (topic.info.isClosed) {
         ids.append(R.id.btn_reopenTopic);
@@ -1061,6 +1071,8 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         toggleTopicPinned(topic, true);
       } else if (id == R.id.btn_unpinTopic) {
         toggleTopicPinned(topic, false);
+      } else if (id == R.id.btn_reorderPinnedTopics) {
+        startPinnedReorder(topic);
       } else if (id == R.id.btn_closeTopic) {
         toggleTopicClosed(topic, true);
       } else if (id == R.id.btn_reopenTopic) {
@@ -1811,14 +1823,55 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     return true;
   }
 
+  // Explicitly enters drag-reorder for the pinned topic chosen from the options
+  // menu. Long-press can't start the drag itself (it opens the options menu, see
+  // isLongPressDragEnabled), so this is the affordance that makes reorder reachable.
+  private void startPinnedReorder (TdApi.ForumTopic topic) {
+    if (isDestroyed() || recyclerView == null || pinReorderTouchHelper == null) {
+      return;
+    }
+    int position = indexOfTopic(topics, topic.info.forumTopicId);
+    if (!canReorderPinnedTopicAt(position)) {
+      return;
+    }
+    // The options popup is still dismissing; defer so the RecyclerView owns touch
+    // again and the target row is laid out before we grab its view holder.
+    final int targetPosition = position;
+    UI.post(() -> {
+      if (isDestroyed() || recyclerView == null || pinReorderTouchHelper == null) {
+        return;
+      }
+      // Re-validate: the list may have changed while the popup was closing.
+      if (!canReorderPinnedTopicAt(targetPosition)) {
+        return;
+      }
+      RecyclerView.ViewHolder viewHolder = recyclerView.findViewHolderForAdapterPosition(targetPosition);
+      if (viewHolder == null) {
+        return;
+      }
+      pinReorderTouchHelper.startDrag(viewHolder);
+      context()
+        .tooltipManager()
+        .builder(viewHolder.itemView)
+        .controller(this)
+        .show(tdlib, Lang.getString(R.string.HoldAndDragToReorder))
+        .hideDelayed();
+    });
+  }
+
   private class PinReorderCallback extends ItemTouchHelper.Callback {
     private int dragFrom = -1;
     private int dragTo = -1;
 
     @Override
     public boolean isLongPressDragEnabled () {
-      // Movement flags below still gate whether any given row is draggable.
-      return true;
+      // Long-press is reserved for the per-topic options menu (showTopicOptions),
+      // so we must NOT let ItemTouchHelper hijack the long-press to start a drag
+      // (it would cannibalize Unpin/Close/Edit/… for admins, see #845 regression).
+      // Reorder is instead started explicitly from the "Reorder" menu entry via
+      // pinReorderTouchHelper.startDrag(); getMovementFlags() still gates which
+      // rows may be dragged.
+      return false;
     }
 
     @Override
