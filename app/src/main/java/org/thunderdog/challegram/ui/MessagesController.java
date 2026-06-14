@@ -3130,6 +3130,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       manager.openChat(chat, messageThread, messageTopicId, previewSearchFilter, this, areScheduled, !inPreviewMode && !isInForceTouchMode());
     }
 
+    // Apply any peer-set chat-specific wallpaper for the chat being opened.
+    applyChatBackground(chat.background, false);
+
     updateShadowColor();
     if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chat.id))) {
       commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
@@ -9575,6 +9578,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         getInputSuggestedPostInfo(replyInfo),
         obtainSilentMode()
       );
+      stampPendingMessageEffect(sendOptions);
 
       TdApi.InputMessageContent inputMessageContent = content.getValue();
       tdlib.sendMessage(chat.id, topicId, replyTo, sendOptions, inputMessageContent, null);
@@ -10839,6 +10843,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       getInputSuggestedPostInfo(replyInfo),
       obtainSilentMode()
     );
+    stampPendingMessageEffect(finalSendOptions);
 
     final boolean isSecretChat = isSecretChat();
 

@@ -2861,6 +2861,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     tdlib.contacts().removeListener(this);
     tdlib.context().dateManager().removeListener(this);
     tdlib.listeners().removeChatFolderListener(chatFolderId(), this);
+    storyListListener = null; // drop the strong ref so the weak story-list listener can be collected
+    storyBarView = null;
   }
 
   // Updates

@@ -2158,6 +2158,19 @@ public class TdlibUi extends Handler {
 
     // Check if this is a forum chat that should be viewed as topics
     if (tdlib.isForum(chat.id) && messageThread == null && messageTopicId == null) {
+      // Only route to the forum topics UI for a plain chat open. When the caller supplied
+      // any payload (highlight, pending action, share item, scheduled-only mode, video chat
+      // invitation, draft, search filter, referrer), fall through to the regular
+      // MessagesController path so that payload is not silently dropped.
+      boolean plainOpen = (params == null || !params.highlightSet) &&
+        after == null &&
+        shareItem == null &&
+        filter == null &&
+        referrer == null &&
+        voiceChatInvitation == null &&
+        forceDraft == null &&
+        !onlyScheduled &&
+        (options & (CHAT_OPTION_NO_OPEN | CHAT_OPTION_OPEN_DIRECT_MESSAGES_CHAT)) == 0;
       // Check if forum has tabs layout enabled
       long supergroupId = ChatId.toSupergroupId(chat.id);
       TdApi.Supergroup supergroup = supergroupId != 0 ? tdlib.cache().supergroup(supergroupId) : null;
@@ -2166,12 +2179,11 @@ public class TdlibUi extends Handler {
       // Show topics view if viewAsTopics is true (default for forums)
       // Forums with tabs should always open in tabs view by default
       // Users can use "View as chat" option to switch to unified view (sets viewAsTopics to false)
-      if (chat.viewAsTopics || hasForumTabs) {
+      if (plainOpen && (chat.viewAsTopics || hasForumTabs)) {
         ViewController<?> forumController;
         // Check user's saved preference for forum view (tabs vs topics list)
         int viewPreference = tdlib.settings().getForumViewPreference(chat.id);
         boolean preferTabs = hasForumTabs && viewPreference != TdlibSettingsManager.FORUM_VIEW_TOPICS;
-        boolean preferTopics = !hasForumTabs || viewPreference == TdlibSettingsManager.FORUM_VIEW_TOPICS;
 
         if (preferTabs) {
           ForumTopicTabsController tabsController = new ForumTopicTabsController(context.context(), context.tdlib());
