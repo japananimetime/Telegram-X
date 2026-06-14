@@ -1630,6 +1630,10 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
             if (isDestroyed()) return;
             if (topics != null && foundIndex < topics.size() &&
                 topics.get(foundIndex).info.forumTopicId == messageThreadId) {
+              // freshTopic may carry a different isPinned than the row it replaces;
+              // re-sort + full notify when it flips so the pinned prefix stays
+              // contiguous (see pinnedTopicCount()).
+              boolean pinnedChanged = topics.get(foundIndex).isPinned != freshTopic.isPinned;
               topics.set(foundIndex, freshTopic);
               // Also update in allTopics if present
               if (allTopics != null) {
@@ -1640,7 +1644,15 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
                   }
                 }
               }
-              if (adapter != null) {
+              if (pinnedChanged) {
+                resortTopics();
+                if (allTopics != null) {
+                  resortTopicList(allTopics);
+                }
+                if (adapter != null) {
+                  adapter.setTopics(topics, null);
+                }
+              } else if (adapter != null) {
                 adapter.notifyItemChanged(foundIndex);
               }
             }
@@ -1653,6 +1665,12 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         if (isDestroyed() || topics == null || foundIndex >= topics.size()) return;
         TdApi.ForumTopic topic = topics.get(foundIndex);
         if (topic.info.forumTopicId != messageThreadId) return;
+
+        // A change to isPinned can move the topic in/out of the pinned prefix that
+        // pinnedTopicCount()/movePinnedTopic()/sendPinnedTopicsOrder() rely on, so
+        // re-sort and do a full notify when it flips (rather than a single
+        // notifyItemChanged that would leave the prefix non-contiguous).
+        boolean pinnedChanged = topic.isPinned != isPinned;
 
         topic.isPinned = isPinned;
         topic.lastReadInboxMessageId = lastReadInboxMessageId;
@@ -1683,7 +1701,15 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
           }
         }
 
-        if (adapter != null) {
+        if (pinnedChanged) {
+          resortTopics();
+          if (allTopics != null) {
+            resortTopicList(allTopics);
+          }
+          if (adapter != null) {
+            adapter.setTopics(topics, null);
+          }
+        } else if (adapter != null) {
           adapter.notifyItemChanged(foundIndex);
         }
       });
@@ -2117,6 +2143,10 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
   }
 
   private void resortTopics () {
+    resortTopicList(topics);
+  }
+
+  private static void resortTopicList (List<TdApi.ForumTopic> topics) {
     if (topics == null || topics.size() < 2) return;
 
     // TDLib contract: topics are sorted by `order` in descending order. `order`

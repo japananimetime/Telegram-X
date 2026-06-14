@@ -54,6 +54,7 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
   private SettingsAdapter adapter;
   private TdApi.StarPaymentOptions paymentOptions;
   private long starBalance = 0;
+  private boolean focusedBefore;
 
   public SettingsStarsController(Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -92,6 +93,19 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
 
     // Fetch data
     fetchData();
+  }
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    // Refresh the balance when returning to this screen (e.g. after a regular
+    // card purchase handed off to PaymentFormController). The first focus is
+    // skipped because onCreateView() already kicks off fetchData().
+    if (focusedBefore) {
+      fetchData();
+    } else {
+      focusedBefore = true;
+    }
   }
 
   private void buildLoadingCells() {
@@ -237,7 +251,9 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
     tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (result, error) -> {
       runOnUiThreadOptional(() -> {
         if (error != null) {
-          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          // Wrap consistently with sendStarsPayment so the user sees a localized
+          // "Payment failed: <reason>" rather than the raw TDLib error string.
+          UI.showToast(Lang.getString(R.string.StarsPaymentFailed, TD.toErrorString(error)), Toast.LENGTH_SHORT);
         } else {
           TdApi.PaymentForm paymentForm = (TdApi.PaymentForm) result;
           handlePaymentForm(paymentForm, inputInvoice, option.starCount);

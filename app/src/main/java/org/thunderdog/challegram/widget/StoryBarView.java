@@ -273,6 +273,10 @@ public class StoryBarView extends RecyclerView {
     private @Nullable TdApi.ChatActiveStories activeStories;
     private boolean hasUnread = false;
 
+    // Cached resolved ring colors. Read from Settings off the draw path (attach / size change /
+    // explicit refresh) so onDraw -> updateRingGradient() never touches the preference store (pmc).
+    private int[] ringColors;
+
     // Gradient colors for unread ring
     private static final int[] GRADIENT_COLORS = {
       0xFF7B68EE, // Medium slate blue
@@ -356,14 +360,39 @@ public class StoryBarView extends RecyclerView {
       return maxId;
     }
 
+    /**
+     * Reads the ring colors from Settings (a preference-store read) and caches them. Must be called
+     * off the draw path. Returns true if the resolved colors actually changed.
+     */
+    private boolean refreshRingColors () {
+      int[] resolved = Settings.instance().getStoryRingColors();
+      if (resolved == null || resolved.length < 2) {
+        resolved = GRADIENT_COLORS;
+      }
+      if (!java.util.Arrays.equals(ringColors, resolved)) {
+        ringColors = resolved;
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Called when the story ring-color setting changes; rebuilds the cached gradient if needed.
+     */
+    public void onStoryRingColorsChanged () {
+      if (refreshRingColors()) {
+        updateRingGradient();
+        invalidate();
+      }
+    }
+
     private void updateRingGradient () {
       if (hasUnread) {
         int width = getWidth();
         int height = getHeight();
         if (width > 0 && height > 0) {
-          int[] ringColors = Settings.instance().getStoryRingColors();
-          if (ringColors == null || ringColors.length < 2) {
-            ringColors = GRADIENT_COLORS;
+          if (ringColors == null) {
+            refreshRingColors();
           }
           LinearGradient gradient = new LinearGradient(
             0, 0, width, height,
@@ -382,12 +411,17 @@ public class StoryBarView extends RecyclerView {
     @Override
     protected void onSizeChanged (int w, int h, int oldw, int oldh) {
       super.onSizeChanged(w, h, oldw, oldh);
+      refreshRingColors();
       updateRingGradient();
     }
 
     @Override
     protected void onAttachedToWindow () {
       super.onAttachedToWindow();
+      // Re-read the ring-color preference (may have changed while detached), off the draw path.
+      if (refreshRingColors()) {
+        updateRingGradient();
+      }
       // Force redraw after attachment to ensure ring renders
       post(this::invalidate);
     }
@@ -435,6 +469,10 @@ public class StoryBarView extends RecyclerView {
     private final Paint ringPaint;
     private final Paint bgPaint;
     private final RectF ringRect;
+
+    // Cached resolved ring colors. Read from Settings off the draw path (attach / size change /
+    // explicit refresh) so onDraw -> updateRingGradient() never touches the preference store (pmc).
+    private int[] ringColors;
 
     // Gradient colors for add story ring (same as unread)
     private static final int[] GRADIENT_COLORS = {
@@ -495,13 +533,38 @@ public class StoryBarView extends RecyclerView {
       invalidate();
     }
 
+    /**
+     * Reads the ring colors from Settings (a preference-store read) and caches them. Must be called
+     * off the draw path. Returns true if the resolved colors actually changed.
+     */
+    private boolean refreshRingColors () {
+      int[] resolved = Settings.instance().getStoryRingColors();
+      if (resolved == null || resolved.length < 2) {
+        resolved = GRADIENT_COLORS;
+      }
+      if (!java.util.Arrays.equals(ringColors, resolved)) {
+        ringColors = resolved;
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Called when the story ring-color setting changes; rebuilds the cached gradient if needed.
+     */
+    public void onStoryRingColorsChanged () {
+      if (refreshRingColors()) {
+        updateRingGradient();
+        invalidate();
+      }
+    }
+
     private void updateRingGradient () {
       int width = getWidth();
       int height = getHeight();
       if (width > 0 && height > 0) {
-        int[] ringColors = Settings.instance().getStoryRingColors();
-        if (ringColors == null || ringColors.length < 2) {
-          ringColors = GRADIENT_COLORS;
+        if (ringColors == null) {
+          refreshRingColors();
         }
         LinearGradient gradient = new LinearGradient(
           0, 0, width, height,
@@ -516,12 +579,17 @@ public class StoryBarView extends RecyclerView {
     @Override
     protected void onSizeChanged (int w, int h, int oldw, int oldh) {
       super.onSizeChanged(w, h, oldw, oldh);
+      refreshRingColors();
       updateRingGradient();
     }
 
     @Override
     protected void onAttachedToWindow () {
       super.onAttachedToWindow();
+      // Re-read the ring-color preference (may have changed while detached), off the draw path.
+      if (refreshRingColors()) {
+        updateRingGradient();
+      }
       // Force redraw after attachment to ensure ring renders
       post(this::invalidate);
     }

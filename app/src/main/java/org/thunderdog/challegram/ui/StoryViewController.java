@@ -584,19 +584,47 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     // Update heart button state
     updateHeartButtonState();
 
+    // Render header, caption, reply-input visibility and viewer count.
+    renderStoryHeaderAndCaption(story);
+
+    // Determine story count for progress indicator
+    int storyCount = 1;
+    if (activeStoriesList != null && currentUserIndex < activeStoriesList.size()) {
+      TdApi.ChatActiveStories activeStories = activeStoriesList.get(currentUserIndex);
+      storyCount = activeStories.stories.length;
+      // Find current story index
+      for (int i = 0; i < activeStories.stories.length; i++) {
+        if (activeStories.stories[i].storyId == currentStoryId) {
+          currentStoryIndex = i;
+          break;
+        }
+      }
+    }
+    storyProgressView.setStoryCount(storyCount, currentStoryIndex);
+
+    // Display content (starts progress timer / prepares player for the freshly opened story).
+    renderStoryContent(story, true);
+  }
+
+  /**
+   * Renders the mutable header/caption parts of a story: poster header, viewer count,
+   * reply-input visibility and the caption text. Idempotent and safe to call again when an
+   * {@link TdApi.UpdateStory} edits the open story. Does not touch the progress timer or player.
+   */
+  private void renderStoryHeaderAndCaption (TdApi.Story story) {
     // Update header
     TdApi.Chat chat = tdlib.chat(story.posterChatId);
-    if (chat != null) {
+    if (chat != null && storyHeaderView != null) {
       storyHeaderView.setChat(chat, story.date);
-      // Set viewer count for own stories
-      if (story.interactionInfo != null) {
-        storyHeaderView.setViewerCount(story.interactionInfo.viewCount);
-      }
+    }
+    // Set viewer count for own stories; reset the displayed value when interaction info is gone.
+    if (storyHeaderView != null) {
+      storyHeaderView.setViewerCount(story.interactionInfo != null ? story.interactionInfo.viewCount : 0);
     }
 
     // Show/hide reply input based on story type
     // Channel stories don't support direct replies (would need linked discussion group)
-    boolean isChannelStory = tdlib.isChannel(currentChatId);
+    boolean isChannelStory = tdlib.isChannel(story.posterChatId);
     if (storyReplyInputView != null) {
       storyReplyInputView.setVisibility(isChannelStory ? View.GONE : View.VISIBLE);
     }
@@ -614,23 +642,14 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     } else {
       captionView.setVisibility(View.GONE);
     }
+  }
 
-    // Determine story count for progress indicator
-    int storyCount = 1;
-    if (activeStoriesList != null && currentUserIndex < activeStoriesList.size()) {
-      TdApi.ChatActiveStories activeStories = activeStoriesList.get(currentUserIndex);
-      storyCount = activeStories.stories.length;
-      // Find current story index
-      for (int i = 0; i < activeStories.stories.length; i++) {
-        if (activeStories.stories[i].storyId == currentStoryId) {
-          currentStoryIndex = i;
-          break;
-        }
-      }
-    }
-    storyProgressView.setStoryCount(storyCount, currentStoryIndex);
-
-    // Display content
+  /**
+   * Renders the visual content (photo/video) of a story. When {@code restartProgress} is true the
+   * progress timer is (re)started and the video player prepared — used for a freshly opened story or
+   * when an {@link TdApi.UpdateStory} actually changes the content type.
+   */
+  private void renderStoryContent (TdApi.Story story, boolean restartProgress) {
     switch (story.content.getConstructor()) {
       case TdApi.StoryContentPhoto.CONSTRUCTOR: {
         // Hide video texture view for photo stories
@@ -640,13 +659,17 @@ public class StoryViewController extends ViewController<StoryViewController.Args
         releasePlayer();
         TdApi.StoryContentPhoto photoContent = (TdApi.StoryContentPhoto) story.content;
         storyContentView.setPhoto(tdlib, photoContent.photo);
-        startProgressTimer(DEFAULT_PHOTO_DURATION_MS);
+        if (restartProgress) {
+          startProgressTimer(DEFAULT_PHOTO_DURATION_MS);
+        }
         break;
       }
       case TdApi.StoryContentVideo.CONSTRUCTOR: {
         TdApi.StoryContentVideo videoContent = (TdApi.StoryContentVideo) story.content;
         storyContentView.setVideo(tdlib, videoContent.video);
-        prepareVideoPlayer(videoContent.video);
+        if (restartProgress) {
+          prepareVideoPlayer(videoContent.video);
+        }
         break;
       }
       case TdApi.StoryContentUnsupported.CONSTRUCTOR: {
@@ -1066,15 +1089,24 @@ public class StoryViewController extends ViewController<StoryViewController.Args
         || story.id != currentStory.id) {
         return;
       }
+
+      // An UpdateStory can carry an edited caption, changed privacy, changed content
+      // (photo/video) or a now-null interactionInfo. Re-render the open story accordingly.
+      boolean contentTypeChanged =
+        currentStory.content == null
+        || story.content == null
+        || currentStory.content.getConstructor() != story.content.getConstructor();
+
       this.currentStory = story;
       this.currentChatId = story.posterChatId;
       this.currentStoryId = story.id;
 
-      // Refresh viewer count (own stories) and reaction (heart) state.
-      if (storyHeaderView != null && story.interactionInfo != null) {
-        storyHeaderView.setViewerCount(story.interactionInfo.viewCount);
-      }
+      // Heart state, header, viewer count (reset when interaction info gone) and caption.
       updateHeartButtonState();
+      renderStoryHeaderAndCaption(story);
+      // Re-render content; only restart the progress timer / player when the content type changed,
+      // so an in-place edit (e.g. caption only) does not interrupt ongoing playback.
+      renderStoryContent(story, contentTypeChanged);
     });
   }
 

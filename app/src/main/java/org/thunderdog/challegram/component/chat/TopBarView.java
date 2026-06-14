@@ -136,7 +136,12 @@ public class TopBarView extends FrameLayoutFix {
     topDismissButton.setBackgroundResource(R.drawable.bg_btn_header);
     Views.setClickable(topDismissButton);
     topDismissButton.setVisibility(View.INVISIBLE);
+    setDismissOnRight(false);
     addView(topDismissButton);
+  }
+
+  private void setDismissOnRight (boolean dismissOnRight) {
+    topDismissButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), ViewGroup.LayoutParams.MATCH_PARENT, (dismissOnRight ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Lang.gravity() | Gravity.CENTER_VERTICAL))));
   }
 
   public void setDismissListener (DismissListener dismissListener) {
@@ -161,7 +166,6 @@ public class TopBarView extends FrameLayoutFix {
   }
 
   public void setItems (Item... items) {
-    actionsList = (LinearLayout) actionsContainer.getChildAt(0);
     for (int i = 0; i < actionsList.getChildCount(); i++) {
       View view = actionsList.getChildAt(i);
       if (view != null && themeProvider != null) {
@@ -174,6 +178,14 @@ public class TopBarView extends FrameLayoutFix {
       offsetView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, .75f));
       actionsList.addView(offsetView);
     }
+    boolean dismissOnRight = false;
+    for (Item item : items) {
+      if (item.showDismissRight) {
+        dismissOnRight = true;
+        break;
+      }
+    }
+    setDismissOnRight(dismissOnRight);
     boolean canDismiss = false;
     for (Item item : items) {
       if (!item.noDismiss) {
@@ -187,8 +199,6 @@ public class TopBarView extends FrameLayoutFix {
       buttonLayout.setBackgroundResource(R.drawable.bg_btn_header);
       buttonLayout.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
       Views.setClickable(buttonLayout);
-
-      topDismissButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), ViewGroup.LayoutParams.MATCH_PARENT, (item.showDismissRight ? (Gravity.END | Gravity.CENTER_VERTICAL) : (Lang.gravity() | Gravity.CENTER_VERTICAL))));
 
       LinearLayout noticeItem = new LinearLayout(getContext());
       noticeItem.setOrientation(LinearLayout.HORIZONTAL);
@@ -226,13 +236,12 @@ public class TopBarView extends FrameLayoutFix {
       }
 
       if (item.noticeRes != null) {
-        var noticeText = Views.newTextView(getContext(), 15f, Theme.getColor(ColorId.textPlaceholder), ViewGroup.MEASURED_HEIGHT_STATE_SHIFT, Views.TEXT_FLAG_HORIZONTAL_PADDING);
+        var noticeText = Views.newTextView(getContext(), 15f, Theme.getColor(ColorId.textPlaceholder), Gravity.START, Views.TEXT_FLAG_HORIZONTAL_PADDING);
         noticeText.setText(item.noticeRes);
         noticeText.setGravity(Gravity.START);
         noticeText.setPadding(Screen.dp(16), Screen.dp(8), Screen.dp(26), Screen.dp(8));
         noticeText.setSingleLine(false);
         noticeText.setEllipsize(null);
-        setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         noticeItem.addView(noticeText);
         actionsList.addView(noticeItem);
       }

@@ -2536,6 +2536,8 @@ public class TdlibUi extends Handler {
   }
 
   private void openWebAppLink (final TdlibDelegate context, final String botUsername, final String webAppShortName, final String startParameter, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    // Theme params read Theme.getColor (UI-thread-only); build them on the caller thread before issuing the TDLib request.
+    final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
     tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
       if (error != null) {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
@@ -2553,8 +2555,8 @@ public class TdlibUi extends Handler {
       }
       final TdApi.Chat chat = result;
       final long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
-      final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
-      tdlib.send(new TdApi.GetWebAppLinkUrl(chat.id, botUserId, webAppShortName, startParameter, false, webAppParams), (linkResult, linkError) -> {
+      // chatId is the chat in which the link was clicked; a deep link has no originating chat, so pass 0.
+      tdlib.send(new TdApi.GetWebAppLinkUrl(0L, botUserId, webAppShortName, startParameter, false, webAppParams), (linkResult, linkError) -> {
         if (linkError != null) {
           showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(linkError), openParameters);
           if (after != null) {
@@ -2582,6 +2584,8 @@ public class TdlibUi extends Handler {
   }
 
   private void openMainWebAppLink (final TdlibDelegate context, final String botUsername, final String startParameter, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    // Theme params read Theme.getColor (UI-thread-only); build them on the caller thread before issuing the TDLib request.
+    final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
     tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
       if (error != null) {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
@@ -2599,8 +2603,8 @@ public class TdlibUi extends Handler {
       }
       final TdApi.Chat chat = result;
       final long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
-      final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
-      tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, startParameter, webAppParams), (mainResult, mainError) -> {
+      // chatId is the chat in which the Web App is opened; a deep link has no originating chat, so pass 0.
+      tdlib.send(new TdApi.GetMainWebApp(0L, botUserId, startParameter, webAppParams), (mainResult, mainError) -> {
         if (mainError != null) {
           showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(mainError), openParameters);
           if (after != null) {
@@ -2641,9 +2645,14 @@ public class TdlibUi extends Handler {
         ViewController<?> controller = context.context().navigation().getCurrentStackItem();
         if (controller != null) {
           openPaymentForm(controller, paymentForm, inputInvoice);
-        }
-        if (after != null) {
-          after.runWithBool(true);
+          if (after != null) {
+            after.runWithBool(true);
+          }
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+          if (after != null) {
+            after.runWithBool(false);
+          }
         }
       });
     });

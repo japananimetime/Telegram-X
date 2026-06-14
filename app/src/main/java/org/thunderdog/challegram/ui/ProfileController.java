@@ -3074,6 +3074,53 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     }
   }
 
+  // Inserts/removes/updates the btn_gifts row to reflect the current gift count.
+  // Mirrors checkProfileNote()/checkDescription(): the row is built once at full-cell
+  // time but giftCount can change afterwards (e.g. a gift is received/converted), so
+  // this keeps the row in sync. Placed last among the header "info" rows, matching
+  // both the user (after description/note) and channel (after inviteLink) builds.
+  private void checkGifts () {
+    if (isEditing())
+      return;
+    int foundIndex = baseAdapter.indexOfViewById(R.id.btn_gifts);
+    boolean hadGifts = foundIndex != -1;
+    // Only the user (USER/SECRET) and channel builds emit a gifts row; mirror that
+    // scope so an update doesn't introduce the row in modes that never built it.
+    boolean giftsEligible = mode == Mode.USER || mode == Mode.SECRET || mode == Mode.CHANNEL;
+    boolean hasGifts = giftsEligible && getGiftCount() > 0;
+    if (hadGifts != hasGifts) {
+      if (hadGifts) {
+        removeTopItem(foundIndex);
+      } else {
+        ListItem giftsItem = newGiftsItem();
+        // Count header rows that precede btn_gifts in both the user and channel
+        // builds; none of these appear after gifts, so this yields the right slot.
+        int index = 0;
+        if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_birthdate) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_description) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_profileNote) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_inviteLink) != -1) {
+          index++;
+        }
+        addTopItem(giftsItem, index);
+      }
+    } else if (hasGifts) {
+      updateValuedItem(R.id.btn_gifts);
+    }
+  }
+
   private ListItem newExplicitDiceItem () {
     return new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_useExplicitDice, 0, R.string.UseExplicitDice).setLongId(Settings.SETTING_FLAG_EXPLICIT_DICE);
   }
@@ -6781,6 +6828,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         checkGroupsInCommon();
         checkDescription();
         checkProfileNote();
+        checkGifts();
         if (mode == Mode.EDIT_BOT_USER) {
           updateValuedItem(R.id.btn_botDescription);
         }
@@ -7094,6 +7142,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           }
           checkDescription();
           checkManage();
+          checkGifts();
           if (mode == Mode.EDIT_CHANNEL) {
             checkChannelMembers();
           }

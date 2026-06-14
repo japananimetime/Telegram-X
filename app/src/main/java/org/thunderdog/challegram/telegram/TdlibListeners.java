@@ -465,16 +465,6 @@ public class TdlibListeners {
   }
 
   @AnyThread
-  public void subscribeToStoryUpdates (StoryListener listener) {
-    storyListeners.add(listener);
-  }
-
-  @AnyThread
-  public void unsubscribeFromStoryUpdates (StoryListener listener) {
-    storyListeners.remove(listener);
-  }
-
-  @AnyThread
   public void subscribeToStoryUpdates (long posterChatId, int storyId, StoryListener listener) {
     specificStoryListeners.add(uniqueStoryKey(posterChatId, storyId), listener);
   }
