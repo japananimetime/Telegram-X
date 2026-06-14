@@ -34,6 +34,7 @@
 #include <tgcalls/v2/InstanceV2ReferenceImpl.h>
 
 #include <tgcalls/VideoCaptureInterface.h>
+#include <tgcalls/StaticThreads.h>
 #include <platform/android/AndroidInterface.h>
 #include <platform/android/AndroidContext.h>
 
@@ -405,6 +406,18 @@ public:
 struct TgCallsContext {
   std::unique_ptr<tgcalls::Instance> tgcalls;
   std::shared_ptr<JniWrapper> javaController;
+  // setIncomingVideoOutput() stores only a weak_ptr, so the owning shared_ptr
+  // must outlive the instance — keep it here for the lifetime of the call.
+  std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> incomingVideoSink;
+};
+
+// Owns one camera VideoCaptureInterface plus the AndroidContext (PlatformContext)
+// it was created with. The AndroidContext instantiates the Java
+// org.telegram.messenger.voip.VideoCameraCapturer and must outlive the capturer,
+// so both are kept together and torn down in destructor order (capturer first).
+struct VideoCaptureContext {
+  std::shared_ptr<tgcalls::PlatformContext> platformContext;
+  std::shared_ptr<tgcalls::VideoCaptureInterface> capture;
 };
 
 jbyteArray toJavaByteArray (JNIEnv *env, const std::vector<uint8_t> &data) {
@@ -809,6 +822,103 @@ JNI_OBJECT_FUNC(void, voip_TgCallsController, destroyInstance, jlong ptr) {
       delete context;
     });
   });
+}
+
+// ==== Video (Stage 1: native + JNI plumbing) ====
+//
+// The camera capture path is: nativeCreateVideoCapturer() builds an
+// AndroidContext (PlatformContext) — which instantiates the Java
+// org.telegram.messenger.voip.VideoCameraCapturer — and a tgcalls
+// VideoCaptureInterface bound to it. The returned jlong owns both
+// (VideoCaptureContext). nativeSetVideoCapture() then hands the capture to the
+// running Instance. nativeSetIncomingVideoOutput() bridges an
+// org.webrtc.VideoSink to a native rtc::VideoSinkInterface and feeds it to the
+// Instance (which keeps only a weak_ptr — the owning shared_ptr lives in
+// TgCallsContext::incomingVideoSink).
+
+// Creates a camera VideoCaptureInterface. deviceId follows tgcalls Android
+// conventions ("front"/"back"/""); the Java capturer maps it to a camera. The
+// returned pointer must be released with nativeDestroyVideoCapturer().
+JNI_OBJECT_FUNC(jlong, voip_TgCallsController, nativeCreateVideoCapturer, jstring jDeviceId, jboolean jIsScreencast) {
+  if (!tgcalls::initialize(env)) {
+    return 0;
+  }
+  std::string deviceId = jDeviceId != nullptr ? jni::from_jstring(env, jDeviceId) : std::string();
+  bool isScreencast = jIsScreencast == JNI_TRUE;
+
+  auto *captureContext = new VideoCaptureContext();
+  captureContext->platformContext = std::make_shared<tgcalls::AndroidContext>(env);
+  captureContext->capture = tgcalls::VideoCaptureInterface::Create(
+    tgcalls::StaticThreads::getThreads(),
+    deviceId,
+    isScreencast,
+    captureContext->platformContext
+  );
+  if (captureContext->capture == nullptr) {
+    delete captureContext;
+    return 0;
+  }
+  return jni::ptr_to_jlong(captureContext);
+}
+
+// Switches the camera (front <-> back) on an existing capturer.
+JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSwitchCamera, jlong capturePtr, jboolean jUseFrontCamera) {
+  auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
+  if (captureContext != nullptr && captureContext->capture != nullptr) {
+    bool useFront = jUseFrontCamera == JNI_TRUE;
+    captureContext->capture->switchToDevice(useFront ? "front" : "back", false);
+  }
+}
+
+// Sets the capture state (0 Inactive / 1 Paused / 2 Active), matching VideoState.java.
+JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetVideoState, jlong capturePtr, jint jState) {
+  auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
+  if (captureContext != nullptr && captureContext->capture != nullptr) {
+    captureContext->capture->setState(static_cast<tgcalls::VideoState>(jState));
+  }
+}
+
+// Releases a capturer created by nativeCreateVideoCapturer().
+JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeDestroyVideoCapturer, jlong capturePtr) {
+  auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
+  delete captureContext;
+}
+
+// Hands a capturer (or clears it when capturePtr == 0) to the running Instance.
+JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetVideoCapture, jlong ptr, jlong capturePtr) {
+  auto context = jni::jlong_to_ptr<TgCallsContext *>(ptr);
+  if (context == nullptr || context->tgcalls == nullptr) {
+    return;
+  }
+  if (capturePtr == 0) {
+    context->tgcalls->setVideoCapture(nullptr);
+    return;
+  }
+  auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
+  if (captureContext != nullptr) {
+    context->tgcalls->setVideoCapture(captureContext->capture);
+  }
+}
+
+// Routes incoming (remote) video frames to an org.webrtc.VideoSink. Passing null
+// clears the output. The Instance holds only a weak_ptr, so the owning
+// shared_ptr is retained in TgCallsContext::incomingVideoSink.
+JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetIncomingVideoOutput, jlong ptr, jobject jSink) {
+  auto context = jni::jlong_to_ptr<TgCallsContext *>(ptr);
+  if (context == nullptr || context->tgcalls == nullptr) {
+    return;
+  }
+  if (jSink == nullptr) {
+    context->incomingVideoSink = nullptr;
+    context->tgcalls->setIncomingVideoOutput(std::weak_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>());
+    return;
+  }
+  // JavaToNativeVideoSink returns a unique_ptr<VideoSinkInterface<VideoFrame>>
+  // wrapping the Java org.webrtc.VideoSink; promote it to shared and retain it.
+  std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink =
+    webrtc::JavaToNativeVideoSink(env, jSink);
+  context->incomingVideoSink = sink;
+  context->tgcalls->setIncomingVideoOutput(sink);
 }
 
 JNI_FUNC(jobjectArray, getTgCallsVersions) {
