@@ -190,6 +190,15 @@ public class ClearButton extends HeaderButton {
     progressAngle = 0f;
   }
 
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    // Release the infinite progress animator so a detached/destroyed button can't keep
+    // running frames and holding a reference to itself.
+    inProgress = false;
+    stopProgressAnimation();
+  }
+
   @SuppressWarnings ("ConstantConditions")
   @Override
   protected void onDraw (Canvas c) {
