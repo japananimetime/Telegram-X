@@ -103,6 +103,8 @@ import org.thunderdog.challegram.ui.EditRightsController;
 import org.thunderdog.challegram.ui.EditUsernameController;
 import org.thunderdog.challegram.ui.ForumTopicTabsController;
 import org.thunderdog.challegram.ui.ForumTopicsController;
+import org.thunderdog.challegram.ui.GiftAuctionController;
+import org.thunderdog.challegram.ui.GiftsController;
 import org.thunderdog.challegram.ui.InstantViewController;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.MainController;
@@ -133,6 +135,8 @@ import org.thunderdog.challegram.ui.SettingsThemeController;
 import org.thunderdog.challegram.ui.SettingsWebsitesController;
 import org.thunderdog.challegram.ui.ShareController;
 import org.thunderdog.challegram.ui.SimpleViewPagerController;
+import org.thunderdog.challegram.ui.UpgradedGiftController;
+import org.thunderdog.challegram.ui.WebAppController;
 import org.thunderdog.challegram.ui.camera.CameraController;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
@@ -2509,6 +2513,165 @@ public class TdlibUi extends Handler {
     showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
   }
 
+  // Mini App / Web App deep links (#840)
+
+  private static TdApi.ThemeParameters buildWebAppThemeParameters () {
+    TdApi.ThemeParameters params = new TdApi.ThemeParameters();
+    params.backgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.secondaryBackgroundColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.headerBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.bottomBarBackgroundColor = Theme.getColor(ColorId.headerBackground) & 0xFFFFFF;
+    params.sectionBackgroundColor = Theme.getColor(ColorId.filling) & 0xFFFFFF;
+    params.sectionSeparatorColor = Theme.getColor(ColorId.separator) & 0xFFFFFF;
+    params.textColor = Theme.getColor(ColorId.text) & 0xFFFFFF;
+    params.accentTextColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.sectionHeaderTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.subtitleTextColor = Theme.getColor(ColorId.textLight) & 0xFFFFFF;
+    params.destructiveTextColor = Theme.getColor(ColorId.textNegative) & 0xFFFFFF;
+    params.hintColor = Theme.getColor(ColorId.textPlaceholder) & 0xFFFFFF;
+    params.linkColor = Theme.getColor(ColorId.textLink) & 0xFFFFFF;
+    params.buttonColor = Theme.getColor(ColorId.fillingPositive) & 0xFFFFFF;
+    params.buttonTextColor = Theme.getColor(ColorId.fillingPositiveContent) & 0xFFFFFF;
+    return params;
+  }
+
+  private void openWebAppLink (final TdlibDelegate context, final String botUsername, final String webAppShortName, final String startParameter, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      if (result.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      final TdApi.Chat chat = result;
+      final long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+      final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
+      tdlib.send(new TdApi.GetWebAppLinkUrl(chat.id, botUserId, webAppShortName, startParameter, false, webAppParams), (linkResult, linkError) -> {
+        if (linkError != null) {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(linkError), openParameters);
+          if (after != null) {
+            post(() -> after.runWithBool(false));
+          }
+          return;
+        }
+        post(() -> {
+          WebAppController controller = new WebAppController(context.context(), tdlib);
+          controller.setArguments(new WebAppController.Args(
+            chat.id,
+            botUserId,
+            botUsername,
+            linkResult.url,
+            0,
+            null // openMode
+          ).setRequireSameOrigin(linkResult.requireSameOrigin));
+          context.context().navigation().navigateTo(controller);
+          if (after != null) {
+            after.runWithBool(true);
+          }
+        });
+      });
+    });
+  }
+
+  private void openMainWebAppLink (final TdlibDelegate context, final String botUsername, final String startParameter, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      if (result.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      final TdApi.Chat chat = result;
+      final long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+      final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
+      tdlib.send(new TdApi.GetMainWebApp(chat.id, botUserId, startParameter, webAppParams), (mainResult, mainError) -> {
+        if (mainError != null) {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(mainError), openParameters);
+          if (after != null) {
+            post(() -> after.runWithBool(false));
+          }
+          return;
+        }
+        post(() -> {
+          WebAppController controller = new WebAppController(context.context(), tdlib);
+          controller.setArguments(new WebAppController.Args(
+            chat.id,
+            botUserId,
+            botUsername,
+            mainResult.url.url,
+            0,
+            mainResult.mode
+          ).setRequireSameOrigin(mainResult.url.requireSameOrigin));
+          context.context().navigation().navigateTo(controller);
+          if (after != null) {
+            after.runWithBool(true);
+          }
+        });
+      });
+    });
+  }
+
+  private void openInvoiceLink (final TdlibDelegate context, final String invoiceName, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    final TdApi.InputInvoiceName inputInvoice = new TdApi.InputInvoiceName(invoiceName);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, buildWebAppThemeParameters()), (paymentForm, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      post(() -> {
+        ViewController<?> controller = context.context().navigation().getCurrentStackItem();
+        if (controller != null) {
+          openPaymentForm(controller, paymentForm, inputInvoice);
+        }
+        if (after != null) {
+          after.runWithBool(true);
+        }
+      });
+    });
+  }
+
+  // Gift collection deep link (#839)
+
+  private void openGiftCollectionLink (final TdlibDelegate context, final String giftOwnerUsername, final int collectionId, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    tdlib.send(new TdApi.SearchPublicChat(giftOwnerUsername), (chat, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      post(() -> {
+        GiftsController c = new GiftsController(context.context(), tdlib);
+        TdApi.MessageSender ownerId = tdlib.sender(chat.id);
+        c.setArguments(new GiftsController.Args(ownerId, tdlib.isSelfSender(ownerId)).setInitialCollectionId(collectionId));
+        context.context().navigation().navigateTo(c);
+        if (after != null) {
+          after.runWithBool(true);
+        }
+      });
+    });
+  }
+
   private static final int BOT_MODE_START = 0;
   private static final int BOT_MODE_START_IN_GROUP = 1;
   private static final int BOT_MODE_START_GAME = 2;
@@ -3795,23 +3958,57 @@ public class TdlibUi extends Handler {
         });
         break;
       }
+      case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeWebApp webApp = (TdApi.InternalLinkTypeWebApp) linkType;
+        openWebAppLink(context, webApp.botUsername, webApp.webAppShortName, webApp.startParameter, openParameters, after);
+        return; // async
+      }
+      case TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeMainWebApp mainWebApp = (TdApi.InternalLinkTypeMainWebApp) linkType;
+        openMainWebAppLink(context, mainWebApp.botUsername, mainWebApp.startParameter, openParameters, after);
+        return; // async
+      }
+      case TdApi.InternalLinkTypeInvoice.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeInvoice invoice = (TdApi.InternalLinkTypeInvoice) linkType;
+        openInvoiceLink(context, invoice.invoiceName, openParameters, after);
+        return; // async
+      }
+      case TdApi.InternalLinkTypeUpgradedGift.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeUpgradedGift upgradedGift = (TdApi.InternalLinkTypeUpgradedGift) linkType;
+        ViewController<?> giftController = context.context().navigation().getCurrentStackItem();
+        if (giftController != null) {
+          UpgradedGiftController.openByName(giftController, tdlib, upgradedGift.name);
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        }
+        break;
+      }
+      case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeGiftAuction giftAuction = (TdApi.InternalLinkTypeGiftAuction) linkType;
+        ViewController<?> auctionController = context.context().navigation().getCurrentStackItem();
+        if (auctionController != null) {
+          GiftAuctionController.openById(auctionController, tdlib, giftAuction.auctionId);
+        } else {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        }
+        break;
+      }
+      case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeGiftCollection giftCollection = (TdApi.InternalLinkTypeGiftCollection) linkType;
+        openGiftCollectionLink(context, giftCollection.giftOwnerUsername, giftCollection.collectionId, openParameters, after);
+        return; // async
+      }
+
       // LiveStory / StoryAlbum still need a viewer / album-highlights UI; left unsupported
       // for now (album viewer tracked in #851).
       case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR:
       case TdApi.InternalLinkTypeStoryAlbum.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypeAttachmentMenuBot.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeWebApp.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR:
-
-      case TdApi.InternalLinkTypeInvoice.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypeRestorePurchases.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeGiftCollection.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeGiftAuction.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatAffiliateProgram.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeUpgradedGift.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypePassportDataRequest.CONSTRUCTOR: {
         showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
