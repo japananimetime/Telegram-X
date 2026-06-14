@@ -105,6 +105,10 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
   private boolean isLoading;
   private boolean canLoadMore;
   private boolean isSubscribedToUpdates;
+  // Pagination cursor from the last GetForumTopics response (F5)
+  private int nextOffsetDate;
+  private long nextOffsetMessageId;
+  private int nextOffsetForumTopicId;
   private String currentSearchQuery;
   private boolean searchInMessages = true; // Toggle between topic name search and message search (default: messages)
   private List<TopicMessageSearchResult> messageSearchResults = new ArrayList<>();
@@ -123,6 +127,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
   private int pendingPageLoads = 0;  // Track remaining pages to load
   private List<TdApi.Message> pendingMessages = new ArrayList<>();  // Collect results from all pages
   private String pendingSearchQuery = null;  // Query for current batch
+  private String queuedSearchQuery = null;  // Query typed while a batch was in flight (F9)
   private int filterAutoRetryCount = 0;  // Track auto-retry attempts
   private java.util.Set<Long> pendingFilterTopicIds = null;  // Filter to apply after loading more
 
@@ -328,7 +333,9 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     }
 
     if (isSearchingMessages) {
-      return; // Already searching
+      // A batch is already in flight; remember the query and restart once it finishes (F9)
+      queuedSearchQuery = query;
+      return;
     }
     isSearchingMessages = true;
 
@@ -336,6 +343,9 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     lastSearchMessageId = 0;
     canLoadMoreMessages = false;
     messageSearchResults.clear();
+    // The adapter renders this list; notify right away so RecyclerView
+    // can't observe a shrunk list before the async results arrive (F9)
+    adapter.setMessageSearchResults(messageSearchResults, null);
 
     // Reset multi-page loading state
     pendingMessages.clear();
@@ -425,12 +435,33 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     loadMessagePage(currentSearchQuery, lastSearchMessageId, true);
   }
 
+  /**
+   * Restarts a message search if the query changed while a batch was in flight (F9).
+   * @return true if a new search was started and the finished batch should be discarded
+   */
+  private boolean maybeRestartQueuedSearch (String finishedQuery) {
+    if (queuedSearchQuery != null) {
+      String query = queuedSearchQuery;
+      queuedSearchQuery = null;
+      if (!StringUtils.equalsOrBothEmpty(query, finishedQuery)) {
+        searchMessages(query);
+        return true;
+      }
+    }
+    return false;
+  }
+
   private void processMessageSearchResults (TdApi.Message[] messages, String query, boolean append) {
     // Flat list: show ALL messages, not grouped by topic
     if (messages.length == 0) {
       UI.post(() -> {
+        if (isDestroyed()) return;
         isSearchingMessages = false;
         setClearButtonSearchInProgress(false);
+        // If the query changed mid-batch, restart and discard this stale batch (F9)
+        if (maybeRestartQueuedSearch(query)) {
+          return;
+        }
         if (!append) {
           messageSearchResults.clear();
           adapter.setMessageSearchResults(messageSearchResults, query);
@@ -511,8 +542,13 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
 
   private void finalizeMessageSearchResults (List<TopicMessageSearchResult> results, String query, boolean append) {
     UI.post(() -> {
+      if (isDestroyed()) return;
       isSearchingMessages = false;
       setClearButtonSearchInProgress(false);
+      // If the query changed mid-batch, restart and discard this stale batch (F9)
+      if (maybeRestartQueuedSearch(query)) {
+        return;
+      }
       if (!append) {
         // New search - store in unfiltered list and reset filter
         unfilteredMessageResults.clear();
@@ -691,7 +727,11 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     if (isSubscribedToUpdates) {
       tdlib.listeners().unsubscribeFromChatUpdates(chatId, this);
       tdlib.listeners().unsubscribeFromMessageUpdates(chatId, this);
+      tdlib.cache().unsubscribeFromSupergroupUpdates(ChatId.toSupergroupId(chatId), this);
       isSubscribedToUpdates = false;
+    }
+    if (headerCell != null) {
+      headerCell.performDestroy();
     }
   }
 
@@ -744,6 +784,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     if (!isSubscribedToUpdates) {
       tdlib.listeners().subscribeToChatUpdates(chatId, this);
       tdlib.listeners().subscribeToMessageUpdates(chatId, this);
+      tdlib.cache().subscribeToSupergroupUpdates(ChatId.toSupergroupId(chatId), this);
       isSubscribedToUpdates = true;
     }
 
@@ -762,12 +803,17 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
       if (result.getConstructor() == TdApi.ForumTopics.CONSTRUCTOR) {
         TdApi.ForumTopics forumTopics = (TdApi.ForumTopics) result;
         UI.post(() -> {
+          if (isDestroyed()) return;
           topics.clear();
           for (TdApi.ForumTopic topic : forumTopics.topics) {
             topics.add(topic);
           }
           // Save all topics for search restore
           allTopics = new ArrayList<>(topics);
+          // Keep the response cursor for load-more (F5)
+          nextOffsetDate = forumTopics.nextOffsetDate;
+          nextOffsetMessageId = forumTopics.nextOffsetMessageId;
+          nextOffsetForumTopicId = forumTopics.nextOffsetForumTopicId;
           canLoadMore = forumTopics.topics.length > 0 &&
                         forumTopics.nextOffsetMessageId != 0;
           // Update cache
@@ -778,6 +824,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         });
       } else {
         UI.post(() -> {
+          if (isDestroyed()) return;
           isLoading = false;
           updateEmptyView();
         });
@@ -785,28 +832,54 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     });
   }
 
+  private static int indexOfTopic (List<TdApi.ForumTopic> list, long forumTopicId) {
+    if (list != null) {
+      for (int i = 0; i < list.size(); i++) {
+        if (list.get(i).info.forumTopicId == forumTopicId) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
   private void loadMoreTopics () {
     if (isLoading || !canLoadMore || topics.isEmpty()) return;
     isLoading = true;
 
-    TdApi.ForumTopic lastTopic = topics.get(topics.size() - 1);
-    long lastMessageId = lastTopic.lastMessage != null ? lastTopic.lastMessage.id : 0;
-    int lastDate = lastTopic.lastMessage != null ? lastTopic.lastMessage.date : 0;
-
-    tdlib.client().send(new TdApi.GetForumTopics(chatId, "", lastDate, lastMessageId, lastTopic.info.forumTopicId, 100), result -> {
+    // Use the cursor returned by the previous GetForumTopics response (F5),
+    // instead of reconstructing offsets from the last topic's lastMessage.
+    tdlib.client().send(new TdApi.GetForumTopics(chatId, "", nextOffsetDate, nextOffsetMessageId, nextOffsetForumTopicId, 100), result -> {
       if (result.getConstructor() == TdApi.ForumTopics.CONSTRUCTOR) {
         TdApi.ForumTopics forumTopics = (TdApi.ForumTopics) result;
         UI.post(() -> {
+          if (isDestroyed()) return;
+          // Dedup before insert, so load-more can't create duplicate rows or
+          // desync notifyItemRangeInserted.
+          int added = 0;
           for (TdApi.ForumTopic topic : forumTopics.topics) {
-            topics.add(topic);
+            if (indexOfTopic(topics, topic.info.forumTopicId) == -1) {
+              topics.add(topic);
+              added++;
+            }
+            if (allTopics != null && indexOfTopic(allTopics, topic.info.forumTopicId) == -1) {
+              allTopics.add(topic);
+            }
           }
+          nextOffsetDate = forumTopics.nextOffsetDate;
+          nextOffsetMessageId = forumTopics.nextOffsetMessageId;
+          nextOffsetForumTopicId = forumTopics.nextOffsetForumTopicId;
           canLoadMore = forumTopics.topics.length > 0 &&
                         forumTopics.nextOffsetMessageId != 0;
-          adapter.setTopics(topics, null);
+          tdlib.updateForumTopicsCache(chatId, allTopics != null ? allTopics : topics);
+          if (added > 0 && adapter != null) {
+            adapter.notifyItemRangeInserted(topics.size() - added, added);
+          }
           isLoading = false;
         });
       } else {
         UI.post(() -> {
+          if (isDestroyed()) return;
           isLoading = false;
         });
       }
@@ -1134,15 +1207,21 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     showConfirm(Lang.getStringBold(R.string.DeleteTopicConfirm, topic.info.name), Lang.getString(R.string.Delete), R.drawable.baseline_delete_24, OptionColor.RED, () -> {
       tdlib.client().send(new TdApi.DeleteForumTopic(topic.info.chatId, topic.info.forumTopicId), result -> {
         if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
-          // Remove from local list immediately
+          // Evict from the global forum cache so the topic can't resurrect from
+          // instant-display or mute checks (F6).
+          tdlib.removeCachedForumTopic(topic.info.chatId, topic.info.forumTopicId);
+          // Remove from local lists immediately
           UI.post(() -> {
-            for (int i = 0; i < topics.size(); i++) {
-              if (topics.get(i).info.forumTopicId == topic.info.forumTopicId) {
-                topics.remove(i);
-                adapter.notifyItemRemoved(i);
-                updateEmptyView();
-                break;
-              }
+            if (isDestroyed()) return;
+            int index = indexOfTopic(topics, topic.info.forumTopicId);
+            if (index != -1) {
+              topics.remove(index);
+              adapter.notifyItemRemoved(index);
+              updateEmptyView();
+            }
+            int allIndex = indexOfTopic(allTopics, topic.info.forumTopicId);
+            if (allIndex != -1) {
+              allTopics.remove(allIndex);
             }
           });
         } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
@@ -1479,6 +1558,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
   public void onForumTopicInfoChanged (TdApi.ForumTopicInfo info) {
     if (info.chatId != chatId) return;
     UI.post(() -> {
+      if (isDestroyed() || topics == null) return;
       for (int i = 0; i < topics.size(); i++) {
         if (topics.get(i).info.forumTopicId == info.forumTopicId) {
           topics.get(i).info = info;
@@ -1491,7 +1571,11 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
 
   @Override
   public void onForumTopicUpdated (long chatId, long messageThreadId, boolean isPinned, long lastReadInboxMessageId, long lastReadOutboxMessageId, int unreadMentionCount, int unreadReactionCount, TdApi.ChatNotificationSettings notificationSettings, TdApi.DraftMessage draftMessage) {
-    if (chatId != this.chatId || topics == null) return;
+    if (chatId != this.chatId) return;
+
+    // The lists are owned by the UI thread; inspect and mutate them only there
+    UI.post(() -> {
+    if (isDestroyed() || topics == null) return;
 
     // Find if read state changed - if so, we need to fetch fresh unread count
     boolean needFetchUnreadCount = false;
@@ -1524,6 +1608,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
           // Update Tdlib cache so chat list badge updates correctly
           tdlib.updateForumTopicUnreadCount(chatId, (int) messageThreadId, freshTopic.unreadCount);
           UI.post(() -> {
+            if (isDestroyed()) return;
             if (topics != null && foundIndex < topics.size() &&
                 topics.get(foundIndex).info.forumTopicId == messageThreadId) {
               topics.set(foundIndex, freshTopic);
@@ -1546,7 +1631,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     } else {
       // Just update local state without fetching
       UI.post(() -> {
-        if (topics == null || foundIndex >= topics.size()) return;
+        if (isDestroyed() || topics == null || foundIndex >= topics.size()) return;
         TdApi.ForumTopic topic = topics.get(foundIndex);
         if (topic.info.forumTopicId != messageThreadId) return;
 
@@ -1584,6 +1669,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         }
       });
     }
+    });
   }
 
   @Override
@@ -1692,7 +1778,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     final int finalTopicId = topicId;
 
     UI.post(() -> {
-      if (topics == null) return;
+      if (isDestroyed() || topics == null) return;
 
       // Find the topic
       int foundIndex = -1;
@@ -1712,21 +1798,29 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         return;
       }
 
-      // Update lastMessage
-      foundTopic.lastMessage = message;
+      // Only advance when the message is actually newer, so a duplicate
+      // onNewMessage / onMessageSendSucceeded echo for the same id can't
+      // regress the preview or double-count unread.
+      boolean isNewer = foundTopic.lastMessage == null || message.id > foundTopic.lastMessage.id;
+      if (isNewer) {
+        // Update lastMessage
+        foundTopic.lastMessage = message;
 
-      // If message is unread, increment unread count
-      if (!message.isOutgoing && message.id > foundTopic.lastReadInboxMessageId) {
-        foundTopic.unreadCount++;
+        // If message is unread, increment unread count
+        if (!message.isOutgoing && message.id > foundTopic.lastReadInboxMessageId) {
+          foundTopic.unreadCount++;
+        }
       }
 
       // Also update in allTopics
       if (allTopics != null) {
         for (TdApi.ForumTopic topic : allTopics) {
           if (topic.info.forumTopicId == finalTopicId) {
-            topic.lastMessage = message;
-            if (!message.isOutgoing && message.id > topic.lastReadInboxMessageId) {
-              topic.unreadCount++;
+            if (topic.lastMessage == null || message.id > topic.lastMessage.id) {
+              topic.lastMessage = message;
+              if (!message.isOutgoing && message.id > topic.lastReadInboxMessageId) {
+                topic.unreadCount++;
+              }
             }
             break;
           }
@@ -1828,17 +1922,23 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
   private void resortTopics () {
     if (topics == null || topics.size() < 2) return;
 
-    // Sort: pinned first, then by lastMessage date (newest first)
+    // TDLib contract: topics are sorted by `order` in descending order. `order`
+    // already folds in pinned state, last-message date AND draft date, so it is
+    // the single source of truth — using lastMessage.date for non-pinned topics
+    // ignored draft-date influence and mis-ordered topics with a newer draft but
+    // older last message (F7). Date is only a tiebreak when orders are equal.
     java.util.Collections.sort(topics, (a, b) -> {
-      // Pinned topics first
+      // Pinned topics first (defensive grouping; pinned topics also carry a higher order).
       if (a.isPinned != b.isPinned) {
         return a.isPinned ? -1 : 1;
       }
-
-      // Within same pinned status, sort by lastMessage date
+      if (a.order != b.order) {
+        return Long.compare(b.order, a.order); // Descending
+      }
+      // Stable tiebreak when orders are equal.
       int dateA = a.lastMessage != null ? a.lastMessage.date : 0;
       int dateB = b.lastMessage != null ? b.lastMessage.date : 0;
-      return Integer.compare(dateB, dateA); // Descending (newest first)
+      return Integer.compare(dateB, dateA);
     });
   }
 

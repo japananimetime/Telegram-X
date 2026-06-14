@@ -3560,6 +3560,39 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
   }
 
+  /**
+   * Removes a topic from the forum caches (e.g. after DeleteForumTopic) so a
+   * deleted topic can't resurrect from instant-display, and refreshes the
+   * cached unread topic count.
+   */
+  public void removeCachedForumTopic (long chatId, long forumTopicId) {
+    synchronized (dataLock) {
+      forumTopicInfos.remove(chatId + "_" + forumTopicId);
+      List<TdApi.ForumTopic> topics = forumTopicsCache.get(chatId);
+      if (topics != null) {
+        for (int i = topics.size() - 1; i >= 0; i--) {
+          if (topics.get(i).info.forumTopicId == forumTopicId) {
+            topics.remove(i);
+            break;
+          }
+        }
+        // Recompute total unread topics (exclude hidden topics), matching the
+        // accounting in fetchForumUnreadTopicCount / updateForumTopicUnreadCount.
+        int totalUnread = 0;
+        for (TdApi.ForumTopic topic : topics) {
+          if (topic.unreadCount > 0 && !topic.info.isHidden) {
+            totalUnread++;
+          }
+        }
+        Integer oldCount = forumUnreadTopicCounts.get(chatId);
+        if (oldCount == null || oldCount != totalUnread) {
+          forumUnreadTopicCounts.put(chatId, totalUnread);
+          listeners().updateForumUnreadTopicCount(chatId, totalUnread);
+        }
+      }
+    }
+  }
+
   public @Nullable TdApi.BlockList chatBlockList (TdApi.Chat chat) {
     return chat != null ? chatBlockList(chat.id) : null;
   }
