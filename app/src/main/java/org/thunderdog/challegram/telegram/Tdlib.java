@@ -2694,10 +2694,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
    */
   public boolean isForumTopicMuted (long chatId, long topicId) {
     TdApi.ForumTopic topic = forumTopic(chatId, topicId);
-    if (topic != null && topic.notificationSettings != null) {
+    if (topic != null && topic.notificationSettings != null && !topic.notificationSettings.useDefaultMuteFor) {
       return topic.notificationSettings.muteFor > 0;
     }
-    return false;
+    // Topic uses default settings (or has none): inherit the parent chat's mute state,
+    // otherwise a topic under a muted chat would wrongly report as unmuted.
+    return chatMuteFor(chatId) > 0;
   }
 
   public @Nullable TdApi.Chat chat (long chatId) {
@@ -7508,8 +7510,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         chatList.clear();
       }
     }
-    forumTopicInfos.clear();
     synchronized (dataLock) {
+      // Clear all forum caches under dataLock on full reset (logout / account switch /
+      // resync) so stale topic snapshots, unread-topic badges and in-flight markers from
+      // the previous session can't survive. forumTopicInfos must be cleared under the lock
+      // too — every other access to it is synchronized on dataLock.
+      forumTopicInfos.clear();
+      forumTopicsCache.clear();
+      forumUnreadTopicCounts.clear();
       forumUnreadTopicCountRequests.clear();
     }
   }
