@@ -625,6 +625,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.StartEncryptedChat);
     }
 
+    if (user.id != myUserId && canSendGiftToUser()) {
+      ids.append(R.id.more_btn_sendGift);
+      strings.append(R.string.SendGift);
+    }
+
     if (isBot) {
       if (Td.hasUsername(user)) {
         ids.append(R.id.more_btn_share);
@@ -796,6 +801,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
             }
           } else if (id == R.id.more_btn_delete) {
             tdlib.ui().deleteContact(this, user.id);
+          } else if (id == R.id.more_btn_sendGift) {
+            openGiftPicker(new TdApi.MessageSenderUser(user.id));
           }
         }
         break;
@@ -1849,6 +1856,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         } else if (itemId == R.id.btn_profileNote) {
           view.setText(profileNoteWrapper);
           view.setName(R.string.ProfileNote);
+        } else if (itemId == R.id.btn_gifts) {
+          view.setData(Lang.plural(R.string.xGifts, getGiftCount()));
         } else if (itemId == R.id.btn_manageInviteLinks) {
           if (inviteLinksCount == -1) {
             view.setData(Lang.getString(R.string.LoadingInformation));
@@ -2457,6 +2466,43 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     return false;
   }
 
+  // Opens a single-field editor for the contact's profile note and persists it via SetUserNote.
+  private void editProfileNote () {
+    if (!isUserMode() || user == null) {
+      return;
+    }
+    final long userId = user.id;
+    // user_note_text_length_max is not surfaced as a structured TdlibOptions field, so read it
+    // directly; fall back to TDLib's documented default until the option arrives.
+    tdlib.send(new TdApi.GetOption("user_note_text_length_max"), (value, error) -> tdlib.ui().post(() -> {
+      if (isDestroyed()) {
+        return;
+      }
+      int maxLength = 1024;
+      if (value != null && value.getConstructor() == TdApi.OptionValueInteger.CONSTRUCTOR) {
+        long optionValue = ((TdApi.OptionValueInteger) value).value;
+        if (optionValue > 0) {
+          maxLength = (int) Math.min(optionValue, Integer.MAX_VALUE);
+        }
+      }
+      final int maxNoteLength = maxLength;
+      final CharSequence currentNote = currentProfileNote != null ? currentProfileNote.text : null;
+      MaterialEditTextGroup editText = openInputAlert(Lang.getString(R.string.ProfileNote), Lang.getString(R.string.ProfileNote), R.string.Save, R.string.Cancel, currentNote, (inputView, result) -> {
+        String note = result != null ? result.trim() : "";
+        // Plain-text note: entities (Bold/Italic/etc.) are not editable from this single-line input.
+        TdApi.FormattedText formattedNote = StringUtils.isEmpty(note) ? new TdApi.FormattedText("", new TdApi.TextEntity[0]) : new TdApi.FormattedText(note, new TdApi.TextEntity[0]);
+        tdlib.send(new TdApi.SetUserNote(userId, formattedNote), (ok, setError) -> tdlib.ui().post(() -> {
+          if (setError != null) {
+            UI.showError(setError);
+          }
+          // On success, the resulting updateUserFullInfo refreshes the note row via checkProfileNote().
+        }));
+        return true;
+      }, true);
+      editText.setMaxLength(maxNoteLength);
+    }));
+  }
+
   /*private SettingItem newMembersListItem () {
     return new SettingItem(SettingItem.TYPE_MEMBERS_LIST, R.id.membersList, 0, 0);
   }*/
@@ -2499,6 +2545,78 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private ListItem newProfileNoteItem () {
     return new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_profileNote, R.drawable.baseline_edit_24, R.string.ProfileNote);
+  }
+
+  private ListItem newGiftsItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_gifts, R.drawable.baseline_gift_outline_24, R.string.Gifts);
+  }
+
+  private int getGiftCount () {
+    if (isUserMode() && userFull != null) {
+      return userFull.giftCount;
+    }
+    if ((mode == Mode.CHANNEL || mode == Mode.SUPERGROUP) && supergroupFull != null) {
+      return supergroupFull.giftCount;
+    }
+    return 0;
+  }
+
+  private void openGifts () {
+    final int giftCount = getGiftCount();
+    if (giftCount <= 0) {
+      return;
+    }
+    final TdApi.MessageSender ownerId;
+    final boolean isSelf;
+    if (isUserMode()) {
+      ownerId = new TdApi.MessageSenderUser(user.id);
+      isSelf = tdlib.isSelfUserId(user.id);
+    } else {
+      ownerId = new TdApi.MessageSenderChat(getChatId());
+      isSelf = false;
+    }
+    GiftsController c = new GiftsController(context, tdlib);
+    c.setArguments(new GiftsController.Args(ownerId, isSelf));
+    navigateTo(c);
+  }
+
+  // Whether the "Send a Gift" entry should be offered for this user/bot.
+  private boolean canSendGiftToUser () {
+    if (!isUserMode() || user == null || userFull == null) {
+      return false;
+    }
+    if (tdlib.isSelfUserId(user.id)) {
+      return false;
+    }
+    TdApi.GiftSettings settings = userFull.giftSettings;
+    if (settings == null) {
+      // Unknown - still allow; SendGift will fail server-side if disallowed.
+      return true;
+    }
+    TdApi.AcceptedGiftTypes types = settings.acceptedGiftTypes;
+    if (types == null) {
+      return true;
+    }
+    return types.unlimitedGifts || types.limitedGifts || types.upgradedGifts;
+  }
+
+  private void openGiftPicker (TdApi.MessageSender ownerId) {
+    GiftPickerController c = new GiftPickerController(context, tdlib);
+    c.setArguments(new GiftPickerController.Args(ownerId));
+    navigateTo(c);
+  }
+
+  private ListItem newGiftSettingsItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_giftSettings, R.drawable.baseline_gift_outline_24, R.string.GiftSettings);
+  }
+
+  private void openGiftSettings () {
+    if (userFull == null) {
+      return;
+    }
+    GiftSettingsController c = new GiftSettingsController(context, tdlib);
+    c.setArguments(new GiftSettingsController.Args(userFull.giftSettings));
+    navigateTo(c);
   }
 
   private ListItem newPeerIdItem () {
@@ -2555,6 +2673,20 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
         }
         items.add(newProfileNoteItem());
+        addedCount++;
+      }
+      if (userFull.giftCount > 0) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newGiftsItem());
+        addedCount++;
+      }
+      if (tdlib.isSelfUserId(user.id)) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newGiftSettingsItem());
         addedCount++;
       }
     }
@@ -3289,6 +3421,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         items.add(new ListItem(ListItem.TYPE_SEPARATOR));
       }
       items.add(newInviteLinkItem());
+      addedCount++;
+    }
+
+    if (supergroupFull != null && supergroupFull.giftCount > 0) {
+      if (addedCount > 0) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      }
+      items.add(newGiftsItem());
       addedCount++;
     }
 
@@ -5222,6 +5362,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       } else {
         showDescriptionOptions(false, descriptionLanguage = null);
       }
+    } else if (viewId == R.id.btn_profileNote) {
+      editProfileNote();
+    } else if (viewId == R.id.btn_gifts) {
+      openGifts();
+    } else if (viewId == R.id.btn_giftSettings) {
+      openGiftSettings();
     } else if (viewId == R.id.btn_notifications) {
       tdlib.ui().showMuteOptions(this, chat.id, true, null);
     } else if (viewId == R.id.btn_encryptionKey) {
