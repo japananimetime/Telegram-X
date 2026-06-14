@@ -1695,6 +1695,24 @@
   <item type="id" name="controller_businessGreeting" />
   <item type="id" name="controller_businessAway" />
   <item type="id" name="controller_businessRecipients" />
+  <item type="id" name="controller_businessConnectedBot" />
+  <item type="id" name="btn_businessConnectedBot" />
+  <item type="id" name="btn_businessBot" />
+  <item type="id" name="btn_businessBotRemove" />
+  <item type="id" name="btn_businessBotCanReply" />
+  <item type="id" name="btn_businessBotCanReadMessages" />
+  <item type="id" name="btn_businessBotCanDeleteSentMessages" />
+  <item type="id" name="btn_businessBotCanDeleteAllMessages" />
+  <item type="id" name="btn_businessBotCanEditName" />
+  <item type="id" name="btn_businessBotCanEditBio" />
+  <item type="id" name="btn_businessBotCanEditProfilePhoto" />
+  <item type="id" name="btn_businessBotCanEditUsername" />
+  <item type="id" name="btn_businessBotCanViewGiftsAndStars" />
+  <item type="id" name="btn_businessBotCanSellGifts" />
+  <item type="id" name="btn_businessBotCanChangeGiftSettings" />
+  <item type="id" name="btn_businessBotCanTransferAndUpgradeGifts" />
+  <item type="id" name="btn_businessBotCanTransferStars" />
+  <item type="id" name="btn_businessBotCanManageStories" />
   <item type="id" name="btn_clearDownloads" />
   <item type="id" name="btn_download" />
   <item type="id" name="btn_pauseDownload" />

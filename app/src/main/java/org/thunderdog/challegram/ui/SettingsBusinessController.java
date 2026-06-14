@@ -105,6 +105,9 @@ public class SettingsBusinessController extends RecyclerViewController<Void> imp
     addValueRow(items, R.id.btn_businessAway, R.drawable.baseline_schedule_24, R.string.BusinessAwayMessage,
       onOff(businessInfo != null && businessInfo.awayMessageSettings != null), false);
     addValueRow(items, R.id.btn_businessChatLinks, R.drawable.baseline_link_24, R.string.BusinessChatLinks, null, false);
+    // The connected bot is not part of BusinessInfo; its state lives behind
+    // GetBusinessConnectedBot, so this row has no inline on/off value.
+    addValueRow(items, R.id.btn_businessConnectedBot, R.drawable.deproko_baseline_bots_24, R.string.BusinessChatbots, null, false);
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     adapter.setItems(items, false);
@@ -134,6 +137,8 @@ public class SettingsBusinessController extends RecyclerViewController<Void> imp
       navigateTo(c);
     } else if (id == R.id.btn_businessChatLinks) {
       navigateTo(new BusinessChatLinksController(context, tdlib));
+    } else if (id == R.id.btn_businessConnectedBot) {
+      navigateTo(new BusinessConnectedBotController(context, tdlib));
     } else if (id == R.id.btn_businessOpeningHours) {
       openOrEdit(businessInfo != null && businessInfo.openingHours != null,
         this::openOpeningHoursEditor,
