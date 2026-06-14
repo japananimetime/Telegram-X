@@ -20,6 +20,8 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import androidx.annotation.Nullable;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
@@ -40,6 +42,8 @@ import java.util.List;
 
 import me.vkryl.core.StringUtils;
 import me.vkryl.core.collection.LongList;
+import me.vkryl.core.lambda.RunnableData;
+import tgx.td.Td;
 
 public class StoryPreviewController extends RecyclerViewController<StoryPreviewController.Args>
     implements View.OnClickListener, Menu, UserPickerMultiDelegate, SettingsAdapter.TextChangeListener {
@@ -82,6 +86,9 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
   private int selectedDuration = DURATION_24H;
   private boolean saveToProfile = false;
   private String captionText = "";
+  // Live handle to the caption editor, so postStory() can read the rich (spanned/Markdown) text
+  // and produce a FormattedText with entities — not just the plain captionText mirror.
+  private MaterialEditTextGroup captionEditor;
   private long[] selectedUserIds = new long[0];
 
   private SettingsAdapter adapter;
@@ -152,6 +159,7 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
   public void onTextChanged (int id, ListItem item, MaterialEditTextGroup v) {
     if (id == R.id.input) {
       captionText = v.getText().toString();
+      captionEditor = v;
     }
   }
 
@@ -439,19 +447,65 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
       }
     }
 
-    // Build the story caption from the caption input; pass null for an empty caption.
-    // Entities are intentionally omitted: text entities in a story caption are only valid when
-    // the "can_use_text_entities_in_story_caption" option is enabled, which we can't read here.
-    // Overlong captions (> story_caption_length_max) are rejected by TDLib and surfaced via the
-    // error toast below.
-    final String trimmedCaption = captionText != null ? captionText.trim() : "";
-    final TdApi.FormattedText caption = StringUtils.isEmpty(trimmedCaption)
-      ? null
-      : new TdApi.FormattedText(trimmedCaption, new TdApi.TextEntity[0]);
+    // Build the RICH story caption from the caption editor. The editor is an
+    // org.thunderdog.challegram.v.EditText subclass, so getOutputText(true) yields a
+    // FormattedText with entities (spans + inline Markdown like **bold**, __italic__,
+    // `code`, [text](url)). Whether those entities are actually sent is gated below on
+    // "can_use_text_entities_in_story_caption"; the length is clamped to
+    // "story_caption_length_max". Neither option has a typed TdlibOptions getter, so both
+    // are fetched via GetOption with sensible fallbacks.
+    final TdApi.FormattedText richCaption = captionEditor != null
+      ? Td.trim(captionEditor.getEditText().getOutputText(true))
+      : (StringUtils.isEmpty(captionText) ? null : new TdApi.FormattedText(captionText.trim(), new TdApi.TextEntity[0]));
 
     UI.showToast(R.string.StoryPosting, Toast.LENGTH_SHORT);
 
     final int finalDuration = duration;
+    fetchCaptionConstraints(richCaption, finalCaption ->
+      sendPostStory(chatId, content, finalCaption, privacy, finalDuration)
+    );
+  }
+
+  // Fetches story-caption constraints (can_use_text_entities_in_story_caption /
+  // story_caption_length_max) and produces the final caption: entities are dropped when not
+  // permitted, and the text is clamped to the server-side maximum. Falls back to permissive
+  // defaults (entities allowed, 2048-char cap matching TDLib's documented default) if the
+  // options are unavailable.
+  private void fetchCaptionConstraints (@Nullable TdApi.FormattedText caption, RunnableData<TdApi.FormattedText> after) {
+    if (Td.isEmpty(caption)) {
+      after.runWithData(null);
+      return;
+    }
+    tdlib.send(new TdApi.GetOption("can_use_text_entities_in_story_caption"), (entitiesValue, entitiesError) -> {
+      final boolean allowEntities = entitiesValue == null
+        || entitiesValue.getConstructor() != TdApi.OptionValueBoolean.CONSTRUCTOR
+        || ((TdApi.OptionValueBoolean) entitiesValue).value;
+      tdlib.send(new TdApi.GetOption("story_caption_length_max"), (lengthValue, lengthError) -> tdlib.ui().post(() -> {
+        if (isDestroyed()) {
+          return;
+        }
+        int maxLength = 2048; // TDLib documented default for story captions
+        if (lengthValue != null && lengthValue.getConstructor() == TdApi.OptionValueInteger.CONSTRUCTOR) {
+          long optionValue = ((TdApi.OptionValueInteger) lengthValue).value;
+          if (optionValue > 0) {
+            maxLength = (int) Math.min(optionValue, Integer.MAX_VALUE);
+          }
+        }
+        TdApi.FormattedText finalCaption = caption;
+        if (!allowEntities && finalCaption.entities != null && finalCaption.entities.length > 0) {
+          // Entities not permitted in story captions on this server — send plain text.
+          finalCaption = new TdApi.FormattedText(finalCaption.text, new TdApi.TextEntity[0]);
+        }
+        if (finalCaption.text != null && finalCaption.text.length() > maxLength) {
+          finalCaption = Td.substring(finalCaption, 0, maxLength);
+        }
+        finalCaption = Td.trim(finalCaption);
+        after.runWithData(Td.isEmpty(finalCaption) ? null : finalCaption);
+      }));
+    });
+  }
+
+  private void sendPostStory (long chatId, TdApi.InputStoryContent content, @Nullable TdApi.FormattedText caption, @Nullable TdApi.StoryPrivacySettings privacy, int finalDuration) {
     tdlib.client().send(new TdApi.PostStory(
       chatId,
       content,

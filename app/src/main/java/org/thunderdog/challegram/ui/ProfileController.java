@@ -2486,11 +2486,17 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         }
       }
       final int maxNoteLength = maxLength;
-      final CharSequence currentNote = currentProfileNote != null ? currentProfileNote.text : null;
+      // Seed the editor with the FULL FormattedText (text + entities) so existing
+      // Bold/Italic/Link/etc. round-trip as editable spans, not just plain text.
+      final CharSequence currentNote = !Td.isEmpty(currentProfileNote) ? TD.toCharSequence(currentProfileNote) : null;
       MaterialEditTextGroup editText = openInputAlert(Lang.getString(R.string.ProfileNote), Lang.getString(R.string.ProfileNote), R.string.Save, R.string.Cancel, currentNote, (inputView, result) -> {
-        String note = result != null ? result.trim() : "";
-        // Plain-text note: entities (Bold/Italic/etc.) are not editable from this single-line input.
-        TdApi.FormattedText formattedNote = StringUtils.isEmpty(note) ? new TdApi.FormattedText("", new TdApi.TextEntity[0]) : new TdApi.FormattedText(note, new TdApi.TextEntity[0]);
+        // The alert's editor is an org.thunderdog.challegram.v.EditText subclass, so it can
+        // produce a FormattedText with entities directly (spans + inline Markdown like **bold**,
+        // __italic__, `code`, [text](url)). Ignore the plain `result` string and read the rich text.
+        TdApi.FormattedText formattedNote = Td.trim(inputView.getEditText().getOutputText(true));
+        if (formattedNote == null) {
+          formattedNote = new TdApi.FormattedText("", new TdApi.TextEntity[0]);
+        }
         tdlib.send(new TdApi.SetUserNote(userId, formattedNote), (ok, setError) -> tdlib.ui().post(() -> {
           if (setError != null) {
             UI.showError(setError);
