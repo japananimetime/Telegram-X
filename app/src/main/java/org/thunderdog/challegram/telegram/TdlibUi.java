@@ -2488,12 +2488,62 @@ public class TdlibUi extends Handler {
 
   public void openStory (final TdlibDelegate context, final long storySenderChatId, final int storyId,
                          @Nullable TdApi.Story preloadedStory, @Nullable java.util.List<TdApi.ChatActiveStories> allStories, int initialUserIndex) {
+    openStory(context, storySenderChatId, storyId, preloadedStory, allStories, initialUserIndex, false);
+  }
+
+  public void openStory (final TdlibDelegate context, final long storySenderChatId, final int storyId,
+                         @Nullable TdApi.Story preloadedStory, @Nullable java.util.List<TdApi.ChatActiveStories> allStories, int initialUserIndex,
+                         boolean explicitStoryList) {
     if (context.context() == null) {
       return;
     }
     org.thunderdog.challegram.ui.StoryViewController storyController = new org.thunderdog.challegram.ui.StoryViewController(context.context(), tdlib);
-    storyController.setArguments(new org.thunderdog.challegram.ui.StoryViewController.Args(storySenderChatId, storyId, preloadedStory, allStories, initialUserIndex));
+    storyController.setArguments(new org.thunderdog.challegram.ui.StoryViewController.Args(storySenderChatId, storyId, preloadedStory, allStories, initialUserIndex, explicitStoryList));
     storyController.open();
+  }
+
+  /**
+   * Opens a story album (a.k.a. highlight): loads the album's curated story list via
+   * {@link TdApi.GetStoryAlbumStories} and presents it sequentially in the existing
+   * {@link org.thunderdog.challegram.ui.StoryViewController}. The album list is treated as an
+   * explicit, authoritative sequence (it is NOT the chat's live active stories), so the viewer
+   * is told not to refresh it from getChatActiveStories.
+   *
+   * @return nothing; opening is asynchronous.
+   */
+  public void openStoryAlbum (final TdlibDelegate context, final long chatId, final int storyAlbumId, final @Nullable UrlOpenParameters openParameters) {
+    if (context.context() == null) {
+      return;
+    }
+    // 0 offset, 0 limit -> TDLib chooses an optimal page size and returns from the first album story.
+    tdlib.client().send(new TdApi.GetStoryAlbumStories(chatId, storyAlbumId, 0, 0), result -> {
+      if (result.getConstructor() == TdApi.Stories.CONSTRUCTOR) {
+        TdApi.Stories stories = (TdApi.Stories) result;
+        if (stories.stories == null || stories.stories.length == 0) {
+          post(() -> showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters));
+          return;
+        }
+        // Build a synthetic ChatActiveStories that wraps the album's stories so the existing
+        // viewer's sequential navigation (which walks ChatActiveStories.stories[]) can drive
+        // the album. Map each full Story to the StoryInfo the navigation path expects.
+        TdApi.Story[] albumStories = stories.stories;
+        TdApi.StoryInfo[] storyInfos = new TdApi.StoryInfo[albumStories.length];
+        for (int i = 0; i < albumStories.length; i++) {
+          TdApi.Story s = albumStories[i];
+          // TdApi.Story exposes privacy via privacySettings, not a close-friends boolean; the
+          // viewer's navigation path only reads StoryInfo.storyId, so the close-friends/live
+          // flags are not load-bearing here.
+          storyInfos[i] = new TdApi.StoryInfo(s.id, s.date, false, false);
+        }
+        TdApi.ChatActiveStories albumSequence = new TdApi.ChatActiveStories(chatId, null, 0, false, 0, storyInfos);
+        java.util.List<TdApi.ChatActiveStories> sequence = new java.util.ArrayList<>(1);
+        sequence.add(albumSequence);
+        TdApi.Story firstStory = albumStories[0];
+        post(() -> openStory(context, chatId, firstStory.id, firstStory, sequence, 0, true));
+      } else {
+        post(() -> showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(result), openParameters));
+      }
+    });
   }
 
   public void openPublicChat (final TdlibDelegate context, final @NonNull String username, final @Nullable UrlOpenParameters openParameters) {
@@ -4074,10 +4124,36 @@ public class TdlibUi extends Handler {
         return; // async
       }
 
-      // LiveStory / StoryAlbum still need a viewer / album-highlights UI; left unsupported
-      // for now (album viewer tracked in #851).
+      case TdApi.InternalLinkTypeStoryAlbum.CONSTRUCTOR: {
+        // Resolve the album owner, then open the album in the story viewer. Mirrors the
+        // InternalLinkTypeStory branch (SearchPublicChat -> open) for threading correctness.
+        TdApi.InternalLinkTypeStoryAlbum album = (TdApi.InternalLinkTypeStoryAlbum) linkType;
+        tdlib.client().send(new TdApi.SearchPublicChat(album.storyAlbumOwnerUsername), object -> {
+          if (object.getConstructor() == TdApi.Chat.CONSTRUCTOR) {
+            TdApi.Chat chat = tdlib.objectToChat(object);
+            post(() -> {
+              openStoryAlbum(context, chat.id, album.storyAlbumId, openParameters);
+              if (after != null) {
+                after.runWithBool(true);
+              }
+            });
+          } else {
+            post(() -> {
+              showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(object), openParameters);
+              if (after != null) {
+                after.runWithBool(false);
+              }
+            });
+          }
+        });
+        return; // async
+      }
+
       case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR:
-      case TdApi.InternalLinkTypeStoryAlbum.CONSTRUCTOR:
+        // A live story requires the join-broadcast flow (searchPublicChat -> getChatActiveStories
+        // -> find the live story -> joinLiveStory) and live-playback handling that the current
+        // StoryViewController does not implement. Leaving unsupported rather than shipping a stub
+        // that would silently fail to join the live broadcast. Tracked under #843.
 
       case TdApi.InternalLinkTypeRestorePurchases.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:

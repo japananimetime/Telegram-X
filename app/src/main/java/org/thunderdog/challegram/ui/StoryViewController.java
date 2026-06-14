@@ -94,6 +94,13 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     public final @Nullable TdApi.Story preloadedStory;
     public final @Nullable List<TdApi.ChatActiveStories> activeStoriesList;
     public final int initialUserIndex;
+    /**
+     * When true, {@link #activeStoriesList} is an explicit, authoritative story sequence
+     * (e.g. a story album / highlight) rather than the chat's live active stories. In this
+     * mode the viewer must NOT refresh the sequence from {@code getChatActiveStories}, since
+     * that would clobber the curated list with whatever the chat is currently broadcasting.
+     */
+    public final boolean explicitStoryList;
 
     public Args (long storySenderChatId, int storyId) {
       this(storySenderChatId, storyId, null, null, 0);
@@ -105,11 +112,18 @@ public class StoryViewController extends ViewController<StoryViewController.Args
 
     public Args (long storySenderChatId, int storyId, @Nullable TdApi.Story preloadedStory,
                  @Nullable List<TdApi.ChatActiveStories> activeStoriesList, int initialUserIndex) {
+      this(storySenderChatId, storyId, preloadedStory, activeStoriesList, initialUserIndex, false);
+    }
+
+    public Args (long storySenderChatId, int storyId, @Nullable TdApi.Story preloadedStory,
+                 @Nullable List<TdApi.ChatActiveStories> activeStoriesList, int initialUserIndex,
+                 boolean explicitStoryList) {
       this.storySenderChatId = storySenderChatId;
       this.storyId = storyId;
       this.preloadedStory = preloadedStory;
       this.activeStoriesList = activeStoriesList;
       this.initialUserIndex = initialUserIndex;
+      this.explicitStoryList = explicitStoryList;
     }
   }
 
@@ -132,6 +146,9 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   private long subscribedStoryChatId;
   private int subscribedStoryId;
   private List<TdApi.ChatActiveStories> activeStoriesList;
+  // When true, activeStoriesList is an explicit curated sequence (story album / highlight) and
+  // must not be refreshed from getChatActiveStories. See Args.explicitStoryList.
+  private boolean explicitStoryList;
   private int currentUserIndex;
   private int currentStoryIndex;
 
@@ -181,6 +198,7 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     this.currentStoryId = args.storyId;
     this.currentStory = args.preloadedStory;
     this.activeStoriesList = args.activeStoriesList != null ? new ArrayList<>(args.activeStoriesList) : null;
+    this.explicitStoryList = args.explicitStoryList;
     this.currentUserIndex = args.initialUserIndex;
   }
 
@@ -492,8 +510,12 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     loadingContainer.addView(loadingInner);
     contentView.addView(loadingContainer);
 
-    // Fetch fresh ChatActiveStories to ensure we have all stories
-    refreshActiveStories();
+    // Fetch fresh ChatActiveStories to ensure we have all stories.
+    // Skip for an explicit curated sequence (story album / highlight): the album's story list is
+    // authoritative and getChatActiveStories would replace it with the chat's live active stories.
+    if (!explicitStoryList) {
+      refreshActiveStories();
+    }
 
     // Load story
     if (currentStory != null) {
