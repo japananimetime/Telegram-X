@@ -606,7 +606,7 @@ public class TGPlayerController implements GlobalMessageListener, ProximityManag
 
   public final void removeTrackChangeListener (@NonNull TrackChangeListener listener) {
     synchronized (this) {
-      globalListeners.add(listener);
+      globalListeners.remove(listener);
     }
   }
 
@@ -1040,7 +1040,7 @@ public class TGPlayerController implements GlobalMessageListener, ProximityManag
       int flags = 0;
       if (byUserRequest)
         flags |= __PLAY_FLAG_BY_USER_REQUEST;
-      if (byUserRequest)
+      if (isNext)
         flags |= __PLAY_FLAG_NEXT;
       handler.sendMessage(Message.obtain(handler, ACTION_PLAY_PAUSE, flags, 0, new Object[] {message, tdlib, builder}));
       return;
