@@ -21,8 +21,12 @@ import androidx.annotation.NonNull;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.telegram.Tdlib;
+import androidx.annotation.Nullable;
+
+import org.thunderdog.challegram.voip.annotation.AudioState;
 import org.thunderdog.challegram.voip.annotation.CallNetworkType;
 import org.thunderdog.challegram.voip.annotation.CallState;
+import org.thunderdog.challegram.voip.annotation.VideoState;
 
 import me.vkryl.core.lambda.Destroyable;
 
@@ -118,6 +122,34 @@ public abstract class VoIPInstance implements Destroyable {
 
   public abstract String getLibraryName ();
   public abstract String getLibraryVersion ();
+
+  // Video (1:1 calls). Default no-ops so non-tgcalls backends stay audio-only;
+  // TgCallsController overrides these to drive the native camera + render pipeline.
+
+  /** Whether the local camera is currently being captured and sent. */
+  public boolean isVideoOutgoing () {
+    return false;
+  }
+
+  /** Starts capturing + sending the local camera. */
+  public void enableOutgoingVideo (boolean useFrontCamera) { }
+
+  /** Stops capturing + sending the local camera. */
+  public void disableOutgoingVideo () { }
+
+  /** Switches between front and back camera. No-op when video is off. */
+  public void switchCamera (boolean useFrontCamera) { }
+
+  /** Routes incoming (remote) frames to the given sink, or clears when null. */
+  public void setIncomingVideoOutput (@Nullable org.webrtc.VideoSink sink) { }
+
+  /** Routes local (preview) frames to the given sink, or clears when null. */
+  public void setLocalVideoOutput (@Nullable org.webrtc.VideoSink sink) { }
+
+  /** Last known remote video state (see {@link VideoState}). */
+  public @VideoState int getRemoteVideoState () {
+    return VideoState.INACTIVE;
+  }
 
   // called from native code
 

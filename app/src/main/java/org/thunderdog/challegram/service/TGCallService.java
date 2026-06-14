@@ -80,6 +80,7 @@ import org.thunderdog.challegram.voip.VoIP;
 import org.thunderdog.challegram.voip.VoIPInstance;
 import org.thunderdog.challegram.voip.annotation.CallNetworkType;
 import org.thunderdog.challegram.voip.annotation.CallState;
+import org.thunderdog.challegram.voip.annotation.VideoState;
 import org.thunderdog.challegram.voip.gui.CallSettings;
 import org.thunderdog.challegram.voip.gui.VoIPFeedbackActivity;
 
@@ -655,6 +656,70 @@ public class TGCallService extends Service implements
 
   public long getConnectionId () {
     return tgcalls != null ? tgcalls.getConnectionId() : 0;
+  }
+
+  // Video (1:1 calls). The active VoIPInstance owns the camera + render pipeline;
+  // CallController drives it through these methods and observes remote video state
+  // via VideoStateListener.
+
+  public interface VideoStateListener {
+    void onCallVideoStateChanged (@VideoState int remoteVideoState, boolean isVideoOutgoing);
+  }
+
+  private @Nullable VideoStateListener videoStateListener;
+  private @VideoState int remoteVideoState = VideoState.INACTIVE;
+
+  public void setVideoStateListener (@Nullable VideoStateListener listener) {
+    this.videoStateListener = listener;
+  }
+
+  public @Nullable VoIPInstance getVoip () {
+    return tgcalls;
+  }
+
+  public @VideoState int getRemoteVideoState () {
+    return remoteVideoState;
+  }
+
+  public boolean isVideoOutgoing () {
+    return tgcalls != null && tgcalls.isVideoOutgoing();
+  }
+
+  public void setOutgoingVideoEnabled (boolean enabled, boolean useFrontCamera) {
+    if (tgcalls == null) {
+      return;
+    }
+    if (enabled) {
+      tgcalls.enableOutgoingVideo(useFrontCamera);
+    } else {
+      tgcalls.disableOutgoingVideo();
+    }
+    notifyVideoStateChanged();
+  }
+
+  public void switchCamera (boolean useFrontCamera) {
+    if (tgcalls != null) {
+      tgcalls.switchCamera(useFrontCamera);
+    }
+  }
+
+  public void setIncomingVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    if (tgcalls != null) {
+      tgcalls.setIncomingVideoOutput(sink);
+    }
+  }
+
+  public void setLocalVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    if (tgcalls != null) {
+      tgcalls.setLocalVideoOutput(sink);
+    }
+  }
+
+  private void notifyVideoStateChanged () {
+    VideoStateListener listener = this.videoStateListener;
+    if (listener != null) {
+      listener.onCallVideoStateChanged(remoteVideoState, isVideoOutgoing());
+    }
   }
 
   private void hangUp () {
@@ -1388,6 +1453,14 @@ public class TGCallService extends Service implements
       @Override
       public void onSignallingDataEmitted (byte[] data) {
         tdlib.client().send(new TdApi.SendCallSignalingData(call.id, data), tdlib.silentHandler());
+      }
+
+      @Override
+      public void onRemoteMediaStateChanged (VoIPInstance context, int audioState, @VideoState int videoState) {
+        UI.post(() -> {
+          remoteVideoState = videoState;
+          notifyVideoStateChanged();
+        });
       }
     };
 
