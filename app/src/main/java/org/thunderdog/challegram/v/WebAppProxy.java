@@ -96,6 +96,11 @@ public final class WebAppProxy {
             String pathFull = data.optString("path_full", "");
             boolean forceRequest = data.optBoolean("force_request", false);
             if (!pathFull.isEmpty()) {
+              // path_full must address t.me itself; force a leading slash so a payload like
+              // ".evil/x" or "@evil/" can't shift the authority away from t.me (host confusion).
+              if (!pathFull.startsWith("/")) {
+                pathFull = "/" + pathFull;
+              }
               controller.onWebAppOpenTgLink("https://t.me" + pathFull, forceRequest);
             }
           }
