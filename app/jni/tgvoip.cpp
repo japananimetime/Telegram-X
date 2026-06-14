@@ -921,6 +921,23 @@ JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetIncomingVideoOutput, jlon
   context->tgcalls->setIncomingVideoOutput(sink);
 }
 
+// Routes locally-captured (preview) video frames to an org.webrtc.VideoSink.
+// VideoCaptureInterface::setOutput takes an owning shared_ptr, so it retains the
+// sink itself; passing nullptr clears the local preview output.
+JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSetVideoCaptureLocalOutput, jlong capturePtr, jobject jSink) {
+  auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
+  if (captureContext == nullptr || captureContext->capture == nullptr) {
+    return;
+  }
+  if (jSink == nullptr) {
+    captureContext->capture->setOutput(nullptr);
+    return;
+  }
+  std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink =
+    webrtc::JavaToNativeVideoSink(env, jSink);
+  captureContext->capture->setOutput(sink);
+}
+
 JNI_FUNC(jobjectArray, getTgCallsVersions) {
 #ifndef DISABLE_TGCALLS
   tgcalls::initialize(env);

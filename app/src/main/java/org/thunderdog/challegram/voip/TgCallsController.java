@@ -72,6 +72,7 @@ public class TgCallsController extends VoIPInstance {
   private native void nativeSetVideoState (long capturePtr, @VideoState int state);
   private native void nativeSetVideoCapture (long ptr, long capturePtr);
   private native void nativeSetIncomingVideoOutput (long ptr, @Nullable org.webrtc.VideoSink sink);
+  private native void nativeSetVideoCaptureLocalOutput (long capturePtr, @Nullable org.webrtc.VideoSink sink);
 
   @Override
   public String getLibraryName () {
@@ -128,19 +129,32 @@ public class TgCallsController extends VoIPInstance {
     fetchNetworkStats(nativePtr(), out);
   }
 
-  // Video (Stage 1: native plumbing). UI wiring (CallController) is a later stage;
-  // these wrappers expose the camera + remote-video pipeline to it.
+  // Video (Stage 1: native plumbing; Stage 3 wires these into CallController via
+  // the VoIPInstance overrides). These expose the camera + remote-video pipeline.
+
+  private @Nullable org.webrtc.VideoSink pendingLocalSink;
+  private @VideoState int remoteVideoState = VideoState.INACTIVE;
+
+  @Override
+  public boolean isVideoOutgoing () {
+    return videoCapturePtr != 0;
+  }
 
   /**
    * Creates (if needed) the camera capturer and attaches it to the running call.
    *
    * @param useFrontCamera whether to start on the front-facing camera.
    */
-  public void enableVideo (boolean useFrontCamera) {
+  @Override
+  public void enableOutgoingVideo (boolean useFrontCamera) {
     if (videoCapturePtr == 0) {
       videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
+      if (videoCapturePtr != 0 && pendingLocalSink != null) {
+        nativeSetVideoCaptureLocalOutput(videoCapturePtr, pendingLocalSink);
+      }
     }
     if (videoCapturePtr != 0) {
+      nativeSetVideoState(videoCapturePtr, VideoState.ACTIVE);
       nativeSetVideoCapture(nativePtr(), videoCapturePtr);
     }
   }
@@ -148,11 +162,13 @@ public class TgCallsController extends VoIPInstance {
   /**
    * Detaches and releases the camera capturer from the running call.
    */
-  public void disableVideo () {
+  @Override
+  public void disableOutgoingVideo () {
     if (nativePtr != 0) {
       nativeSetVideoCapture(nativePtr, 0);
     }
     if (videoCapturePtr != 0) {
+      nativeSetVideoCaptureLocalOutput(videoCapturePtr, null);
       nativeDestroyVideoCapturer(videoCapturePtr);
       videoCapturePtr = 0;
     }
@@ -161,6 +177,7 @@ public class TgCallsController extends VoIPInstance {
   /**
    * Switches between front and back camera. No-op if video is not active.
    */
+  @Override
   public void switchCamera (boolean useFrontCamera) {
     if (videoCapturePtr != 0) {
       nativeSwitchCamera(videoCapturePtr, useFrontCamera);
@@ -180,10 +197,28 @@ public class TgCallsController extends VoIPInstance {
    * Routes incoming (remote) video frames to the given sink, or clears the output
    * when {@code sink} is null.
    */
+  @Override
   public void setIncomingVideoOutput (@Nullable org.webrtc.VideoSink sink) {
     if (nativePtr != 0) {
       nativeSetIncomingVideoOutput(nativePtr, sink);
     }
+  }
+
+  /**
+   * Routes local (preview) video frames to the given sink. Stored until the
+   * capturer exists so it survives an enable/disable cycle.
+   */
+  @Override
+  public void setLocalVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    this.pendingLocalSink = sink;
+    if (videoCapturePtr != 0) {
+      nativeSetVideoCaptureLocalOutput(videoCapturePtr, sink);
+    }
+  }
+
+  @Override
+  public @VideoState int getRemoteVideoState () {
+    return remoteVideoState;
   }
 
   @Override
@@ -205,6 +240,7 @@ public class TgCallsController extends VoIPInstance {
 
   @Keep
   protected final void handleRemoteMediaStateChange (@AudioState int audioState, @VideoState int videoState) {
+    this.remoteVideoState = videoState;
     connectionStateListener.onRemoteMediaStateChanged(this, audioState, videoState);
   }
 
