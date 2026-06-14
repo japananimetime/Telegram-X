@@ -2006,7 +2006,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         if (tempFile != null && tempFile.exists()) {
           tempFile.delete();
         }
-        UI.post(() -> UI.showToast("Failed to download media", android.widget.Toast.LENGTH_SHORT));
+        UI.post(() -> UI.showToast(Lang.getString(R.string.MediaDownloadFailed), android.widget.Toast.LENGTH_SHORT));
         return;
       }
 

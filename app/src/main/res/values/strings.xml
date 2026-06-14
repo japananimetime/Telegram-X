@@ -6299,6 +6299,7 @@
   <string name="BusinessChatLinkCreate">Create a link</string>
   <string name="BusinessChatLinkDelete">Delete link</string>
   <string name="BusinessChatLinkEdit">Edit link</string>
+  <string name="MediaDownloadFailed">Failed to download media</string>
   <string name="HideGeneralTopic">Hide General Topic</string>
   <string name="UnhideGeneralTopic">Unhide General Topic</string>
   <string name="BusinessChatLinkText">Message text</string>

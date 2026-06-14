@@ -2029,7 +2029,6 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
     if (result) {
       if(!tdlib.isForum(chatId) && getArguments().isReplyToOtherChat){
-        Log.d("TG", "replyToOtherChat");
         replyToOtherChat(chatId, null);
 
         return false;
@@ -2117,7 +2116,6 @@ public class ShareController extends TelegramViewController<ShareController.Args
           }
           showOptions(tdlib.chatTitle(chatId), ids, titles, (itemView, id) -> {
             if(getArguments().isReplyToOtherChat) {
-              Log.d("TG", "replyToOtherChat");
               replyToOtherChat(chatId, new TdApi.MessageTopicForum(id));
               return true;
             }

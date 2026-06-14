@@ -2443,14 +2443,16 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
     c.restore();
   }
 
+  private static final Paint QUOTE_HIGHLIGHT_PAINT = new Paint(Paint.ANTI_ALIAS_FLAG);
+
   private void drawQuoteHighlight(Canvas c, int startX, int endX, int endXBottomPadding, int startY, boolean center, float alpha) {
     if (quoteHighlightStart == -1 || quoteHighlightEnd == -1 || quoteHighlightStart >= quoteHighlightEnd) return;
 
-    // Use system text selection highlight color with alpha
+    // Use system text selection highlight color with alpha. Reuse a static Paint —
+    // this runs on the onDraw path and must not allocate per frame.
     int baseColor = Theme.getColor(ColorId.textSelectionHighlight);
     int color = ColorUtils.alphaColor(alpha, baseColor);
-    Paint paint = new Paint();
-    paint.setColor(color);
+    QUOTE_HIGHLIGHT_PAINT.setColor(color);
 
     for (TextPart part : parts) {
       // Полностью пропускаем части вне диапазона
@@ -2495,7 +2497,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
       float height = getPartHeight(part);
 
       // Добавляем микро-отступ ширины (0.5dp), чтобы визуально перекрыть стыки символов
-      c.drawRect(drawX, drawY, drawX + selectionWidth + (selectionWidth > 0 ? 1 : 0), drawY + height, paint);
+      c.drawRect(drawX, drawY, drawX + selectionWidth + (selectionWidth > 0 ? 1 : 0), drawY + height, QUOTE_HIGHLIGHT_PAINT);
     }
   }
   private int lastStartX, lastEndX, lastEndXBottomPadding, lastStartY;
