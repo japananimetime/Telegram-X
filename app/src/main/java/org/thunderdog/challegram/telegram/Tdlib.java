@@ -439,6 +439,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private final HashMap<String, TdApi.ForumTopicInfo> forumTopicInfos = new HashMap<>();
   private final HashMap<Long, Integer> forumUnreadTopicCounts = new HashMap<>();
   private final HashMap<Long, List<TdApi.ForumTopic>> forumTopicsCache = new HashMap<>();
+  private final HashSet<Long> forumUnreadTopicCountRequests = new HashSet<>();
   private final HashMap<String, TdlibChatList> chatLists = new HashMap<>();
   private final StickerSet
     animatedTgxEmoji = new StickerSet(AnimatedEmojiListener.TYPE_TGX, "AnimatedTgxEmojies", false),
@@ -3475,6 +3476,15 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
       return;
     }
+    synchronized (dataLock) {
+      if (!forumUnreadTopicCountRequests.add(chatId)) {
+        // Request already in flight; the in-flight one will refresh the cache/badge.
+        if (callback != null) {
+          ui().post(callback);
+        }
+        return;
+      }
+    }
     client().send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), result -> {
       if (result.getConstructor() == TdApi.ForumTopics.CONSTRUCTOR) {
         TdApi.ForumTopics topics = (TdApi.ForumTopics) result;
@@ -3487,9 +3497,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         }
         synchronized (dataLock) {
           forumUnreadTopicCounts.put(chatId, unreadCount);
-          forumTopicsCache.put(chatId, new java.util.ArrayList<>(java.util.Arrays.asList(topics.topics)));
+          forumTopicsCache.put(chatId, copyForumTopics(java.util.Arrays.asList(topics.topics)));
+          forumUnreadTopicCountRequests.remove(chatId);
         }
         listeners().updateForumUnreadTopicCount(chatId, unreadCount);
+      } else {
+        synchronized (dataLock) {
+          forumUnreadTopicCountRequests.remove(chatId);
+        }
       }
       if (callback != null) {
         ui().post(callback);
@@ -3505,21 +3520,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     synchronized (dataLock) {
       List<TdApi.ForumTopic> topics = forumTopicsCache.get(chatId);
       if (topics != null) {
-        int oldUnreadTopics = 0;
-        int newUnreadTopics = 0;
         boolean found = false;
         for (int i = 0; i < topics.size(); i++) {
           TdApi.ForumTopic topic = topics.get(i);
           if (topic.info.forumTopicId == topicId) {
             found = true;
-            if (topic.unreadCount > 0) oldUnreadTopics++;
-            if (newUnreadCount > 0) newUnreadTopics++;
             topic.unreadCount = newUnreadCount;
-          } else {
-            if (topic.unreadCount > 0) {
-              oldUnreadTopics++;
-              newUnreadTopics++;
-            }
+            break;
           }
         }
         if (found) {
@@ -3547,7 +3554,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   public @Nullable List<TdApi.ForumTopic> getCachedForumTopics (long chatId) {
     synchronized (dataLock) {
       List<TdApi.ForumTopic> cached = forumTopicsCache.get(chatId);
-      return cached != null ? new java.util.ArrayList<>(cached) : null;
+      return cached != null ? copyForumTopics(cached) : null;
     }
   }
 
@@ -3556,8 +3563,26 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
    */
   public void updateForumTopicsCache (long chatId, List<TdApi.ForumTopic> topics) {
     synchronized (dataLock) {
-      forumTopicsCache.put(chatId, new java.util.ArrayList<>(topics));
+      forumTopicsCache.put(chatId, copyForumTopics(topics));
     }
+  }
+
+  /**
+   * Copies ForumTopic objects at the cache boundary, so cached instances
+   * (mutated on the TDLib thread under dataLock — e.g. unreadCount in
+   * updateForumTopicUnreadCount) are never aliased with instances owned by UI
+   * controllers (read/mutated on the UI thread).
+   */
+  private static List<TdApi.ForumTopic> copyForumTopics (List<TdApi.ForumTopic> topics) {
+    List<TdApi.ForumTopic> copy = new java.util.ArrayList<>(topics.size());
+    for (TdApi.ForumTopic topic : topics) {
+      // Deep-copy the mutable fields that may be updated in place on another thread.
+      TdApi.Message lastMessage = topic.lastMessage != null ? Td.copyOf(topic.lastMessage) : null;
+      TdApi.ChatNotificationSettings notificationSettings = topic.notificationSettings != null ? Td.copyOf(topic.notificationSettings) : null;
+      TdApi.DraftMessage draftMessage = topic.draftMessage != null ? Td.copyOf(topic.draftMessage) : null;
+      copy.add(new TdApi.ForumTopic(topic.info, lastMessage, topic.order, topic.isPinned, topic.unreadCount, topic.lastReadInboxMessageId, topic.lastReadOutboxMessageId, topic.unreadMentionCount, topic.unreadReactionCount, topic.unreadPollVoteCount, notificationSettings, draftMessage));
+    }
+    return copy;
   }
 
   /**
@@ -7484,6 +7509,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
     }
     forumTopicInfos.clear();
+    synchronized (dataLock) {
+      forumUnreadTopicCountRequests.clear();
+    }
   }
 
   @TdlibThread
