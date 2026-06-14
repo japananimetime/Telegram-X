@@ -33,7 +33,8 @@ import me.vkryl.core.StringUtils;
 
 /**
  * Lists Telegram Business chat links (GetBusinessChatLinks), lets the user create
- * a new one (CreateBusinessChatLink) with a ready-to-send message, copy/share an
+ * a new one (CreateBusinessChatLink) with a ready-to-send message and optional title,
+ * edit an existing one (EditBusinessChatLink — message text + title), copy/share an
  * existing link, and delete it (DeleteBusinessChatLink).
  */
 public class BusinessChatLinksController extends RecyclerViewController<Void> implements View.OnClickListener {
@@ -133,12 +134,23 @@ public class BusinessChatLinksController extends RecyclerViewController<Void> im
   }
 
   private void promptCreate () {
+    // Step 1: message text (required). Step 2: optional title.
     openInputAlert(Lang.getString(R.string.BusinessChatLinkCreate), Lang.getString(R.string.BusinessChatLinkText),
-      R.string.Create, R.string.Cancel, null, (inputView, text) -> {
-        if (StringUtils.isEmpty(text != null ? text.trim() : null)) {
+      R.string.Continue, R.string.Cancel, null, (inputView, text) -> {
+        final String trimmedText = text != null ? text.trim() : null;
+        if (StringUtils.isEmpty(trimmedText)) {
           return false;
         }
-        TdApi.InputBusinessChatLink linkInfo = new TdApi.InputBusinessChatLink(new TdApi.FormattedText(text.trim(), null), "");
+        promptCreateTitle(trimmedText);
+        return true;
+      }, true);
+  }
+
+  private void promptCreateTitle (String messageText) {
+    openInputAlert(Lang.getString(R.string.BusinessChatLinkCreate), Lang.getString(R.string.BusinessChatLinkTitle),
+      R.string.Create, R.string.Cancel, null, (inputView, title) -> {
+        final String linkTitle = title != null ? title.trim() : "";
+        TdApi.InputBusinessChatLink linkInfo = new TdApi.InputBusinessChatLink(new TdApi.FormattedText(messageText, null), linkTitle);
         tdlib.send(new TdApi.CreateBusinessChatLink(linkInfo), (result, error) -> runOnUiThreadOptional(() -> {
           if (error != null) {
             UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
@@ -151,14 +163,52 @@ public class BusinessChatLinksController extends RecyclerViewController<Void> im
       }, true);
   }
 
+  private void promptEdit (TdApi.BusinessChatLink link) {
+    // Step 1: edit message text. Step 2: edit title. Both go through EditBusinessChatLink.
+    final String currentText = link.text != null ? link.text.text : null;
+    openInputAlert(Lang.getString(R.string.BusinessChatLinkEdit), Lang.getString(R.string.BusinessChatLinkText),
+      R.string.Continue, R.string.Cancel, currentText, (inputView, text) -> {
+        final String trimmedText = text != null ? text.trim() : null;
+        if (StringUtils.isEmpty(trimmedText)) {
+          return false;
+        }
+        promptEditTitle(link, trimmedText);
+        return true;
+      }, true);
+  }
+
+  private void promptEditTitle (TdApi.BusinessChatLink link, String messageText) {
+    openInputAlert(Lang.getString(R.string.BusinessChatLinkEdit), Lang.getString(R.string.BusinessChatLinkTitle),
+      R.string.Save, R.string.Cancel, link.title, (inputView, title) -> {
+        final String linkTitle = title != null ? title.trim() : "";
+        TdApi.InputBusinessChatLink linkInfo = new TdApi.InputBusinessChatLink(new TdApi.FormattedText(messageText, null), linkTitle);
+        tdlib.send(new TdApi.EditBusinessChatLink(link.link, linkInfo), (result, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          } else if (result != null) {
+            int index = links.indexOf(link);
+            if (index >= 0) {
+              links.set(index, result);
+            } else {
+              links.add(result);
+            }
+            buildCells();
+          }
+        }));
+        return true;
+      }, true);
+  }
+
   private void showLinkOptions (TdApi.BusinessChatLink link) {
     showOptions(link.link,
-      new int[] {R.id.btn_copyLink, R.id.btn_share, R.id.btn_delete},
-      new String[] {Lang.getString(R.string.CopyLink), Lang.getString(R.string.Share), Lang.getString(R.string.BusinessChatLinkDelete)},
-      new int[] {ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL, ViewController.OptionColor.RED},
-      new int[] {R.drawable.baseline_content_copy_24, R.drawable.baseline_forward_24, R.drawable.baseline_delete_24},
+      new int[] {R.id.btn_edit, R.id.btn_copyLink, R.id.btn_share, R.id.btn_delete},
+      new String[] {Lang.getString(R.string.BusinessChatLinkEdit), Lang.getString(R.string.CopyLink), Lang.getString(R.string.Share), Lang.getString(R.string.BusinessChatLinkDelete)},
+      new int[] {ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL, ViewController.OptionColor.RED},
+      new int[] {R.drawable.baseline_edit_24, R.drawable.baseline_content_copy_24, R.drawable.baseline_forward_24, R.drawable.baseline_delete_24},
       (itemView, optionId) -> {
-        if (optionId == R.id.btn_copyLink) {
+        if (optionId == R.id.btn_edit) {
+          promptEdit(link);
+        } else if (optionId == R.id.btn_copyLink) {
           UI.copyText(link.link, R.string.CopiedLink);
         } else if (optionId == R.id.btn_share) {
           tdlib.ui().shareUrl(this, link.link);

@@ -577,6 +577,9 @@
   <item type="id" name="btn_stars" />
   <item type="id" name="btn_starOption" />
   <item type="id" name="btn_starTransactions" />
+  <item type="id" name="btn_tonTransactions" />
+  <item type="id" name="btn_hideTopic" />
+  <item type="id" name="btn_unhideTopic" />
   <item type="id" name="controller_paymentForm" />
   <item type="id" name="btn_notificationSettings" />
   <item type="id" name="btn_privacySettings" />
@@ -1718,7 +1721,9 @@
   <item type="id" name="btn_download" />
   <item type="id" name="btn_pauseDownload" />
   <item type="id" name="btn_quickReply" />
+  <item type="id" name="btn_quickReplyCreate" />
   <item type="id" name="btn_removeDownload" />
+  <item type="id" name="btn_rename" />
   <item type="id" name="btn_resetStoryColors" />
   <item type="id" name="btn_savedMessagesTopic" />
   <item type="id" name="btn_showAddStoryBorder" />

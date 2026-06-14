@@ -20,6 +20,7 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.QuickReplyListener;
 import org.thunderdog.challegram.telegram.Tdlib;
@@ -29,10 +30,19 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
+import me.vkryl.core.StringUtils;
+
 /**
  * Lists the account's quick-reply shortcuts (Business feature) and lets the user
- * delete them. Loads via LoadQuickReplyShortcuts; the list is cached in Tdlib and
- * refreshed live via QuickReplyListener.
+ * create, rename and delete them. Loads via LoadQuickReplyShortcuts; the list is
+ * cached in Tdlib and refreshed live via QuickReplyListener.
+ *
+ * <p>NOTE: TDLib has no standalone "create empty shortcut" function. A shortcut is
+ * materialised implicitly by adding its first message (AddQuickReplyShortcutMessage
+ * creates the shortcut if it doesn't already exist). The create flow below therefore
+ * collects a shortcut name plus a first message text and persists both in one step,
+ * which is the closest correct flow TDLib supports. Renaming uses
+ * SetQuickReplyShortcutName.</p>
  */
 public class QuickRepliesController extends RecyclerViewController<Void> implements View.OnClickListener, QuickReplyListener {
 
@@ -88,6 +98,11 @@ public class QuickRepliesController extends RecyclerViewController<Void> impleme
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.QuickRepliesHint));
 
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_quickReplyCreate, R.drawable.baseline_add_24, R.string.QuickReplyCreate)
+      .setTextColorId(org.thunderdog.challegram.theme.ColorId.textNeutral));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
     if (shortcuts.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.QuickRepliesEmpty));
@@ -113,7 +128,10 @@ public class QuickRepliesController extends RecyclerViewController<Void> impleme
 
   @Override
   public void onClick (View v) {
-    if (v.getId() == R.id.btn_quickReply) {
+    final int id = v.getId();
+    if (id == R.id.btn_quickReplyCreate) {
+      promptCreate();
+    } else if (id == R.id.btn_quickReply) {
       ListItem item = (ListItem) v.getTag();
       if (item != null && item.getData() instanceof TdApi.QuickReplyShortcut) {
         TdApi.QuickReplyShortcut shortcut = (TdApi.QuickReplyShortcut) item.getData();
@@ -124,19 +142,87 @@ public class QuickRepliesController extends RecyclerViewController<Void> impleme
 
   private void showShortcutOptions (TdApi.QuickReplyShortcut shortcut) {
     showOptions("/" + shortcut.name,
-      new int[] {R.id.btn_delete},
-      new String[] {Lang.getString(R.string.QuickReplyDelete)},
-      new int[] {ViewController.OptionColor.RED},
-      new int[] {R.drawable.baseline_delete_24},
+      new int[] {R.id.btn_rename, R.id.btn_delete},
+      new String[] {Lang.getString(R.string.QuickReplyRename), Lang.getString(R.string.QuickReplyDelete)},
+      new int[] {ViewController.OptionColor.NORMAL, ViewController.OptionColor.RED},
+      new int[] {R.drawable.baseline_edit_24, R.drawable.baseline_delete_24},
       (itemView, id) -> {
-        if (id == R.id.btn_delete) {
+        if (id == R.id.btn_rename) {
+          promptRename(shortcut);
+        } else if (id == R.id.btn_delete) {
           tdlib.send(new TdApi.DeleteQuickReplyShortcut(shortcut.id), (ok, error) -> runOnUiThreadOptional(() -> {
             if (error != null) {
-              UI.showToast(error.message, Toast.LENGTH_SHORT);
+              UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
             }
           }));
         }
         return true;
       });
+  }
+
+  // Step 1: collect the shortcut name. The name is validated by CheckQuickReplyShortcutName
+  // and then the first message text is collected (step 2), because TDLib only persists a
+  // shortcut once it has at least one message (AddQuickReplyShortcutMessage).
+  private void promptCreate () {
+    openInputAlert(Lang.getString(R.string.QuickReplyCreate), Lang.getString(R.string.QuickReplyName),
+      R.string.Continue, R.string.Cancel, null, (inputView, name) -> {
+        final String trimmedName = name != null ? name.trim() : null;
+        if (StringUtils.isEmpty(trimmedName)) {
+          return false;
+        }
+        tdlib.send(new TdApi.CheckQuickReplyShortcutName(trimmedName), (ok, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          } else {
+            promptCreateMessage(trimmedName);
+          }
+        }));
+        return true;
+      }, true);
+  }
+
+  // Step 2: collect the first message text and create the shortcut by adding it.
+  private void promptCreateMessage (String shortcutName) {
+    openInputAlert("/" + shortcutName, Lang.getString(R.string.QuickReplyMessageHint),
+      R.string.Create, R.string.Cancel, null, (inputView, text) -> {
+        final String trimmedText = text != null ? text.trim() : null;
+        if (StringUtils.isEmpty(trimmedText)) {
+          return false;
+        }
+        TdApi.InputMessageContent content = new TdApi.InputMessageText(new TdApi.FormattedText(trimmedText, null), null, false);
+        // Adding the first message implicitly creates the shortcut (and persists it).
+        tdlib.send(new TdApi.AddQuickReplyShortcutMessage(shortcutName, 0, content), (message, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          }
+          // On success the shortcut list is refreshed live via QuickReplyListener.
+        }));
+        return true;
+      }, true);
+  }
+
+  private void promptRename (TdApi.QuickReplyShortcut shortcut) {
+    openInputAlert(Lang.getString(R.string.QuickReplyRename), Lang.getString(R.string.QuickReplyName),
+      R.string.Save, R.string.Cancel, shortcut.name, (inputView, name) -> {
+        final String trimmedName = name != null ? name.trim() : null;
+        if (StringUtils.isEmpty(trimmedName)) {
+          return false;
+        }
+        if (trimmedName.equals(shortcut.name)) {
+          return true;
+        }
+        tdlib.send(new TdApi.CheckQuickReplyShortcutName(trimmedName), (ok, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          } else {
+            tdlib.send(new TdApi.SetQuickReplyShortcutName(shortcut.id, trimmedName), (ok2, error2) -> runOnUiThreadOptional(() -> {
+              if (error2 != null) {
+                UI.showToast(TD.toErrorString(error2), Toast.LENGTH_SHORT);
+              }
+            }));
+          }
+        }));
+        return true;
+      }, true);
   }
 }

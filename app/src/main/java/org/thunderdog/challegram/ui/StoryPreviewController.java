@@ -33,14 +33,16 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.util.UserPickerMultiDelegate;
 import org.thunderdog.challegram.v.CustomRecyclerView;
+import org.thunderdog.challegram.widget.MaterialEditTextGroup;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import me.vkryl.core.StringUtils;
 import me.vkryl.core.collection.LongList;
 
 public class StoryPreviewController extends RecyclerViewController<StoryPreviewController.Args>
-    implements View.OnClickListener, Menu, UserPickerMultiDelegate {
+    implements View.OnClickListener, Menu, UserPickerMultiDelegate, SettingsAdapter.TextChangeListener {
 
   public static class Args {
     public final String filePath;
@@ -140,8 +142,17 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
       }
     };
 
+    adapter.setTextChangeListener(this);
+
     buildCells();
     recyclerView.setAdapter(adapter);
+  }
+
+  @Override
+  public void onTextChanged (int id, ListItem item, MaterialEditTextGroup v) {
+    if (id == R.id.input) {
+      captionText = v.getText().toString();
+    }
   }
 
   private void buildCells () {
@@ -149,6 +160,13 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
     boolean isChannel = isChannelStory();
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+
+    // Caption input — feeds captionText, posted as the story caption
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_EDITTEXT_REUSABLE, R.id.input, 0, R.string.Caption)
+        .setStringValue(captionText));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.StoryPosting));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
@@ -421,6 +439,16 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
       }
     }
 
+    // Build the story caption from the caption input; pass null for an empty caption.
+    // Entities are intentionally omitted: text entities in a story caption are only valid when
+    // the "can_use_text_entities_in_story_caption" option is enabled, which we can't read here.
+    // Overlong captions (> story_caption_length_max) are rejected by TDLib and surfaced via the
+    // error toast below.
+    final String trimmedCaption = captionText != null ? captionText.trim() : "";
+    final TdApi.FormattedText caption = StringUtils.isEmpty(trimmedCaption)
+      ? null
+      : new TdApi.FormattedText(trimmedCaption, new TdApi.TextEntity[0]);
+
     UI.showToast(R.string.StoryPosting, Toast.LENGTH_SHORT);
 
     final int finalDuration = duration;
@@ -428,7 +456,7 @@ public class StoryPreviewController extends RecyclerViewController<StoryPreviewC
       chatId,
       content,
       null,  // areas
-      null,  // caption
+      caption,
       privacy,
       new int[0],  // albumIds
       finalDuration,

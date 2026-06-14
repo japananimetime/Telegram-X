@@ -219,6 +219,9 @@ public class StoryBarView extends RecyclerView {
 
     public void bind () {
       itemView.updateColors();
+      // Re-read the "Show Add Story Border" / ring-color preferences off the draw path on (re)bind,
+      // so a setting change made elsewhere is reflected without waiting for re-attach.
+      itemView.onStoryRingColorsChanged();
       itemView.setOnClickListener(v -> {
         if (clickListener != null) {
           clickListener.onAddStoryClick();
@@ -474,6 +477,11 @@ public class StoryBarView extends RecyclerView {
     // explicit refresh) so onDraw -> updateRingGradient() never touches the preference store (pmc).
     private int[] ringColors;
 
+    // Cached "Show Add Story Border" preference. Read from Settings off the draw path (attach /
+    // size change / explicit refresh) for the same reason as ringColors: onDraw must never touch
+    // the preference store (pmc). When false the add-story gradient ring is not drawn.
+    private boolean showBorder = true;
+
     // Gradient colors for add story ring (same as unread)
     private static final int[] GRADIENT_COLORS = {
       0xFF7B68EE, // Medium slate blue
@@ -534,23 +542,34 @@ public class StoryBarView extends RecyclerView {
     }
 
     /**
-     * Reads the ring colors from Settings (a preference-store read) and caches them. Must be called
-     * off the draw path. Returns true if the resolved colors actually changed.
+     * Reads the ring colors and the "Show Add Story Border" preference from Settings (preference-store
+     * reads) and caches them. Must be called off the draw path. Returns true if either the resolved
+     * colors or the border-visibility preference actually changed.
      */
     private boolean refreshRingColors () {
+      boolean changed = false;
+
       int[] resolved = Settings.instance().getStoryRingColors();
       if (resolved == null || resolved.length < 2) {
         resolved = GRADIENT_COLORS;
       }
       if (!java.util.Arrays.equals(ringColors, resolved)) {
         ringColors = resolved;
-        return true;
+        changed = true;
       }
-      return false;
+
+      boolean resolvedShowBorder = Settings.instance().showAddStoryBorder();
+      if (showBorder != resolvedShowBorder) {
+        showBorder = resolvedShowBorder;
+        changed = true;
+      }
+
+      return changed;
     }
 
     /**
-     * Called when the story ring-color setting changes; rebuilds the cached gradient if needed.
+     * Called when the story ring-color or border-visibility setting changes; rebuilds the cached
+     * gradient if needed.
      */
     public void onStoryRingColorsChanged () {
       if (refreshRingColors()) {
@@ -598,16 +617,26 @@ public class StoryBarView extends RecyclerView {
     protected void onDraw (Canvas canvas) {
       super.onDraw(canvas);
 
-      // Ensure gradient is initialized (may not be set if view was bound before layout)
-      if (ringPaint.getShader() == null) {
-        updateRingGradient();
-      }
-
       // Draw ring around icon area
       int centerX = getWidth() / 2;
       int avatarTopMargin = Screen.dp(8);
       int avatarSize = Screen.dp(AVATAR_SIZE_DP);
       int centerY = avatarTopMargin + avatarSize / 2;
+
+      // Draw background circle (always drawn — it backs the plus icon)
+      float bgRadius = avatarSize / 2f;
+      canvas.drawCircle(centerX, centerY, bgRadius, bgPaint);
+
+      // Draw gradient ring only when the "Show Add Story Border" setting is enabled.
+      // showBorder is read off the draw path (refreshRingColors), like ringColors.
+      if (!showBorder) {
+        return;
+      }
+
+      // Ensure gradient is initialized (may not be set if view was bound before layout)
+      if (ringPaint.getShader() == null) {
+        updateRingGradient();
+      }
 
       float ringRadius = avatarSize / 2f + Screen.dp(RING_GAP_DP) + Screen.dp(RING_WIDTH_DP) / 2f;
 
@@ -618,11 +647,6 @@ public class StoryBarView extends RecyclerView {
         centerY + ringRadius
       );
 
-      // Draw background circle
-      float bgRadius = avatarSize / 2f;
-      canvas.drawCircle(centerX, centerY, bgRadius, bgPaint);
-
-      // Draw gradient ring
       canvas.drawOval(ringRect, ringPaint);
     }
   }

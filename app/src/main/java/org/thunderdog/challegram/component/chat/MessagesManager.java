@@ -1027,6 +1027,34 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return useReactionBubblesValue;
   }
 
+  /**
+   * Re-evaluates the "Big Reactions" setting ({@link Settings#getBigReactionsInDMs()} /
+   * {@link Settings#getBigReactionsInChats()} / {@link Settings#getBigReactionsInChannels()})
+   * for the currently displayed chat and, if it changed, rebuilds the layout of all visible
+   * messages so the new reaction style takes effect without re-opening the chat.
+   *
+   * Must be called on the UI thread.
+   *
+   * The Big Reactions toggle is stored as plain preference keys (it does NOT go through
+   * Settings#setNewSetting, so it fires no SettingsChangeListener.onSettingsChanged broadcast).
+   * Therefore this hook has to be invoked manually from the toggle site. Wire it in
+   * {@code SettingsStickersAndEmojiController} right after the
+   * setBigReactionsIn*(...) calls, e.g.:
+   * <pre>
+   *   MessagesController c = context.navigation().getCurrentStackItemOf(MessagesController.class);
+   *   if (c != null) c.getManager().refreshBigReactions();
+   * </pre>
+   * (mirrors how a chat-font-size change calls manager.onUpdateTextSize() + rebuildLayouts()
+   *  in MessagesController).
+   */
+  public void refreshBigReactions () {
+    boolean newValue = checkReactionBubbles();
+    if (this.useReactionBubblesValue != newValue) {
+      this.useReactionBubblesValue = newValue;
+      rebuildLayouts();
+    }
+  }
+
   private int usedTranslateStyleMode;
   private int checkTranslateStyleMode () {
     return Settings.instance().getChatTranslateMode();

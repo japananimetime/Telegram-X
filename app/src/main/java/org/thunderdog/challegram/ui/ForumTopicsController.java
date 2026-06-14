@@ -1033,6 +1033,23 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         colors.append(OptionColor.NORMAL);
         strings.add(Lang.getString(R.string.CloseTopic));
       }
+
+      // Admin-only: Hide/Unhide — only the General topic can be hidden (it is
+      // pinned above the list and closed when hidden). TdApi.isHidden is only
+      // meaningful for the General topic. Sends ToggleGeneralForumTopicIsHidden.
+      if (topic.info.isGeneral) {
+        if (topic.info.isHidden) {
+          ids.append(R.id.btn_unhideTopic);
+          icons.append(R.drawable.baseline_visibility_24);
+          colors.append(OptionColor.NORMAL);
+          strings.add(Lang.getString(R.string.UnhideGeneralTopic));
+        } else {
+          ids.append(R.id.btn_hideTopic);
+          icons.append(R.drawable.baseline_eye_off_24);
+          colors.append(OptionColor.NORMAL);
+          strings.add(Lang.getString(R.string.HideGeneralTopic));
+        }
+      }
     }
 
     // Notifications (always available for members)
@@ -1041,6 +1058,12 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
     icons.append(isMuted ? R.drawable.baseline_notifications_off_24 : R.drawable.baseline_notifications_24);
     colors.append(OptionColor.NORMAL);
     strings.add(Lang.getString(isMuted ? R.string.Unmute : R.string.Mute));
+
+    // Copy link to the topic (always available). Resolves via GetForumTopicLink.
+    ids.append(R.id.btn_copyLink);
+    icons.append(R.drawable.baseline_link_24);
+    colors.append(OptionColor.NORMAL);
+    strings.add(Lang.getString(R.string.CopyLink));
 
     // Admin-only: Edit
     if (canManage) {
@@ -1077,6 +1100,12 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         toggleTopicClosed(topic, true);
       } else if (id == R.id.btn_reopenTopic) {
         toggleTopicClosed(topic, false);
+      } else if (id == R.id.btn_hideTopic) {
+        toggleGeneralTopicHidden(topic, true);
+      } else if (id == R.id.btn_unhideTopic) {
+        toggleGeneralTopicHidden(topic, false);
+      } else if (id == R.id.btn_copyLink) {
+        copyTopicLink(topic);
       } else if (id == R.id.btn_notifications) {
         showTopicMuteOptions(topic);
       } else if (id == R.id.btn_editTopic) {
@@ -1103,6 +1132,33 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
       if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
         UI.post(() -> UI.showError(result));
       }
+    });
+  }
+
+  // Hide/unhide the General forum topic (#853). Only valid for the General topic;
+  // requires canManageTopics admin right (gated at the call site). The local state
+  // is refreshed via the onForumTopicInfoChanged listener.
+  private void toggleGeneralTopicHidden (TdApi.ForumTopic topic, boolean isHidden) {
+    tdlib.client().send(new TdApi.ToggleGeneralForumTopicIsHidden(topic.info.chatId, isHidden), result -> {
+      if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+        UI.post(() -> UI.showError(result));
+      }
+    });
+  }
+
+  // Resolve and copy an HTTPS link to the topic (#853). GetForumTopicLink is an
+  // offline method returning a MessageLink; mirror the copy-link idiom used
+  // elsewhere (UI.copyText(link, R.string.CopiedLink)).
+  private void copyTopicLink (TdApi.ForumTopic topic) {
+    tdlib.client().send(new TdApi.GetForumTopicLink(topic.info.chatId, topic.info.forumTopicId), result -> {
+      UI.post(() -> {
+        if (isDestroyed()) return;
+        if (result.getConstructor() == TdApi.MessageLink.CONSTRUCTOR) {
+          UI.copyText(((TdApi.MessageLink) result).link, R.string.CopiedLink);
+        } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+          UI.showError(result);
+        }
+      });
     });
   }
 
@@ -1327,51 +1383,6 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
       });
 
     showSettings(b);
-  }
-
-  // Map topic color to a Unicode circle emoji for display in filter dialog
-  private String getTopicColorEmoji (int colorValue) {
-    // Telegram topic default colors mapped to emoji circles
-    // Blue 0x6FB9F0, Yellow 0xFFD67E, Purple 0xCB86DB, Green 0x8EEE98, Pink 0xFF93B2, Red 0xFB6F5F
-
-    // Normalize color (remove alpha if present)
-    int color = colorValue & 0x00FFFFFF;
-
-    // Check for custom emoji (iconCustomEmojiId != 0) - use white circle as default
-    if (colorValue == 0) {
-      return "\u26AA"; // White circle
-    }
-
-    // Map based on hue - determine closest match
-    int r = (color >> 16) & 0xFF;
-    int g = (color >> 8) & 0xFF;
-    int b = color & 0xFF;
-
-    // Simple color matching based on dominant channel
-    if (b > r && b > g) {
-      return "\uD83D\uDD35"; // Blue circle
-    } else if (r > g && r > b && g > b * 0.8) {
-      // Yellow/Orange (high red and green, low blue)
-      return "\uD83D\uDFE1"; // Yellow circle
-    } else if (r > b && g > b && Math.abs(r - g) < 50) {
-      // Could be yellow or green - check green dominance
-      if (g > r) {
-        return "\uD83D\uDFE2"; // Green circle
-      }
-      return "\uD83D\uDFE1"; // Yellow circle
-    } else if (g > r && g > b) {
-      return "\uD83D\uDFE2"; // Green circle
-    } else if (r > g && b > g * 0.5) {
-      // Purple/Pink (high red and blue)
-      if (b > r * 0.7) {
-        return "\uD83D\uDFE3"; // Purple circle
-      }
-      return "\uD83D\uDD34"; // Red circle (for pink)
-    } else if (r > g && r > b) {
-      return "\uD83D\uDD34"; // Red circle
-    }
-
-    return "\u26AA"; // White circle as fallback
   }
 
   private void applyTopicFilter (java.util.Set<Long> topicIds) {

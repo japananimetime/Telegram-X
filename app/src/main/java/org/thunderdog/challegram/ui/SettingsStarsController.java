@@ -171,6 +171,8 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
     // Transaction history link
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_starTransactions, R.drawable.baseline_history_24, R.string.StarTransactions));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_tonTransactions, R.drawable.baseline_history_24, R.string.TonTransactions));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     // Payment options
@@ -216,6 +218,8 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
       }
     } else if (viewId == R.id.btn_starTransactions) {
       openTransactionHistory();
+    } else if (viewId == R.id.btn_tonTransactions) {
+      openTonTransactionHistory();
     }
   }
 
@@ -319,6 +323,11 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
 
   private void openTransactionHistory() {
     StarTransactionsController controller = new StarTransactionsController(context(), tdlib);
+    navigateTo(controller);
+  }
+
+  private void openTonTransactionHistory() {
+    TonTransactionsController controller = new TonTransactionsController(context(), tdlib);
     navigateTo(controller);
   }
 }

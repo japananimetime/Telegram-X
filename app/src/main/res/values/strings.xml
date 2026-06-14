@@ -6298,7 +6298,11 @@
   <string name="BusinessAwayMessage">Away Message</string>
   <string name="BusinessChatLinkCreate">Create a link</string>
   <string name="BusinessChatLinkDelete">Delete link</string>
+  <string name="BusinessChatLinkEdit">Edit link</string>
+  <string name="HideGeneralTopic">Hide General Topic</string>
+  <string name="UnhideGeneralTopic">Unhide General Topic</string>
   <string name="BusinessChatLinkText">Message text</string>
+  <string name="BusinessChatLinkTitle">Link title (optional)</string>
   <string name="BusinessChatLinkViews_one">%1$d view</string>
   <string name="BusinessChatLinkViews_other">%1$d views</string>
   <string name="BusinessChatLinks">Chat Links</string>
@@ -6423,7 +6427,11 @@
   <string name="QuickReplies">Quick Replies</string>
   <string name="QuickRepliesEmpty">You have no quick replies yet.</string>
   <string name="QuickRepliesHint">Set up shortcuts to quickly send messages you use often.</string>
+  <string name="QuickReplyCreate">New shortcut</string>
   <string name="QuickReplyDelete">Delete shortcut</string>
+  <string name="QuickReplyMessageHint">Enter the first message…</string>
+  <string name="QuickReplyName">Shortcut name</string>
+  <string name="QuickReplyRename">Rename shortcut</string>
   <string name="ResetToDefault">Reset to default</string>
   <string name="SavedMessagesTopics">Saved Messages</string>
   <string name="SavedMessagesTopicsEmpty">You have no Saved Messages topics yet.</string>
