@@ -3783,7 +3783,20 @@ public class TdlibUi extends Handler {
         openExternalUrl(context, instantView.url, instantViewOpenParameters, after);
         break;
       }
-      case TdApi.InternalLinkTypeStory.CONSTRUCTOR:
+      case TdApi.InternalLinkTypeStory.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeStory story = (TdApi.InternalLinkTypeStory) linkType;
+        tdlib.client().send(new TdApi.SearchPublicChat(story.storyPosterUsername), object -> {
+          if (object.getConstructor() == TdApi.Chat.CONSTRUCTOR) {
+            TdApi.Chat chat = tdlib.objectToChat(object);
+            post(() -> openStory(context, chat.id, story.storyId));
+          } else {
+            showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+          }
+        });
+        break;
+      }
+      // LiveStory / StoryAlbum still need a viewer / album-highlights UI; left unsupported
+      // for now (album viewer tracked in #851).
       case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR:
       case TdApi.InternalLinkTypeStoryAlbum.CONSTRUCTOR:
 
