@@ -39,7 +39,15 @@ public class GroupCallInstance {
     void onNetworkStateChanged (boolean connected);
   }
 
+  /** tgcalls VideoChannelDescription quality (min is always Thumbnail). */
+  public static final int VIDEO_QUALITY_THUMBNAIL = 0;
+  public static final int VIDEO_QUALITY_MEDIUM = 1;
+  public static final int VIDEO_QUALITY_FULL = 2;
+
   private long nativePtr;
+  // Owns the camera capturer (a native VideoCaptureContext, same type as
+  // TgCallsController's), created on demand and handed to the instance.
+  private long videoCapturePtr;
   private @Nullable Listener listener;
 
   /**
@@ -85,7 +93,86 @@ public class GroupCallInstance {
     }
   }
 
+  // region outgoing camera video
+
+  public boolean isVideoEnabled () {
+    return videoCapturePtr != 0;
+  }
+
+  /**
+   * Creates (if needed) the camera capturer and attaches it to the running call,
+   * starting capture. Pass the local-preview sink to mirror the self tile.
+   */
+  public void enableOutgoingVideo (boolean useFrontCamera, @Nullable org.webrtc.VideoSink localSink) {
+    if (nativePtr == 0) {
+      return;
+    }
+    if (videoCapturePtr == 0) {
+      videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
+    }
+    if (videoCapturePtr != 0) {
+      if (localSink != null) {
+        nativeSetVideoCaptureLocalOutput(videoCapturePtr, localSink);
+      }
+      nativeSetVideoState(videoCapturePtr, 2 /* VideoState.ACTIVE */);
+      nativeSetVideoCapture(nativePtr, videoCapturePtr);
+    }
+  }
+
+  /** Detaches and releases the camera capturer from the running call. */
+  public void disableOutgoingVideo () {
+    if (nativePtr != 0) {
+      nativeSetVideoCapture(nativePtr, 0);
+    }
+    if (videoCapturePtr != 0) {
+      nativeSetVideoCaptureLocalOutput(videoCapturePtr, null);
+      nativeDestroyVideoCapturer(videoCapturePtr);
+      videoCapturePtr = 0;
+    }
+  }
+
+  public void switchCamera (boolean useFrontCamera) {
+    if (videoCapturePtr != 0) {
+      nativeSwitchCamera(videoCapturePtr, useFrontCamera);
+    }
+  }
+
+  // endregion
+
+  // region incoming participant video
+
+  /**
+   * Attaches a renderer (org.webrtc.VideoSink) to the remote video identified by
+   * {@code endpointId} (from {@code GroupCallParticipantVideoInfo.endpointId}).
+   */
+  public void addIncomingVideoOutput (String endpointId, org.webrtc.VideoSink sink) {
+    if (nativePtr != 0 && endpointId != null && sink != null) {
+      nativeAddIncomingVideoOutput(nativePtr, endpointId, sink);
+    }
+  }
+
+  /** Drops the renderer for {@code endpointId} (participant stopped video / tile gone). */
+  public void removeIncomingVideoOutput (String endpointId) {
+    if (nativePtr != 0 && endpointId != null) {
+      nativeRemoveIncomingVideoOutput(nativePtr, endpointId);
+    }
+  }
+
+  /**
+   * Sets the set of remote video channels we want to receive. Parallel arrays:
+   * {@code endpointIds[i]} at {@code qualities[i]} (one of VIDEO_QUALITY_*), with
+   * {@code ssrcGroups[i]} encoded as {@code "SEMANTICS:ssrc,ssrc;..."}.
+   */
+  public void setRequestedVideoChannels (String[] endpointIds, int[] qualities, String[] ssrcGroups) {
+    if (nativePtr != 0 && endpointIds != null) {
+      nativeSetRequestedVideoChannels(nativePtr, endpointIds, qualities, ssrcGroups);
+    }
+  }
+
+  // endregion
+
   public void stop () {
+    disableOutgoingVideo();
     if (nativePtr != 0) {
       stopNative(nativePtr);
       nativePtr = 0;
@@ -117,4 +204,17 @@ public class GroupCallInstance {
   private native void setMuted (long ptr, boolean muted);
   private native void setVolume (long ptr, int audioSource, double volume);
   private native void stopNative (long ptr);
+
+  // Video — outgoing camera (capturer owned by a separate native VideoCaptureContext).
+  private native long nativeCreateVideoCapturer (String deviceId, boolean isScreencast);
+  private native void nativeDestroyVideoCapturer (long capturePtr);
+  private native void nativeSwitchCamera (long capturePtr, boolean useFrontCamera);
+  private native void nativeSetVideoState (long capturePtr, int state);
+  private native void nativeSetVideoCaptureLocalOutput (long capturePtr, @Nullable org.webrtc.VideoSink sink);
+  private native void nativeSetVideoCapture (long ptr, long capturePtr);
+
+  // Video — incoming participant tiles (keyed by endpointId).
+  private native void nativeAddIncomingVideoOutput (long ptr, String endpointId, org.webrtc.VideoSink sink);
+  private native void nativeRemoveIncomingVideoOutput (long ptr, String endpointId);
+  private native void nativeSetRequestedVideoChannels (long ptr, String[] endpointIds, int[] qualities, String[] ssrcGroups);
 }

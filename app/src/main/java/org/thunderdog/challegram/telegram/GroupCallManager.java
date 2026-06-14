@@ -45,6 +45,10 @@ public class GroupCallManager implements GroupCallInstance.Listener {
     /** Join state of a video chat changed (one of STATE_*). Called on the UI thread. */
     @UiThread
     void onGroupCallJoinStateChanged (int groupCallId, int state, boolean micMuted);
+
+    /** Local outgoing-camera state changed. Called on the UI thread. */
+    @UiThread
+    default void onGroupCallVideoStateChanged (int groupCallId, boolean videoEnabled) { }
   }
 
   private final Tdlib tdlib;
@@ -154,6 +158,84 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   public void setParticipantVolume (int audioSource, double volume) {
     if (instance != null) {
       instance.setVolume(audioSource, volume);
+    }
+  }
+
+  // endregion
+
+  // region video
+
+  @AnyThread
+  public boolean isVideoEnabled () {
+    return instance != null && instance.isVideoEnabled();
+  }
+
+  /**
+   * Enables the local outgoing camera and broadcasts it via TDLib. The caller must
+   * hold the CAMERA permission. {@code localSink} mirrors the self preview tile.
+   */
+  @MainThread
+  public void enableOutgoingVideo (boolean useFrontCamera, @Nullable org.webrtc.VideoSink localSink) {
+    if (instance == null || state == STATE_NONE) {
+      return;
+    }
+    instance.enableOutgoingVideo(useFrontCamera, localSink);
+    if (groupCallId != 0) {
+      tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, true), tdlib.typedOkHandler());
+    }
+    notifyVideoListeners();
+  }
+
+  @MainThread
+  public void disableOutgoingVideo () {
+    if (instance == null) {
+      return;
+    }
+    boolean wasEnabled = instance.isVideoEnabled();
+    instance.disableOutgoingVideo();
+    if (wasEnabled && groupCallId != 0 && state != STATE_NONE) {
+      tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, false), tdlib.typedOkHandler());
+    }
+    notifyVideoListeners();
+  }
+
+  @MainThread
+  public void switchCamera (boolean useFrontCamera) {
+    if (instance != null) {
+      instance.switchCamera(useFrontCamera);
+    }
+  }
+
+  /** Attaches a renderer to a participant's remote video by endpointId. */
+  @MainThread
+  public void addIncomingVideoOutput (String endpointId, org.webrtc.VideoSink sink) {
+    if (instance != null) {
+      instance.addIncomingVideoOutput(endpointId, sink);
+    }
+  }
+
+  /** Detaches the renderer for a participant's remote video by endpointId. */
+  @MainThread
+  public void removeIncomingVideoOutput (String endpointId) {
+    if (instance != null) {
+      instance.removeIncomingVideoOutput(endpointId);
+    }
+  }
+
+  /** Updates the set of remote video channels we want to receive (visible tiles). */
+  @MainThread
+  public void setRequestedVideoChannels (String[] endpointIds, int[] qualities, String[] ssrcGroups) {
+    if (instance != null) {
+      instance.setRequestedVideoChannels(endpointIds, qualities, ssrcGroups);
+    }
+  }
+
+  @UiThread
+  private void notifyVideoListeners () {
+    final int groupCallId = this.groupCallId;
+    final boolean videoEnabled = isVideoEnabled();
+    for (Listener listener : listeners) {
+      listener.onGroupCallVideoStateChanged(groupCallId, videoEnabled);
     }
   }
 

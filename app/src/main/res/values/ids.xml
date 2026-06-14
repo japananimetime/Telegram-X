@@ -1634,6 +1634,7 @@
   <item type="id" name="controller_groupCall" />
   <item type="id" name="btn_groupCallJoinLeave" />
   <item type="id" name="btn_groupCallMute" />
+  <item type="id" name="btn_groupCallVideo" />
   <item type="id" name="btn_groupCallInvite" />
   <item type="id" name="btn_groupCallRename" />
   <item type="id" name="btn_groupCallStart" />

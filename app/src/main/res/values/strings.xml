@@ -6262,6 +6262,8 @@
   <string name="GroupCallLeave">Leave</string>
   <string name="GroupCallMute">Mute</string>
   <string name="GroupCallUnmute">Unmute</string>
+  <string name="GroupCallStartVideo">Start video</string>
+  <string name="GroupCallStopVideo">Stop video</string>
   <string name="GroupCallConnecting">Connecting…</string>
   <string name="GroupCallManage">Manage</string>
   <string name="GroupCallStartNow">Start now</string>

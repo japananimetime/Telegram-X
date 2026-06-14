@@ -38,6 +38,8 @@
 #include <platform/android/AndroidInterface.h>
 #include <platform/android/AndroidContext.h>
 
+#include "video_capture_context.h"
+
 #include <utility>
 
 #else
@@ -411,14 +413,8 @@ struct TgCallsContext {
   std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> incomingVideoSink;
 };
 
-// Owns one camera VideoCaptureInterface plus the AndroidContext (PlatformContext)
-// it was created with. The AndroidContext instantiates the Java
-// org.telegram.messenger.voip.VideoCameraCapturer and must outlive the capturer,
-// so both are kept together and torn down in destructor order (capturer first).
-struct VideoCaptureContext {
-  std::shared_ptr<tgcalls::PlatformContext> platformContext;
-  std::shared_ptr<tgcalls::VideoCaptureInterface> capture;
-};
+// VideoCaptureContext (camera capturer + its PlatformContext) is defined in the
+// shared header so group_call.cpp can attach the same capturer to a group call.
 
 jbyteArray toJavaByteArray (JNIEnv *env, const std::vector<uint8_t> &data) {
   auto size = (jsize) data.size();
