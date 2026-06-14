@@ -181,17 +181,17 @@ public class BusinessChatLinksController extends RecyclerViewController<Void> im
     openInputAlert(Lang.getString(R.string.BusinessChatLinkEdit), Lang.getString(R.string.BusinessChatLinkTitle),
       R.string.Save, R.string.Cancel, link.title, (inputView, title) -> {
         final String linkTitle = title != null ? title.trim() : "";
-        TdApi.InputBusinessChatLink linkInfo = new TdApi.InputBusinessChatLink(new TdApi.FormattedText(messageText, null), linkTitle);
+        // Preserve the original message-text entities when the visible text is unchanged,
+        // so a title-only edit doesn't strip bold/italic/link formatting.
+        TdApi.FormattedText newText = (link.text != null && messageText.equals(link.text.text))
+          ? link.text
+          : new TdApi.FormattedText(messageText, null);
+        TdApi.InputBusinessChatLink linkInfo = new TdApi.InputBusinessChatLink(newText, linkTitle);
         tdlib.send(new TdApi.EditBusinessChatLink(link.link, linkInfo), (result, error) -> runOnUiThreadOptional(() -> {
           if (error != null) {
             UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
           } else if (result != null) {
-            int index = links.indexOf(link);
-            if (index >= 0) {
-              links.set(index, result);
-            } else {
-              links.add(result);
-            }
+            replaceOrAddLink(link.link, result);
             buildCells();
           }
         }));
@@ -224,9 +224,31 @@ public class BusinessChatLinksController extends RecyclerViewController<Void> im
       if (error != null) {
         UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
       } else {
-        links.remove(link);
+        removeLink(link.link);
         buildCells();
       }
     }));
+  }
+
+  // BusinessChatLink has no equals(); match by the immutable link URL rather than object
+  // identity so an async edit/delete can't desync (append a duplicate / fail to remove)
+  // if the list was rebuilt while the request was in flight.
+  private void replaceOrAddLink (String url, TdApi.BusinessChatLink updated) {
+    for (int i = 0; i < links.size(); i++) {
+      if (links.get(i).link.equals(url)) {
+        links.set(i, updated);
+        return;
+      }
+    }
+    links.add(updated);
+  }
+
+  private void removeLink (String url) {
+    for (int i = 0; i < links.size(); i++) {
+      if (links.get(i).link.equals(url)) {
+        links.remove(i);
+        return;
+      }
+    }
   }
 }
