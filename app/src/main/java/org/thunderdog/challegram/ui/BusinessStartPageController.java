@@ -14,20 +14,29 @@ package org.thunderdog.challegram.ui;
 
 import android.content.Context;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.base.SettingView;
+import org.thunderdog.challegram.component.chat.StickerSuggestionAdapter;
+import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
+import org.thunderdog.challegram.widget.PopupLayout;
+import org.thunderdog.challegram.widget.ShadowView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,15 +45,22 @@ import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.StringUtils;
 
 /**
- * Editor for the Telegram Business start page (title + message). Sends
- * {@link TdApi.SetBusinessStartPage}; passing an empty title and message removes
- * the custom start page. Attaching a greeting sticker is a follow-up.
+ * Editor for the Telegram Business start page (title + message + greeting
+ * sticker). Sends {@link TdApi.SetBusinessStartPage}; passing an empty title,
+ * empty message and no sticker removes the custom start page.
+ * <p>
+ * Note: pinning a map point is NOT part of the start page — the business
+ * location (address + optional {@link TdApi.Location}) is a separate concept
+ * edited by {@link BusinessLocationController} via {@code SetBusinessLocation}.
  */
-public class BusinessStartPageController extends EditBaseController<TdApi.BusinessStartPage> implements SettingsAdapter.TextChangeListener {
+public class BusinessStartPageController extends EditBaseController<TdApi.BusinessStartPage> implements SettingsAdapter.TextChangeListener, View.OnClickListener {
 
   private SettingsAdapter adapter;
   private String title = "";
   private String message = "";
+  private @Nullable TdApi.Sticker sticker;
+
+  private ListItem stickerItem;
 
   public BusinessStartPageController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -66,6 +82,7 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
     if (args != null) {
       this.title = args.title != null ? args.title : "";
       this.message = args.message != null ? args.message : "";
+      this.sticker = args.sticker;
     }
   }
 
@@ -80,6 +97,13 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
         } else {
           editText.getEditText().setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
           Views.setSingleLine(editText.getEditText(), false);
+        }
+      }
+
+      @Override
+      protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
+        if (item.getId() == R.id.btn_stickers) {
+          view.setData(item.getStringValue());
         }
       }
     };
@@ -98,6 +122,12 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.BusinessStartPageHint).setTextColorId(ColorId.textLight));
 
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    stickerItem = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickers, R.drawable.deproko_baseline_stickers_24, R.string.Sticker)
+      .setStringValue(stickerValue());
+    items.add(stickerItem);
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
     adapter.setTextChangeListener(this);
     adapter.setItems(items, false);
 
@@ -105,6 +135,18 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
     setDoneVisible(true);
+  }
+
+  private String stickerValue () {
+    // Reuse the same On/Off value style as the rest of the business settings.
+    return Lang.getString(sticker != null ? R.string.BusinessValueOn : R.string.BusinessValueOff);
+  }
+
+  @Override
+  public void onClick (View v) {
+    if (v.getId() == R.id.btn_stickers) {
+      openStickerPicker();
+    }
   }
 
   @Override
@@ -116,6 +158,125 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
     }
   }
 
+  // Sticker picker
+
+  private @Nullable PopupLayout stickerPickerPopup;
+
+  private void openStickerPicker () {
+    if (stickerPickerPopup != null) {
+      return;
+    }
+    // Greeting stickers must belong to a sticker set (not custom emoji);
+    // recent stickers are an ideal, lightweight source for the chooser.
+    tdlib.client().send(new TdApi.GetRecentStickers(false), result -> runOnUiThreadOptional(() -> {
+      if (result.getConstructor() != TdApi.Stickers.CONSTRUCTOR) {
+        UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
+        return;
+      }
+      TdApi.Sticker[] stickers = ((TdApi.Stickers) result).stickers;
+      if (stickers.length == 0) {
+        UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
+        return;
+      }
+      showStickerPickerPopup(stickers);
+    }));
+  }
+
+  private void showStickerPickerPopup (TdApi.Sticker[] stickers) {
+    if (isDestroyed() || stickerPickerPopup != null) {
+      return;
+    }
+    final Context context = context();
+
+    final ArrayList<TGStickerObj> stickerObjs = new ArrayList<>(stickers.length);
+    for (TdApi.Sticker s : stickers) {
+      // Greeting sticker must not be a custom emoji.
+      if (s.fullType != null && s.fullType.getConstructor() == TdApi.StickerFullTypeCustomEmoji.CONSTRUCTOR) {
+        continue;
+      }
+      stickerObjs.add(new TGStickerObj(tdlib, s, s.emoji, s.fullType));
+    }
+    if (stickerObjs.isEmpty()) {
+      UI.showToast(R.string.NoStickerSets, android.widget.Toast.LENGTH_SHORT);
+      return;
+    }
+
+    final RecyclerView recyclerView = new RecyclerView(context);
+    final LinearLayoutManager manager = new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false);
+    recyclerView.setLayoutManager(manager);
+    recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
+    final StickerSuggestionAdapter stickerAdapter = new StickerSuggestionAdapter(this, manager, this, false);
+    stickerAdapter.setCallback(new StickerSuggestionAdapter.Callback() {
+      @Override
+      public boolean onSendStickerSuggestion (View view, TGStickerObj sticker, TdApi.MessageSendOptions sendOptions) {
+        onStickerPicked(sticker);
+        return true;
+      }
+
+      @Override
+      public int getStickerSuggestionsTop (boolean isEmoji) {
+        return 0;
+      }
+
+      @Override
+      public int getStickerSuggestionPreviewViewportHeight () {
+        return -1;
+      }
+
+      @Override
+      public long getStickerSuggestionsChatId () {
+        return 0;
+      }
+    });
+    stickerAdapter.setStickers(stickerObjs);
+    recyclerView.setAdapter(stickerAdapter);
+
+    final int popupHeight = Screen.dp(72f) + Screen.dp(7f);
+
+    ShadowView shadowView = new ShadowView(context);
+    shadowView.setSimpleTopShadow(true);
+    addThemeInvalidateListener(shadowView);
+
+    FrameLayoutFix popupView = new FrameLayoutFix(context);
+    ViewSupport.setThemedBackground(popupView, ColorId.background);
+    addThemeInvalidateListener(popupView);
+    popupView.addView(shadowView, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(7f), Gravity.TOP));
+    popupView.addView(recyclerView, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(72f), Gravity.TOP, 0, Screen.dp(7f), 0, 0));
+    popupView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+
+    stickerPickerPopup = new PopupLayout(context);
+    stickerPickerPopup.init(true);
+    stickerPickerPopup.setDismissListener(popup -> stickerPickerPopup = null);
+    stickerPickerPopup.setNeedRootInsets();
+    stickerPickerPopup.showSimplePopupView(popupView, popupHeight);
+  }
+
+  private void onStickerPicked (TGStickerObj stickerObj) {
+    TdApi.Sticker picked = stickerObj.getSticker();
+    if (picked == null) {
+      return;
+    }
+    this.sticker = picked;
+    if (stickerItem != null && adapter != null) {
+      stickerItem.setStringValue(stickerValue());
+      adapter.updateValuedSetting(stickerItem);
+    }
+    if (stickerPickerPopup != null) {
+      stickerPickerPopup.hideWindow(true);
+      stickerPickerPopup = null;
+    }
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    if (stickerPickerPopup != null) {
+      stickerPickerPopup.hideWindow(false);
+      stickerPickerPopup = null;
+    }
+  }
+
   @Override
   protected boolean onDoneClick () {
     if (isInProgress()) {
@@ -124,11 +285,14 @@ public class BusinessStartPageController extends EditBaseController<TdApi.Busine
     setInProgress(true);
     final String title = this.title.trim();
     final String message = this.message.trim();
+    final TdApi.Sticker sticker = this.sticker;
     final TdApi.InputBusinessStartPage startPage;
-    if (StringUtils.isEmpty(title) && StringUtils.isEmpty(message)) {
+    if (StringUtils.isEmpty(title) && StringUtils.isEmpty(message) && sticker == null) {
       startPage = null; // removes the custom start page
     } else {
-      startPage = new TdApi.InputBusinessStartPage(title, message, null);
+      // Greeting sticker is referenced by its persistent file id; pass null when none.
+      TdApi.InputFile inputSticker = sticker != null ? new TdApi.InputFileId(sticker.sticker.id) : null;
+      startPage = new TdApi.InputBusinessStartPage(title, message, inputSticker);
     }
     tdlib.send(new TdApi.SetBusinessStartPage(startPage), (result, error) -> runOnUiThreadOptional(() -> {
       setInProgress(false);
