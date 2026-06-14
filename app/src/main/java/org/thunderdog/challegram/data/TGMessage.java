@@ -4363,6 +4363,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   // Getters
 
   public boolean onMessageClick (MessageView v, MessagesController c) {
+    // Paid media is rendered as a plain text bubble (see buildPaidMediaText). When it is
+    // still locked, a tap must open the Stars payment form rather than fall through to the
+    // default message options.
+    if (msg.content.getConstructor() == TdApi.MessagePaidMedia.CONSTRUCTOR &&
+      isPaidMediaLocked((TdApi.MessagePaidMedia) msg.content)) {
+      unlockPaidMedia();
+      return true;
+    }
     // TODO
     return /* isEventLog() */ false;
   }
