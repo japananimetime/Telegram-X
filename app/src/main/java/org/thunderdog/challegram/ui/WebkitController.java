@@ -74,11 +74,7 @@ public class WebkitController<T> extends ViewController<T> {
     webView.getSettings().setDomStorageEnabled(true);
     webView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      // FIXME maybe better to remove?
-      webView.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-    }
+    configureWebViewSecurity(webView);
 
     if (hasSpecialProcessing()) {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -178,6 +174,61 @@ public class WebkitController<T> extends ViewController<T> {
   @Override
   public View getCustomHeaderCell () {
     return headerCell;
+  }
+
+  /**
+   * Applies the security-sensitive WebView settings. The base implementation keeps the
+   * historically permissive behavior used by the generic in-app browser, the Telegram FAQ
+   * page and HTML5 games (these load only remote http(s) URLs and never need file access).
+   *
+   * Subclasses that expose a privileged surface — notably {@link WebAppController}, which
+   * injects the {@code TelegramWebviewProxy} JS bridge into attacker-influenced bot pages —
+   * MUST NOT relax these defaults and should override {@link #allowsMixedContent()},
+   * {@link #allowsThirdPartyCookies()} and {@link #allowsFileAccess()} to harden them.
+   */
+  protected void configureWebViewSecurity (WebView webView) {
+    final WebSettings settings = webView.getSettings();
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      // FIXME maybe better to remove?
+      settings.setMixedContentMode(allowsMixedContent() ? WebSettings.MIXED_CONTENT_ALWAYS_ALLOW : WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, allowsThirdPartyCookies());
+    }
+
+    // setAllowFileAccess defaults to true on API < 30; explicitly pin the file/content
+    // access flags so they reflect allowsFileAccess() on every API level. Instant View is
+    // rendered natively by InstantViewController (no WebView), so this never affects it.
+    final boolean allowFileAccess = allowsFileAccess();
+    settings.setAllowFileAccess(allowFileAccess);
+    settings.setAllowContentAccess(allowFileAccess);
+    settings.setAllowFileAccessFromFileURLs(allowFileAccess);
+    settings.setAllowUniversalAccessFromFileURLs(allowFileAccess);
+  }
+
+  /**
+   * @return whether active mixed content (https pages loading http scripts) is allowed.
+   * Defaults to {@code true} to preserve the legacy browser behavior; overridden to
+   * {@code false} on privileged surfaces.
+   */
+  protected boolean allowsMixedContent () {
+    return true;
+  }
+
+  /**
+   * @return whether the WebView may set/read third-party cookies. Defaults to {@code true}
+   * for the legacy browser behavior; overridden to {@code false} on privileged surfaces.
+   */
+  protected boolean allowsThirdPartyCookies () {
+    return true;
+  }
+
+  /**
+   * @return whether the WebView may access {@code file://}/{@code content://} resources.
+   * Defaults to {@code true} to keep the browser/FAQ/game behavior unchanged; overridden to
+   * {@code false} on privileged surfaces so file:// is unreachable from bot-controlled pages.
+   */
+  protected boolean allowsFileAccess () {
+    return true;
   }
 
   protected boolean hasSpecialProcessing () {

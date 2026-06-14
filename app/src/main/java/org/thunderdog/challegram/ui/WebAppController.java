@@ -370,6 +370,25 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
     return true;
   }
 
+  // Security hardening (#819 + #828): this WebView injects the privileged
+  // TelegramWebviewProxy JS bridge into attacker-influenced bot pages, so it must not inherit
+  // the permissive defaults used by the generic in-app browser.
+
+  @Override
+  protected boolean allowsMixedContent () {
+    return false; // MIXED_CONTENT_NEVER_ALLOW — block active mixed-content script injection
+  }
+
+  @Override
+  protected boolean allowsThirdPartyCookies () {
+    return false;
+  }
+
+  @Override
+  protected boolean allowsFileAccess () {
+    return false; // keep file:///content:// unreachable from bot-controlled pages
+  }
+
   @Override
   protected boolean processSpecial (Uri uri) {
     if (uri == null) return false;
