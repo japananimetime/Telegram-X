@@ -2631,6 +2631,55 @@ public class TdlibUi extends Handler {
     });
   }
 
+  private void openAttachmentMenuBotLink (final TdlibDelegate context, final String botUsername, final String url, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
+    // Theme params read Theme.getColor (UI-thread-only); build them on the caller thread before issuing the TDLib request.
+    final TdApi.WebAppOpenParameters webAppParams = new TdApi.WebAppOpenParameters(buildWebAppThemeParameters(), "tgx", null);
+    tdlib.send(new TdApi.SearchPublicChat(botUsername), (result, error) -> {
+      if (error != null) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(error), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      if (result.type.getConstructor() != TdApi.ChatTypePrivate.CONSTRUCTOR) {
+        showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
+        if (after != null) {
+          post(() -> after.runWithBool(false));
+        }
+        return;
+      }
+      final TdApi.Chat chat = result;
+      final long botUserId = ((TdApi.ChatTypePrivate) chat.type).userId;
+      // url is the URL to be passed to openWebApp (see InternalLinkTypeAttachmentMenuBot.url);
+      // GetWebAppUrl resolves it into the HTTPS URL to display in the web view.
+      tdlib.send(new TdApi.GetWebAppUrl(botUserId, url, webAppParams), (webAppUrl, urlError) -> {
+        if (urlError != null) {
+          showLinkTooltip(tdlib, R.drawable.baseline_warning_24, TD.toErrorString(urlError), openParameters);
+          if (after != null) {
+            post(() -> after.runWithBool(false));
+          }
+          return;
+        }
+        post(() -> {
+          WebAppController controller = new WebAppController(context.context(), tdlib);
+          controller.setArguments(new WebAppController.Args(
+            chat.id,
+            botUserId,
+            botUsername,
+            webAppUrl.url,
+            0,
+            null // openMode
+          ).setRequireSameOrigin(webAppUrl.requireSameOrigin));
+          context.context().navigation().navigateTo(controller);
+          if (after != null) {
+            after.runWithBool(true);
+          }
+        });
+      });
+    });
+  }
+
   private void openInvoiceLink (final TdlibDelegate context, final String invoiceName, final @Nullable UrlOpenParameters openParameters, final @Nullable RunnableBool after) {
     final TdApi.InputInvoiceName inputInvoice = new TdApi.InputInvoiceName(invoiceName);
     tdlib.send(new TdApi.GetPaymentForm(inputInvoice, buildWebAppThemeParameters()), (paymentForm, error) -> {
@@ -3987,6 +4036,13 @@ public class TdlibUi extends Handler {
         openMainWebAppLink(context, mainWebApp.botUsername, mainWebApp.startParameter, openParameters, after);
         return; // async
       }
+      case TdApi.InternalLinkTypeAttachmentMenuBot.CONSTRUCTOR: {
+        TdApi.InternalLinkTypeAttachmentMenuBot attachmentMenuBot = (TdApi.InternalLinkTypeAttachmentMenuBot) linkType;
+        // targetChat (current/chosen/internal-link) isn't threaded through here: we open the bot's
+        // Web App directly via GetWebAppUrl, which doesn't require a resolved target chat.
+        openAttachmentMenuBotLink(context, attachmentMenuBot.botUsername, attachmentMenuBot.url, openParameters, after);
+        return; // async
+      }
       case TdApi.InternalLinkTypeInvoice.CONSTRUCTOR: {
         TdApi.InternalLinkTypeInvoice invoice = (TdApi.InternalLinkTypeInvoice) linkType;
         openInvoiceLink(context, invoice.invoiceName, openParameters, after);
@@ -4022,8 +4078,6 @@ public class TdlibUi extends Handler {
       // for now (album viewer tracked in #851).
       case TdApi.InternalLinkTypeLiveStory.CONSTRUCTOR:
       case TdApi.InternalLinkTypeStoryAlbum.CONSTRUCTOR:
-
-      case TdApi.InternalLinkTypeAttachmentMenuBot.CONSTRUCTOR:
 
       case TdApi.InternalLinkTypeRestorePurchases.CONSTRUCTOR:
       case TdApi.InternalLinkTypeChatBoost.CONSTRUCTOR:
@@ -6292,8 +6346,12 @@ public class TdlibUi extends Handler {
   }
 
   public void switchInline (ViewController<?> context, String username, String query, boolean keepStack) {
+    switchInline(context, username, query, keepStack, null);
+  }
+
+  public void switchInline (ViewController<?> context, String username, String query, boolean keepStack, @Nullable ChatFilter chatFilter) {
     ChatsController c = new ChatsController(context.context(), context.tdlib());
-    c.setArguments(new ChatsController.Arguments(new ChatsController.PickerDelegate() {
+    ChatsController.PickerDelegate delegate = new ChatsController.PickerDelegate() {
       @Override
       public boolean onChatPicked (TdApi.Chat chat, Runnable onDone) {
         if (!tdlib.canSendBasicMessage(chat)) {
@@ -6314,7 +6372,12 @@ public class TdlibUi extends Handler {
           params.keepStack();
         }
       }
-    }));
+    };
+    // When a chatFilter is supplied (e.g. switch_inline_query with chat_types from a Web App),
+    // restrict the chats shown/selectable in the picker to the allowed types.
+    c.setArguments(chatFilter != null
+      ? new ChatsController.Arguments(chatFilter, delegate)
+      : new ChatsController.Arguments(delegate));
     context.navigateTo(c);
   }
 

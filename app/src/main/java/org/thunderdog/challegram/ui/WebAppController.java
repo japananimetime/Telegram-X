@@ -1263,7 +1263,7 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
         }
       };
     }
-    tdlib.ui().switchInline(this, args.botUsername, query, false);
+    tdlib.ui().switchInline(this, args.botUsername, query, false, filter);
     navigateBack();
   }
 
