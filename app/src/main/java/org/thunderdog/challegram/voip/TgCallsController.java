@@ -28,6 +28,7 @@ import org.thunderdog.challegram.voip.annotation.VideoState;
 public class TgCallsController extends VoIPInstance {
   private final String version;
   private long nativePtr;
+  private long videoCapturePtr;
   public TgCallsController (@NonNull Tdlib tdlib, @NonNull TdApi.Call call, @NonNull CallConfiguration configuration, @NonNull CallOptions options, @NonNull ConnectionStateListener stateListener, String version) {
     super(tdlib, call, configuration, options, stateListener);
     if (configuration.state.encryptionKey.length != 256)
@@ -61,6 +62,16 @@ public class TgCallsController extends VoIPInstance {
   private native void updateEchoCancellationStrength (long ptr, int strength);
   private native void updateAudioOutputGainControlEnabled (long ptr, boolean isEnabled);
   private native void destroyInstance (long ptr);
+
+  // Video (Stage 1: native plumbing). The capturer is owned by a separate native
+  // pointer (videoCapturePtr) created via nativeCreateVideoCapturer and handed to
+  // the instance via nativeSetVideoCapture.
+  private native long nativeCreateVideoCapturer (String deviceId, boolean isScreencast);
+  private native void nativeDestroyVideoCapturer (long capturePtr);
+  private native void nativeSwitchCamera (long capturePtr, boolean useFrontCamera);
+  private native void nativeSetVideoState (long capturePtr, @VideoState int state);
+  private native void nativeSetVideoCapture (long ptr, long capturePtr);
+  private native void nativeSetIncomingVideoOutput (long ptr, @Nullable org.webrtc.VideoSink sink);
 
   @Override
   public String getLibraryName () {
@@ -117,8 +128,73 @@ public class TgCallsController extends VoIPInstance {
     fetchNetworkStats(nativePtr(), out);
   }
 
+  // Video (Stage 1: native plumbing). UI wiring (CallController) is a later stage;
+  // these wrappers expose the camera + remote-video pipeline to it.
+
+  /**
+   * Creates (if needed) the camera capturer and attaches it to the running call.
+   *
+   * @param useFrontCamera whether to start on the front-facing camera.
+   */
+  public void enableVideo (boolean useFrontCamera) {
+    if (videoCapturePtr == 0) {
+      videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
+    }
+    if (videoCapturePtr != 0) {
+      nativeSetVideoCapture(nativePtr(), videoCapturePtr);
+    }
+  }
+
+  /**
+   * Detaches and releases the camera capturer from the running call.
+   */
+  public void disableVideo () {
+    if (nativePtr != 0) {
+      nativeSetVideoCapture(nativePtr, 0);
+    }
+    if (videoCapturePtr != 0) {
+      nativeDestroyVideoCapturer(videoCapturePtr);
+      videoCapturePtr = 0;
+    }
+  }
+
+  /**
+   * Switches between front and back camera. No-op if video is not active.
+   */
+  public void switchCamera (boolean useFrontCamera) {
+    if (videoCapturePtr != 0) {
+      nativeSwitchCamera(videoCapturePtr, useFrontCamera);
+    }
+  }
+
+  /**
+   * Updates the local capture state. No-op if video is not active.
+   */
+  public void setVideoState (@VideoState int state) {
+    if (videoCapturePtr != 0) {
+      nativeSetVideoState(videoCapturePtr, state);
+    }
+  }
+
+  /**
+   * Routes incoming (remote) video frames to the given sink, or clears the output
+   * when {@code sink} is null.
+   */
+  public void setIncomingVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    if (nativePtr != 0) {
+      nativeSetIncomingVideoOutput(nativePtr, sink);
+    }
+  }
+
   @Override
   public void performDestroy () {
+    if (videoCapturePtr != 0) {
+      if (nativePtr != 0) {
+        nativeSetVideoCapture(nativePtr, 0);
+      }
+      nativeDestroyVideoCapturer(videoCapturePtr);
+      videoCapturePtr = 0;
+    }
     if (nativePtr != 0) {
       destroyInstance(nativePtr);
       nativePtr = 0;
