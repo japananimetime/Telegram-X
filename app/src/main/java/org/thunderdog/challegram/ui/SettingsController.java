@@ -159,6 +159,11 @@ public class SettingsController extends ViewController<Void> implements
     navigateTo(new SettingsPremiumController(context, tdlib));
   }
 
+  private void launchStarsScreen () {
+    // Navigate to Telegram Stars settings screen
+    navigateTo(new SettingsStarsController(context, tdlib));
+  }
+
   @Override
   public void onBlur () {
     super.onBlur();
@@ -639,6 +644,8 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_devices, R.drawable.baseline_devices_other_24, R.string.Devices));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_premium, R.drawable.baseline_premium_star_24, R.string.TelegramPremium));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_stars, R.drawable.baseline_star_24, R.string.TelegramStars));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
 
     checkErrors(false);
@@ -1194,6 +1201,8 @@ public class SettingsController extends ViewController<Void> implements
       navigateTo(new SettingsSessionsController(context, tdlib));
     } else if (viewId == R.id.btn_premium) {
       launchPremiumPurchase();
+    } else if (viewId == R.id.btn_stars) {
+      launchStarsScreen();
     } else if (viewId == R.id.btn_checkUpdates) {
       openInstallerPage(((AppInstallationUtil.DownloadUrl) ((ListItem) v.getTag()).getData()));
     } else if (viewId == R.id.btn_subscribeToBeta) {

@@ -207,13 +207,90 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
 
   private void purchaseStars(TdApi.StarPaymentOption option) {
     if (!StringUtils.isEmpty(option.storeProductId)) {
-      // Store purchase - not supported in this build
+      // Store (Google Play) purchase of Telegram Stars.
+      // Mirrors SettingsPremiumController#startPaymentFlow: when only a store
+      // product id is available and there is no out-of-store payment route,
+      // surface the store-unavailable notice. The shared BillingManager is
+      // currently wired exclusively for the Premium SUBS product and exposes
+      // no generic INAPP entry point for StorePaymentPurposeStars, so an
+      // honest notice is shown instead of a fake purchase. See report.
       UI.showToast(R.string.PremiumStorePaymentNotAvailable, Toast.LENGTH_SHORT);
     } else {
-      // Out-of-store purchase via Fragment/TON
-      // This would require TelegramPaymentPurposeStars and createInvoiceLink
-      UI.showToast(R.string.PremiumPaymentUnavailable, Toast.LENGTH_SHORT);
+      // Out-of-store purchase: build a Telegram invoice for the Stars purpose
+      // and route it through the regular GetPaymentForm flow, mirroring
+      // SettingsPremiumController#openPaymentForm / #handlePaymentForm.
+      purchaseStarsOutOfStore(option);
     }
+  }
+
+  private void purchaseStarsOutOfStore(TdApi.StarPaymentOption option) {
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+
+    TdApi.TelegramPaymentPurposeStars purpose = new TdApi.TelegramPaymentPurposeStars(
+      option.currency,
+      option.amount,
+      option.starCount,
+      0 /* chatId: buying for self */
+    );
+    TdApi.InputInvoiceTelegram inputInvoice = new TdApi.InputInvoiceTelegram(purpose);
+
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (result, error) -> {
+      runOnUiThreadOptional(() -> {
+        if (error != null) {
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+        } else {
+          TdApi.PaymentForm paymentForm = (TdApi.PaymentForm) result;
+          handlePaymentForm(paymentForm, inputInvoice, option.starCount);
+        }
+      });
+    });
+  }
+
+  private void handlePaymentForm(TdApi.PaymentForm paymentForm, TdApi.InputInvoice inputInvoice, long starCount) {
+    if (paymentForm.type instanceof TdApi.PaymentFormTypeRegular) {
+      // Regular (card / external provider) payment form: hand off to the
+      // shared payment form controller, as SettingsPremiumController does.
+      PaymentFormController controller = new PaymentFormController(context(), tdlib);
+      controller.setArguments(new PaymentFormController.Args(paymentForm, inputInvoice, 0));
+      navigateTo(controller);
+    } else if (paymentForm.type instanceof TdApi.PaymentFormTypeStars) {
+      TdApi.PaymentFormTypeStars starsType = (TdApi.PaymentFormTypeStars) paymentForm.type;
+      showStarsPaymentConfirmation(paymentForm, inputInvoice, starsType.starCount);
+    } else {
+      UI.showToast(R.string.PaymentUnknownType, Toast.LENGTH_SHORT);
+    }
+  }
+
+  private void showStarsPaymentConfirmation(TdApi.PaymentForm paymentForm, TdApi.InputInvoice inputInvoice, long starCount) {
+    String message = Lang.getString(R.string.StarsPayConfirmMessage, starCount);
+    showOptions(
+      message,
+      new int[] { R.id.btn_done, R.id.btn_cancel },
+      new String[] { Lang.getString(R.string.StarsPayConfirm, starCount), Lang.getString(R.string.Cancel) },
+      new int[] { OptionColor.BLUE, OptionColor.NORMAL },
+      new int[] { R.drawable.baseline_star_24, R.drawable.baseline_cancel_24 },
+      (view, optionId) -> {
+        if (optionId == R.id.btn_done) {
+          sendStarsPayment(paymentForm, inputInvoice);
+        }
+        return true;
+      }
+    );
+  }
+
+  private void sendStarsPayment(TdApi.PaymentForm paymentForm, TdApi.InputInvoice inputInvoice) {
+    UI.showToast(R.string.PaymentProcessing, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.SendPaymentForm(inputInvoice, paymentForm.id, "", "", null, 0), (result, error) -> {
+      runOnUiThreadOptional(() -> {
+        if (error != null) {
+          UI.showToast(Lang.getString(R.string.StarsPaymentFailed, TD.toErrorString(error)), Toast.LENGTH_SHORT);
+        } else {
+          UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
+          // Refresh balance and options after a successful purchase.
+          fetchData();
+        }
+      });
+    });
   }
 
   private void openTransactionHistory() {
