@@ -28,6 +28,9 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.loader.DoubleImageReceiver;
 import org.thunderdog.challegram.loader.Receiver;
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
@@ -116,8 +119,11 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
     View view = findCurrentView();
     int totalHeight = 0;
     for (PageBlock block : blocks) {
-      block.setViewWidthOverride(maxWidth);
-      totalHeight += block.getHeight(view, maxWidth);
+      // Reserve a left column for list markers (Instant View does this via a RecyclerView
+      // ItemDecoration; in the bubble we lay the block out narrower and translate it right).
+      int layoutWidth = maxWidth - listMarkerReserve(block);
+      block.setViewWidthOverride(layoutWidth);
+      totalHeight += block.getHeight(view, layoutWidth);
     }
     if (needShowMore()) {
       this.showMoreText = new Text.Builder(Lang.getString(R.string.RichMessageShowMore), maxWidth - getShowMorePaddingLeft(), PageBlockRichText.getParagraphProvider(), getShowMoreColorSet())
@@ -161,6 +167,20 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
   }
 
   // == Media ==
+
+  // Width of the left column reserved for list markers (mirrors InstantViewController's
+  // FillingDecoration.getItemOffsets), or 0 for non-list blocks.
+  private static int listMarkerReserve (PageBlock block) {
+    PageBlock.ListItemInfo[] info = block.getListItem();
+    if (info == null) {
+      return 0;
+    }
+    int reserve = Screen.dp(18f);
+    for (PageBlock.ListItemInfo itemInfo : info) {
+      reserve += Math.max(Screen.dp(16f), (int) itemInfo.list.maxLabelWidth + Screen.dp(4f));
+    }
+    return reserve;
+  }
 
   private static int getMediaMode (PageBlock block) {
     switch (block.getRelatedViewType()) {
@@ -248,7 +268,9 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
     int y = startY;
     for (int i = 0; i < blockCount; i++) {
       PageBlock block = blocks.get(i);
-      final int blockHeight = block.getHeight(view, contentWidth);
+      final int reserve = listMarkerReserve(block);
+      final int blockX = startX + reserve;
+      final int blockHeight = block.getHeight(view, contentWidth - reserve);
       final int mediaMode = getMediaMode(block);
       Receiver preview = null, content = null;
       if (mediaMode != MEDIA_MODE_NONE) {
@@ -260,10 +282,31 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
         preview = receiver.getPreviewReceiver(previewKey(i));
         content = mediaMode == MEDIA_MODE_GIF ? receiver.getGifReceiver(contentKey(i)) : receiver.getImageReceiver(contentKey(i));
       }
+      // Block backgrounds (e.g. code/preformatted) are painted by a RecyclerView ItemDecoration in
+      // Instant View; in the chat bubble we must paint them ourselves before drawing the block.
+      final int bgColorId = block.getBackgroundColorId();
+      if (bgColorId != ColorId.NONE && bgColorId != ColorId.filling) {
+        c.drawRect(blockX, y, startX + contentWidth, y + blockHeight, Paints.fillingPaint(Theme.getColor(bgColorId)));
+      }
       final int saveCount = Views.save(c);
-      c.translate(startX, y);
+      c.translate(blockX, y);
       block.draw(view, c, preview, content, iconReceiver);
       Views.restore(c, saveCount);
+      // List markers (bullets / checkboxes / numbers): Instant View draws these in an ItemDecoration;
+      // replicate here in the reserved left column [startX, blockX).
+      PageBlock.ListItemInfo[] listInfo = block.getListItem();
+      if (listInfo != null) {
+        int left = blockX;
+        final int top = y + block.getBulletTop();
+        for (int k = listInfo.length - 1; k >= 0; k--) {
+          PageBlock.ListItemInfo itemInfo = listInfo[k];
+          if (itemInfo.firstBlock != null && itemInfo.firstBlock != block)
+            break;
+          int x = left - itemInfo.label.getWidth();
+          itemInfo.label.draw(c, x, x, 0, top, null, 1f);
+          left -= Math.max(Screen.dp(16f), (int) itemInfo.list.maxLabelWidth + Screen.dp(4f));
+        }
+      }
       y += blockHeight;
     }
     if (showMoreText != null) {
@@ -284,10 +327,12 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
     final int startX = getContentX();
     int y = getContentY();
     for (PageBlock block : blocks) {
-      final int blockHeight = block.getHeight(view, contentWidth);
-      e.offsetLocation(-startX, -y);
+      final int reserve = listMarkerReserve(block);
+      final int blockX = startX + reserve;
+      final int blockHeight = block.getHeight(view, contentWidth - reserve);
+      e.offsetLocation(-blockX, -y);
       boolean result = block.onTouchEvent(view, e);
-      e.offsetLocation(startX, y);
+      e.offsetLocation(blockX, y);
       if (result) {
         return true;
       }
@@ -327,7 +372,7 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
     int y = 0;
     View view = findCurrentView();
     for (PageBlock block : blocks) {
-      int blockHeight = block.getHeight(view, contentWidth);
+      int blockHeight = block.getHeight(view, contentWidth - listMarkerReserve(block));
       if (localY >= y && localY < y + blockHeight) {
         return block;
       }

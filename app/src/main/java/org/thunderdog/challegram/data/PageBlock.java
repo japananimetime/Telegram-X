@@ -384,6 +384,10 @@ public abstract class PageBlock {
     }
 
     private void processCaption (ViewController<?> parent, @NonNull TdApi.PageBlock mediaBlock, TdApi.PageBlockCaption caption, @Nullable TdlibUi.UrlOpenParameters openParameters, ArrayList<PageBlock> out) {
+      // Rich-message media blocks may carry a null caption (unlike instant-view page blocks) — nothing to render.
+      if (caption == null) {
+        return;
+      }
       PageBlockRichText captionBlock = null;
       boolean needMerge = (lastBlock != null && lastBlock.block == mediaBlock) || mediaBlock.getConstructor() == TdApi.PageBlockEmbeddedPost.CONSTRUCTOR;
       if (!Td.isEmpty(caption.text)) {
@@ -718,11 +722,16 @@ public abstract class PageBlock {
       }
       case TdApi.PageBlockBlockQuote.CONSTRUCTOR: {
         TdApi.PageBlockBlockQuote quoteRaw = (TdApi.PageBlockBlockQuote) block;
-        // The quote body is now represented with nested page blocks
-        // TODO: draw the quote line along the nested blocks, similarly to embedded posts
+        // The quote body is represented with nested page blocks. Mark them as a "post" so the
+        // shared draw() paints the rounded quote line spanning the whole body (same mechanism as
+        // embedded posts) — works in both the instant-view list and the chat-bubble canvas path.
+        boolean wasPost = context.isPost;
+        context.isPost = true;
+        context.lastBlock = null;
         for (TdApi.PageBlock pageBlock : quoteRaw.blocks) {
           parse(parent, out, context, pageBlock, openParameters);
         }
+        context.isPost = wasPost;
         if (!Td.isEmpty(quoteRaw.credit)) {
           PageBlockRichText credit = new PageBlockRichText(parent, quoteRaw, openParameters);
           context.process(credit, out);

@@ -280,7 +280,9 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
   private boolean ignoreBottomPadding;
 
   private void setCaption (TdApi.PageBlockCaption caption) {
-    if (!Td.isEmpty(caption.text) || !Td.isEmpty(caption.credit)) {
+    // Rich-message media blocks may carry a null caption (unlike instant-view page blocks),
+    // so guard before dereferencing — otherwise the whole rich message falls back to "Unsupported".
+    if (caption != null && (!Td.isEmpty(caption.text) || !Td.isEmpty(caption.credit))) {
       this.caption = caption;
       ignoreBottomPadding = true;
     }
