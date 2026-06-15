@@ -681,6 +681,7 @@ public final class TGMessageService extends TGMessageServiceImpl {
             case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
             case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
             case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+            case TdApi.MessageRichMessage.CONSTRUCTOR:
               staticResId = R.string.ActionPinnedNoText;
               break;
             default:

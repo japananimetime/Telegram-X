@@ -508,8 +508,10 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+      case TdApi.MessageRichMessage.CONSTRUCTOR:
       case TdApi.MessageUnsupported.CONSTRUCTOR: {
-        // No media preview.
+        // No media preview (rich messages have no single representative thumbnail; the text
+        // preview is still produced by ContentPreview).
         break;
       }
       default: {
