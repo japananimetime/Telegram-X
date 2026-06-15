@@ -1233,6 +1233,7 @@ public class Lang {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+      case TdApi.MessageRichMessage.CONSTRUCTOR:
         break;
       default:
         Td.assertMessageContent_bb294b24();
