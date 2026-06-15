@@ -27,6 +27,10 @@ patch-opus-impl.sh
 # Patch androidx-media sources
 patch-androidx-media-impl.sh
 
+# Apply fork native submodule patches (tgcalls screencast bitrate; webrtc ADM
+# graceful-returns that fixes the group-call join SIGABRT). See app/jni/patches.
+patch-native-impl.sh
+
 # Build and configure libvpx
 build-vpx-impl.sh
 
