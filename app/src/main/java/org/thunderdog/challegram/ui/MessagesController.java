@@ -140,6 +140,7 @@ import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGAudio;
 import org.thunderdog.challegram.data.TGBotStart;
 import org.thunderdog.challegram.data.TGMessage;
+import org.thunderdog.challegram.data.TGMessageRich;
 import org.thunderdog.challegram.data.TGMessageBotInfo;
 import org.thunderdog.challegram.data.TGMessageLocation;
 import org.thunderdog.challegram.data.TGMessageMedia;
@@ -315,7 +316,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   ViewPager.OnPageChangeListener, ViewPagerTopView.OnItemClickListener,
   TGMessage.SelectableDelegate, GlobalAccountListener, EmojiToneHelper.Delegate, ComplexHeaderView.Callback, LiveLocationHelper.Callback, CreatePollController.Callback,
   HapticMenuHelper.Provider, HapticMenuHelper.OnItemClickListener, TdlibSettingsManager.DismissRequestsListener, InputView.SelectionChangeListener,
-  SavedMessagesTagsListener, MediaLayout.LocationPickerCallback {
+  SavedMessagesTagsListener, MediaLayout.LocationPickerCallback, Text.ClickCallback {
 
   private boolean reuseEnabled;
   private boolean destroyInstance;
@@ -1841,6 +1842,28 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public MessagesManager getManager () {
     return manager;
+  }
+
+  @Override
+  public boolean onAnchorClick (View view, String anchor) {
+    // In-message anchor navigation for rich messages ("Jump to <section>"). The clicked message is
+    // on screen, so scroll the chat so the anchor's position within the bubble reaches the top.
+    if (!(view instanceof MessageView)) {
+      return false;
+    }
+    TGMessage msg = ((MessageView) view).getMessage();
+    if (!(msg instanceof TGMessageRich)) {
+      return false;
+    }
+    int contentY = ((TGMessageRich) msg).findAnchorContentY(anchor);
+    if (contentY < 0) {
+      return false;
+    }
+    int anchorYInRecycler = view.getTop() + msg.getContentY() + contentY;
+    if (messagesView != null && anchorYInRecycler != 0) {
+      messagesView.smoothScrollBy(0, anchorYInRecycler);
+    }
+    return true;
   }
 
   public TdApi.Chat getChat () {

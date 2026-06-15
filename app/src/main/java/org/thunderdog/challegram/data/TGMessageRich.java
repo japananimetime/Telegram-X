@@ -42,6 +42,7 @@ import org.thunderdog.challegram.util.text.TextColorSets;
 import java.util.ArrayList;
 
 import me.vkryl.android.util.ClickHelper;
+import me.vkryl.core.StringUtils;
 import me.vkryl.core.lambda.Destroyable;
 
 /**
@@ -393,6 +394,34 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
       return CLICK_TARGET_DETAILS;
     }
     return CLICK_TARGET_NONE;
+  }
+
+  /**
+   * Y offset (within this message's content) of the given in-message anchor, or -1 if not found.
+   * Mirrors InstantViewController.scrollToAnchor's block- and child-anchor matching.
+   */
+  public int findAnchorContentY (@Nullable String anchor) {
+    if (StringUtils.isEmpty(anchor)) {
+      return 0; // "top" / empty anchor → start of content
+    }
+    String decoded = StringUtils.decodeURIComponent(anchor);
+    View view = findCurrentView();
+    int y = 0;
+    for (PageBlock block : blocks) {
+      final int layoutWidth = contentWidth - listMarkerReserve(block);
+      final int blockHeight = block.getHeight(view, layoutWidth);
+      if (anchor.equals(block.getAnchor()) || (decoded != null && decoded.equals(block.getAnchor()))) {
+        return y;
+      }
+      if (block.hasChildAnchor(anchor)) {
+        return y + block.getChildAnchorTop(anchor, layoutWidth);
+      }
+      if (decoded != null && !decoded.equals(anchor) && block.hasChildAnchor(decoded)) {
+        return y + block.getChildAnchorTop(decoded, layoutWidth);
+      }
+      y += blockHeight;
+    }
+    return -1;
   }
 
   private @Nullable PageBlock findBlockAt (float localY) {
