@@ -23,6 +23,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.ComplexReceiver;
@@ -505,7 +506,19 @@ public abstract class PageBlock {
     ParseContext context = new ParseContext(null, fakeInstantView, null);
     ArrayList<PageBlock> out = new ArrayList<>(richMessage.blocks.length);
     for (TdApi.PageBlock rawPageBlock : richMessage.blocks) {
-      parseForChat(parent, out, context, rawPageBlock, urlOpenParameters);
+      final int sizeBefore = out.size();
+      try {
+        parseForChat(parent, out, context, rawPageBlock, urlOpenParameters);
+      } catch (Throwable t) {
+        // A single unknown/broken block must not collapse the whole message to "Unsupported".
+        // Roll back any partial output from this block, render a placeholder, and keep going.
+        while (out.size() > sizeBefore) {
+          out.remove(out.size() - 1);
+        }
+        Log.e("Cannot parse rich message block %s", t, rawPageBlock.getClass().getSimpleName());
+        context.lastBlock = null;
+        parse(parent, out, context, placeholderParagraph(Lang.getString(R.string.UnsupportedMessageType)), urlOpenParameters);
+      }
     }
     // Strip helper blocks meant for RecyclerView decorations (shadows, empty offsets)
     for (int i = out.size() - 1; i >= 0; i--) {
