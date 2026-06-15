@@ -57,6 +57,10 @@ public class TextEntityCustom extends TextEntity {
   public static final int LINK_TYPE_PHONE_NUMBER = 3;
   public static final int LINK_TYPE_ANCHOR = 4;
   public static final int LINK_TYPE_REFERENCE = 5;
+  public static final int LINK_TYPE_HASHTAG = 6;
+  public static final int LINK_TYPE_CASHTAG = 7;
+  public static final int LINK_TYPE_BANK_CARD = 8;
+  public static final int LINK_TYPE_BOT_COMMAND = 9;
 
   private final ViewController<?> context; // TODO move to TextEntity
 
@@ -371,6 +375,28 @@ public class TextEntityCustom extends TextEntity {
       case LINK_TYPE_REFERENCE: {
         if (callback == null || !(callback.onReferenceClick(view, link, referenceAnchorName, this.openParameters(view, text, part, isFromLongPressMenu))) || callback.onAnchorClick(view, link)) {
           // TODO open pop-up with ${referenceText}?
+        }
+        break;
+      }
+      case LINK_TYPE_HASHTAG:
+      case LINK_TYPE_CASHTAG: {
+        // Let the host (chat) handle the hashtag/cashtag search; no chat-independent action.
+        if (callback != null) {
+          callback.onHashtagClick(link);
+        }
+        break;
+      }
+      case LINK_TYPE_BANK_CARD: {
+        if (callback == null || !callback.onBankCardNumberClick(link)) {
+          if (tdlib != null && context != null) {
+            tdlib.ui().openCardNumber(context, link);
+          }
+        }
+        break;
+      }
+      case LINK_TYPE_BOT_COMMAND: {
+        if (callback != null) {
+          callback.onCommandClick(view, text, part, link, isFromLongPressMenu);
         }
         break;
       }

@@ -561,23 +561,23 @@ public class FormattedText {
         break;
       }
       case TdApi.RichTextHashtag.CONSTRUCTOR: {
-        // TODO: hashtag search, like TextEntityTypeHashtag; rendered as plain text for now
-        parseRichText(context, ((TdApi.RichTextHashtag) in).text, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        TdApi.RichTextHashtag hashtag = (TdApi.RichTextHashtag) in;
+        parseRichText(context, hashtag.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_HASHTAG, hashtag.hashtag, linkCached, referenceAnchorName, null, openParameters);
         break;
       }
       case TdApi.RichTextCashtag.CONSTRUCTOR: {
-        // TODO: cashtag search, like TextEntityTypeCashtag; rendered as plain text for now
-        parseRichText(context, ((TdApi.RichTextCashtag) in).text, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        TdApi.RichTextCashtag cashtag = (TdApi.RichTextCashtag) in;
+        parseRichText(context, cashtag.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_CASHTAG, cashtag.cashtag, linkCached, referenceAnchorName, null, openParameters);
         break;
       }
       case TdApi.RichTextBotCommand.CONSTRUCTOR: {
-        // TODO: send bot command on click, like TextEntityTypeBotCommand; rendered as plain text for now
-        parseRichText(context, ((TdApi.RichTextBotCommand) in).text, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        TdApi.RichTextBotCommand botCommand = (TdApi.RichTextBotCommand) in;
+        parseRichText(context, botCommand.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_BOT_COMMAND, botCommand.botCommand, linkCached, referenceAnchorName, null, openParameters);
         break;
       }
       case TdApi.RichTextBankCardNumber.CONSTRUCTOR: {
-        // TODO: show bank card actions on click, like TextEntityTypeBankCardNumber; rendered as plain text for now
-        parseRichText(context, ((TdApi.RichTextBankCardNumber) in).text, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        TdApi.RichTextBankCardNumber bankCard = (TdApi.RichTextBankCardNumber) in;
+        parseRichText(context, bankCard.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_BANK_CARD, bankCard.bankCardNumber, linkCached, referenceAnchorName, null, openParameters);
         break;
       }
       case TdApi.RichTextMathematicalExpression.CONSTRUCTOR: {
