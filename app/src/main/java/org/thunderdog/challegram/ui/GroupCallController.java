@@ -318,12 +318,13 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       }
     }
 
-    // Self preview.
+    // Self preview — camera and screen presentation are independent sources, each with its
+    // own self tile, and can be shown simultaneously.
     if (view != null) {
       if (calls.isVideoEnabled()) {
         if (!view.hasTile(GroupCallVideoView.SELF_ENDPOINT)) {
-          // Mirror only for the front camera (matches a natural selfie view); never for a screen-share.
-          boolean mirror = !calls.isScreencast() && calls.isFrontCamera();
+          // Mirror only for the front camera (matches a natural selfie view).
+          boolean mirror = calls.isFrontCamera();
           VideoSink selfSink = view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, mirror);
           if (selfSink != null) {
             // Video is already on (the capturer survives this controller), so only
@@ -334,6 +335,16 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         }
       } else {
         view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+      }
+      if (calls.isScreenSharing()) {
+        if (!view.hasTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT)) {
+          VideoSink screenSink = view.obtainTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT, false);
+          if (screenSink != null) {
+            calls.setScreenPreviewSink(screenSink);
+          }
+        }
+      } else {
+        view.removeTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT);
       }
     }
 
@@ -453,10 +464,12 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
           muted ? R.string.GroupCallUnmute : R.string.GroupCallMute));
         if (groupCall.isVideoChat) {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          // Camera and screen presentation are independent sources (separate group connections)
+          // and can be on at the same time, so the camera label tracks only the camera state.
           boolean videoOn = tdlib.groupCalls().isVideoEnabled();
-          boolean screenOn = tdlib.groupCalls().isScreencast();
+          boolean screenOn = tdlib.groupCalls().isScreenSharing();
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallVideo, R.drawable.baseline_videocam_24,
-            (videoOn && !screenOn) ? R.string.GroupCallStopVideo : R.string.GroupCallStartVideo));
+            videoOn ? R.string.GroupCallStopVideo : R.string.GroupCallStartVideo));
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallScreenShare, R.drawable.baseline_devices_other_24,
             screenOn ? R.string.GroupCallStopScreen : R.string.GroupCallStartScreen));
@@ -523,9 +536,9 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     if (calls.getState(groupCallId) == GroupCallManager.STATE_NONE) {
       return;
     }
-    // The camera toggle turns video OFF only when the active source is the camera; if a
-    // screen-share is active it switches to the camera instead (mutually exclusive).
-    if (calls.isVideoEnabled() && !calls.isScreencast()) {
+    // Camera and screen presentation are independent (separate connections); the camera toggle
+    // only affects the camera self tile and never touches the screen presentation.
+    if (calls.isVideoEnabled()) {
       calls.disableOutgoingVideo();
       if (videoView != null) {
         videoView.removeTile(GroupCallVideoView.SELF_ENDPOINT);
@@ -538,7 +551,6 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         return;
       }
       GroupCallVideoView view = ensureVideoView();
-      // Switching from screen to camera replaces the self tile (mirror for front camera).
       if (view != null) {
         view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
       }
@@ -553,32 +565,34 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     if (calls.getState(groupCallId) == GroupCallManager.STATE_NONE) {
       return;
     }
-    if (calls.isScreencast()) {
-      calls.disableOutgoingVideo();
+    if (calls.isScreenSharing()) {
+      calls.stopScreenSharing();
       if (videoView != null) {
-        videoView.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+        videoView.removeTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT);
       }
       buildCells();
       return;
     }
     // Request MediaProjection permission; on grant the result is stored in VoIPScreenCapture
-    // and we start the screencast capturer (replacing the camera).
+    // and we start the SECOND (presentation) connection that streams the screen as a distinct
+    // server-side source (StartGroupCallScreenSharing). Camera, if on, keeps running.
     context().requestScreenCapturePermission(() -> {
       if (isDestroyed() || calls.getState(groupCallId) == GroupCallManager.STATE_NONE) {
         return;
       }
       GroupCallVideoView view = ensureVideoView();
-      // Screen-share self preview is never mirrored.
+      // Screen-share self preview is never mirrored, and lives in its own tile (the camera self
+      // tile, if any, stays).
       if (view != null) {
-        view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+        view.removeTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT);
       }
-      VideoSink selfSink = view != null ? view.obtainTile(GroupCallVideoView.SELF_ENDPOINT, false) : null;
-      boolean started = calls.enableOutgoingScreencast(selfSink);
+      VideoSink selfSink = view != null ? view.obtainTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT, false) : null;
+      boolean started = calls.startScreenSharing(selfSink);
       if (!started) {
-        // FGS re-assert or screencast creation failed: clear the self tile we provisioned and
-        // surface an error so the user can retry.
+        // FGS re-assert / presentation create / screencast capturer failed: clear the self tile
+        // we provisioned and surface an error so the user can retry.
         if (view != null) {
-          view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
+          view.removeTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT);
         }
         UI.showToast(R.string.VoipScreenShareFailed, android.widget.Toast.LENGTH_SHORT);
       }

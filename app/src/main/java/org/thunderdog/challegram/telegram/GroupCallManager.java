@@ -54,7 +54,28 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   private final Tdlib tdlib;
   private final ReferenceList<Listener> listeners = new ReferenceList<>();
 
+  // Routes the presentation instance's handshake to StartGroupCallScreenSharing (instead of
+  // JoinVideoChat, which the main instance uses). Kept as a field so the same listener instance
+  // is reused for the lifetime of the manager.
+  private final GroupCallInstance.Listener presentationListener = new GroupCallInstance.Listener() {
+    @Override
+    public void onJoinPayloadEmitted (int audioSource, String json) {
+      onPresentationJoinPayloadEmitted(audioSource, json);
+    }
+
+    @Override
+    public void onNetworkStateChanged (boolean connected) {
+      // The presentation connection's own network state isn't surfaced separately; the main
+      // instance drives the call-level STATE_*. Nothing to do here.
+    }
+  };
+
   private @Nullable volatile GroupCallInstance instance;
+  // The SECOND group connection used for screen sharing (videoContentType =
+  // Screencast). Lives independently of the main instance so the user's camera and
+  // their screen presentation can be broadcast simultaneously as distinct sources.
+  // Non-null only while a screen share is active (or starting).
+  private @Nullable volatile GroupCallInstance presentationInstance;
   private int groupCallId;
   private int state = STATE_NONE;
   private boolean micMuted = true;
@@ -127,6 +148,12 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   public void leave () {
     final int leftGroupCallId = groupCallId;
     final boolean wasActive = state != STATE_NONE;
+    // Tear down any active screen-sharing presentation first (drops the FGS type + projection,
+    // ends it server-side). LeaveGroupCall below ends the whole call, so a separate
+    // EndGroupCallScreenSharing is redundant — just stop the presentation locally.
+    if (presentationInstance != null) {
+      tearDownPresentation();
+    }
     if (instance != null) {
       instance.stop();
       instance = null;
@@ -174,59 +201,57 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   /**
    * Enables the local outgoing camera and broadcasts it via TDLib. The caller must
    * hold the CAMERA permission. {@code localSink} mirrors the self preview tile.
+   *
+   * <p>The camera lives on the MAIN instance and is independent of a screen
+   * presentation (which is its own connection) — they can be broadcast at once.</p>
    */
   @MainThread
   public void enableOutgoingVideo (boolean useFrontCamera, @Nullable org.webrtc.VideoSink localSink) {
     if (instance == null || state == STATE_NONE) {
       return;
     }
-    boolean wasScreencast = instance.isScreencast();
-    if (wasScreencast) {
-      // Leaving the screencast: stop listening for its teardown and drop the stale projection
-      // token so a later capture can't reuse it.
-      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
-      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
-    }
     instance.enableOutgoingVideo(useFrontCamera, localSink);
-    if (wasScreencast) {
-      // Switched screen -> camera: drop the mediaProjection FGS type.
-      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
-    }
     if (groupCallId != 0) {
       tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, true), tdlib.typedOkHandler());
     }
     notifyVideoListeners();
   }
 
-  /** Whether the current outgoing video source is a screen-share (vs. camera). */
+  /**
+   * Whether a screen presentation is currently active (a second screen-sharing
+   * connection is up or coming up). This is now SEPARATE from the camera, which
+   * lives on the main instance — see {@link #isVideoEnabled()}.
+   */
   @AnyThread
-  public boolean isScreencast () {
-    final GroupCallInstance instance = this.instance;
-    return instance != null && instance.isScreencast();
+  public boolean isScreenSharing () {
+    return presentationInstance != null;
   }
 
   /**
-   * Enables outgoing screen sharing as the broadcast video source (replacing the camera).
-   * The MediaProjection permission result must already be stored in
-   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture}. Returns {@code true} on success;
-   * {@code false} (without enabling) if the mediaProjection FGS type couldn't be asserted or the
-   * screencast capturer failed to come up — the caller must surface an error / re-prompt.
+   * Starts a server-side screen-sharing presentation: a SECOND group connection
+   * (videoContentType = Screencast) joins the call via
+   * {@link TdApi.StartGroupCallScreenSharing} and streams the screen as a distinct
+   * presentation source, coexisting with the user's camera on the main instance.
    *
-   * <p>NOTE: screen sharing in a group call is a DISTINCT TDLib concept from camera video
-   * ({@link TdApi.StartGroupCallScreenSharing} / {@link TdApi.EndGroupCallScreenSharing}, which
-   * require a SEPARATE tgcalls screencast endpoint producing its own {@code audioSourceId} +
-   * join {@code payload}). The native bridge here reuses the main call's single outgoing-video
-   * slot and does NOT produce a screencast join payload, so the full
-   * {@code StartGroupCallScreenSharing} handshake is OUT OF SCOPE. We therefore do NOT announce
-   * screen sharing to TDLib at all here (rather than MISusing
-   * {@code ToggleGroupCallIsMyVideoEnabled}, which is the CAMERA-video toggle): the local
-   * screencast still streams as the outgoing video, but it is not registered as a separate
-   * presentation source server-side. See {@code TODO(group-screencast)} when wiring the full API.
+   * <p>The MediaProjection permission result must already be stored in
+   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture}. Returns {@code true} once the
+   * presentation instance + capturer are up and the join handshake has been kicked off;
+   * {@code false} (after rolling everything back) if the mediaProjection FGS type couldn't be
+   * asserted, the native presentation instance couldn't be created, or the screencast capturer
+   * failed to come up — the caller must surface an error / re-prompt.</p>
+   *
+   * <p>Handshake: the presentation instance emits a join payload (ssrc + JSON); the ssrc becomes
+   * the {@code audioSourceId} and the JSON the {@code payload} for
+   * {@code StartGroupCallScreenSharing(groupCallId, audioSourceId, payload)}, whose
+   * {@code Text} response is fed back via {@code setJoinResponsePayload}.</p>
    */
   @MainThread
-  public boolean enableOutgoingScreencast (@Nullable org.webrtc.VideoSink localSink) {
-    if (instance == null || state == STATE_NONE) {
+  public boolean startScreenSharing (@Nullable org.webrtc.VideoSink localSink) {
+    if (instance == null || state == STATE_NONE || groupCallId == 0) {
       return false;
+    }
+    if (presentationInstance != null) {
+      return true; // already sharing
     }
     // Android 10+: add the mediaProjection FGS type before the capturer obtains a MediaProjection.
     // If it fails, ABORT — don't run into a startCapture that will throw on the media thread.
@@ -235,37 +260,85 @@ public class GroupCallManager implements GroupCallInstance.Listener {
       notifyVideoListeners();
       return false;
     }
-    // Register the teardown callback (system-revoke / start-failure) before starting.
-    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(this::onScreencastUnavailable);
-    instance.enableOutgoingScreencast(localSink);
-    // Reconcile: if creation failed, drop the FGS type back and report failure so we don't
-    // pretend screen sharing is live. Do NOT announce camera-video to TDLib (see note above).
-    if (!instance.isScreencast()) {
-      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+    // Create the SECOND (screencast) connection. Muted: a screen presentation carries no mic.
+    GroupCallInstance presentation = new GroupCallInstance(true, true);
+    if (!presentation.isValid()) {
+      presentation.stop();
       org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
       org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
       notifyVideoListeners();
       return false;
     }
+    presentation.setListener(presentationListener);
+    this.presentationInstance = presentation;
+    // Register the teardown callback (system-revoke / start-failure) before starting capture.
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(this::onScreencastUnavailable);
+    // Attach the screencast capturer (ScreenCapturerAndroid via the static screencast flag).
+    presentation.enableOutgoingScreencast(localSink);
+    if (!presentation.isScreencast()) {
+      // Capturer failed to come up — roll the whole presentation back.
+      tearDownPresentation();
+      notifyVideoListeners();
+      return false;
+    }
+    // Kick off the screencast join handshake; payload arrives in presentationListener.
+    presentation.emitJoinPayload();
     notifyVideoListeners();
     return true;
+  }
+
+  /** Stops the active screen-sharing presentation (if any): notifies TDLib and tears it down. */
+  @MainThread
+  public void stopScreenSharing () {
+    if (presentationInstance == null) {
+      return;
+    }
+    final int targetGroupCallId = groupCallId;
+    tearDownPresentation();
+    if (targetGroupCallId != 0) {
+      tdlib.send(new TdApi.EndGroupCallScreenSharing(targetGroupCallId), tdlib.typedOkHandler());
+    }
+    notifyVideoListeners();
+  }
+
+  /** Pauses/resumes the presentation video without leaving the screen-sharing connection. */
+  @MainThread
+  public void setScreenSharingPaused (boolean paused) {
+    if (presentationInstance == null || groupCallId == 0) {
+      return;
+    }
+    tdlib.send(new TdApi.ToggleGroupCallScreenSharingIsPaused(groupCallId, paused), tdlib.typedOkHandler());
+  }
+
+  /**
+   * Tears down the presentation instance + capturer and drops the mediaProjection FGS type,
+   * WITHOUT notifying TDLib (callers that need the EndGroupCallScreenSharing request send it
+   * themselves). Idempotent.
+   */
+  @MainThread
+  private void tearDownPresentation () {
+    final GroupCallInstance presentation = this.presentationInstance;
+    this.presentationInstance = null;
+    // Stop listening for this presentation's teardown and drop the stale projection token so a
+    // later capture can't reuse it.
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+    org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
+    if (presentation != null) {
+      presentation.stop();
+    }
+    // Drop the mediaProjection FGS type once screen sharing stops.
+    org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
   }
 
   /**
    * Drives screen-share teardown when the source becomes unavailable below the controller layer
    * (system revoked the projection, or the screencast capturer failed to start). Invoked on the
-   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}.
+   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}. Notifies TDLib so the
+   * server-side presentation is ended too.
    */
   @MainThread
   private void onScreencastUnavailable () {
-    if (instance != null && instance.isScreencast()) {
-      disableOutgoingVideo();
-    } else {
-      // Already torn down natively; reconcile FGS type / preview state.
-      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
-      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
-      notifyVideoListeners();
-    }
+    stopScreenSharing();
   }
 
   @MainThread
@@ -274,22 +347,8 @@ public class GroupCallManager implements GroupCallInstance.Listener {
       return;
     }
     boolean wasEnabled = instance.isVideoEnabled();
-    boolean wasScreencast = instance.isScreencast();
-    if (wasScreencast) {
-      // Leaving the screencast: stop listening for its teardown and drop the stale projection
-      // token so a later capture can't reuse it.
-      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
-      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
-    }
     instance.disableOutgoingVideo();
-    if (wasScreencast) {
-      // Drop the mediaProjection FGS type once screen sharing stops.
-      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
-    }
-    // Only un-announce camera video if the camera (not a screencast) was the announced source:
-    // screen sharing is never announced via ToggleGroupCallIsMyVideoEnabled (see
-    // enableOutgoingScreencast note), so don't send a spurious video-off for it.
-    if (wasEnabled && !wasScreencast && groupCallId != 0 && state != STATE_NONE) {
+    if (wasEnabled && groupCallId != 0 && state != STATE_NONE) {
       tdlib.send(new TdApi.ToggleGroupCallIsMyVideoEnabled(groupCallId, false), tdlib.typedOkHandler());
     }
     notifyVideoListeners();
@@ -300,6 +359,15 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   public void setLocalPreviewSink (@Nullable org.webrtc.VideoSink localSink) {
     if (instance != null) {
       instance.setLocalPreviewSink(localSink);
+    }
+  }
+
+  /** Re-routes the screen-presentation preview into a (new) sink without restarting capture. */
+  @MainThread
+  public void setScreenPreviewSink (@Nullable org.webrtc.VideoSink localSink) {
+    final GroupCallInstance presentation = this.presentationInstance;
+    if (presentation != null) {
+      presentation.setLocalPreviewSink(localSink);
     }
   }
 
@@ -386,6 +454,35 @@ public class GroupCallManager implements GroupCallInstance.Listener {
         return;
       }
       setState(connected ? STATE_CONNECTED : STATE_JOINING);
+    });
+  }
+
+  /**
+   * Relays the presentation instance's join payload to TDLib via StartGroupCallScreenSharing.
+   * The emitted ssrc is the {@code audioSourceId}; the JSON is the {@code payload}. The Text
+   * response is fed back into the presentation engine via setJoinResponsePayload.
+   */
+  private void onPresentationJoinPayloadEmitted (int audioSource, String json) {
+    final int targetGroupCallId = this.groupCallId;
+    UI.post(() -> {
+      final GroupCallInstance presentation = this.presentationInstance;
+      if (presentation == null || groupCallId != targetGroupCallId || state == STATE_NONE) {
+        return; // screen share stopped before the payload arrived
+      }
+      tdlib.send(new TdApi.StartGroupCallScreenSharing(targetGroupCallId, audioSource, json), (result, error) -> UI.post(() -> {
+        if (presentationInstance != presentation || groupCallId != targetGroupCallId) {
+          return; // stopped / replaced in the meantime
+        }
+        if (error != null) {
+          // Server rejected the presentation: tear it down locally so we don't pretend it's live.
+          tearDownPresentation();
+          notifyVideoListeners();
+          return;
+        }
+        if (result != null) {
+          presentation.setJoinResponsePayload(result.text);
+        }
+      }));
     });
   }
 

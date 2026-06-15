@@ -119,7 +119,13 @@ namespace {
 }
 
 // Creates a group-call instance in RTC mode. Returns an opaque native pointer.
-JNI_OBJECT_FUNC(jlong, voip_GroupCallInstance, newInstance, jboolean muted) {
+//
+// isPresentation selects the SECOND group connection used for screen sharing: it
+// sets videoContentType = Screencast so tgcalls joins the call as a distinct
+// "screen sharing" participant whose emitted ssrc becomes the audioSourceId for
+// TDLib's StartGroupCallScreenSharing. The main call instance passes false (None),
+// keeping the camera/voice connection it always had. Both share this same bridge.
+JNI_OBJECT_FUNC(jlong, voip_GroupCallInstance, newInstance, jboolean muted, jboolean isPresentation) {
   if (g_vm == nullptr) {
     env->GetJavaVM(&g_vm);
   }
@@ -134,6 +140,9 @@ JNI_OBJECT_FUNC(jlong, voip_GroupCallInstance, newInstance, jboolean muted) {
   descriptor.threads = tgcalls::StaticThreads::getThreads();
   descriptor.isConference = false;
   descriptor.useDummyChannel = true;
+  descriptor.videoContentType = (isPresentation == JNI_TRUE)
+    ? tgcalls::VideoContentType::Screencast
+    : tgcalls::VideoContentType::None;
   descriptor.networkStateUpdated = [ctx](tgcalls::GroupNetworkState state) {
     bool connected = state.isConnected;
     ctx->callOnJava([connected](JNIEnv *env, jobject obj, jclass cls) {

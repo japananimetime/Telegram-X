@@ -55,18 +55,52 @@ public class GroupCallInstance {
   private boolean frontCamera = true;
   // Whether the current outgoing capturer is a screen-share (vs. camera).
   private volatile boolean screencast;
+  // Whether this instance is the SECOND (presentation) connection used for screen
+  // sharing — created with videoContentType = Screencast natively. A presentation
+  // instance carries only the screencast video; the main instance carries camera/voice.
+  private final boolean presentation;
+  // The audio source (ssrc) emitted during the join handshake; for a presentation
+  // instance this becomes the audioSourceId passed to StartGroupCallScreenSharing.
+  // Written on the native callback thread, read on the UI thread after the listener fires.
+  private volatile int audioSource;
   // Set once stop() has run; all public video methods become no-ops afterwards
   // so a late call can't touch a torn-down native instance.
   private volatile boolean destroyed;
   private @Nullable Listener listener;
 
   /**
-   * Creates the native group-call instance.
+   * Creates the main native group-call instance (camera + voice).
    *
    * @param muted whether the local microphone starts muted
    */
   public GroupCallInstance (boolean muted) {
-    this.nativePtr = newInstance(muted);
+    this(muted, false);
+  }
+
+  /**
+   * Creates a native group-call instance.
+   *
+   * @param muted whether the local microphone starts muted
+   * @param presentation when {@code true}, creates the SECOND screen-sharing connection
+   *                      (videoContentType = Screencast) instead of the main camera/voice one
+   */
+  public GroupCallInstance (boolean muted, boolean presentation) {
+    this.presentation = presentation;
+    this.nativePtr = newInstance(muted, presentation);
+  }
+
+  /** Whether this is the presentation (screen-sharing) connection rather than the main call. */
+  public boolean isPresentation () {
+    return presentation;
+  }
+
+  /**
+   * The audio source (ssrc) the engine emitted in its join payload. For a presentation
+   * instance this is the {@code audioSourceId} that {@code StartGroupCallScreenSharing}
+   * expects. Valid only after {@link Listener#onJoinPayloadEmitted}.
+   */
+  public int getAudioSource () {
+    return audioSource;
   }
 
   public void setListener (@Nullable Listener listener) {
@@ -279,6 +313,7 @@ public class GroupCallInstance {
 
   @Keep
   void handleEmitJoinPayload (int audioSource, String json) {
+    this.audioSource = audioSource;
     final Listener listener = this.listener;
     if (listener != null) {
       listener.onJoinPayloadEmitted(audioSource, json);
@@ -293,7 +328,7 @@ public class GroupCallInstance {
     }
   }
 
-  private native long newInstance (boolean muted);
+  private native long newInstance (boolean muted, boolean isPresentation);
   private native void emitJoinPayload (long ptr);
   private native void setJoinResponsePayload (long ptr, String json);
   private native void setMuted (long ptr, boolean muted);
