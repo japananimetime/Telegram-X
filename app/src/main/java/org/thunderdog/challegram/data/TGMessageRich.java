@@ -80,7 +80,7 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
     destroyBlocks();
     ArrayList<PageBlock> parsedBlocks;
     try {
-      parsedBlocks = PageBlock.parseRichMessage(controller(), richMessage, openParameters());
+      parsedBlocks = PageBlock.parseRichMessage(controller(), this, richMessage, openParameters());
     } catch (Throwable t) {
       Log.e("Cannot parse rich message blocks", t);
       parsedBlocks = new ArrayList<>(1);
