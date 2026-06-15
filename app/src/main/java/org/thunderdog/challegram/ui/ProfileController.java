@@ -434,8 +434,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       int buttonColorId = getHeaderIconColorId();
 
       if (mode == Mode.SECRET || mode == Mode.USER) {
+        float callAlpha = userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f;
+        HeaderButton videoCallButton = header.addButton(realMenu, R.id.menu_btn_callVideo, R.drawable.baseline_videocam_24, buttonColorId, this, Screen.dp(48f));
+        videoCallButton.setAlpha(callAlpha);
         callButton = header.addButton(realMenu, R.id.menu_btn_call, R.drawable.baseline_phone_24, buttonColorId, this, Screen.dp(48f));
-        callButton.setAlpha(userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f);
+        callButton.setAlpha(callAlpha);
       }
 
       if (mode == Mode.SECRET) {
@@ -495,6 +498,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     } else if (id == R.id.menu_btn_call) {
       if (userFull != null) {
         tdlib.context().calls().makeCall(this, user.id, userFull);
+      }
+    } else if (id == R.id.menu_btn_callVideo) {
+      if (userFull != null) {
+        tdlib.context().calls().makeCall(this, user.id, userFull, Settings.instance().needOutboundCallsPrompt(), true);
       }
       /*case R.id.menu_btn_edit: {
         if (supergroupFull != null) {
@@ -2761,7 +2768,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private void checkUserButtons () {
     if (headerView != null && !isEditing()) {
-      headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_call, userFull.canBeCalled || userFull.hasPrivateCalls ? 1f : 0f);
+      float callAlpha = userFull.canBeCalled || userFull.hasPrivateCalls ? 1f : 0f;
+      headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_call, callAlpha);
+      headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_callVideo, callAlpha);
     }
   }
 

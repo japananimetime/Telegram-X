@@ -74,6 +74,7 @@
   <item type="id" name="menu_btn_clear" />
   <item type="id" name="menu_btn_stopwatch" />
   <item type="id" name="menu_btn_call" />
+  <item type="id" name="menu_btn_callVideo" />
   <item type="id" name="menu_btn_share" />
   <item type="id" name="menu_btn_unpinAll" />
 

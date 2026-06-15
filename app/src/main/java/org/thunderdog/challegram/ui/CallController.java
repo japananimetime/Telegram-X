@@ -339,8 +339,24 @@ public class CallController extends ViewController<CallController.Arguments> imp
   @Override
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
+    updateButtonWrapHeight(extraBottomInset);
     Views.setPaddingBottom(buttonWrap, extraBottomInset);
     Views.setPaddingBottom(callControlsLayout, extraBottomInset);
+  }
+
+  // buttonWrap is a fixed-height bottom strip whose bottom padding reserves the gesture-nav inset.
+  // The strip must be tall enough to hold the 72dp buttons ON TOP of that inset, otherwise the inset
+  // padding squeezes the buttons up out of the strip (clipped → invisible). Grow the height by the inset.
+  private void updateButtonWrapHeight (int extraBottomInset) {
+    if (buttonWrap == null) {
+      return;
+    }
+    int targetHeight = Screen.dp(76f) + extraBottomInset;
+    ViewGroup.LayoutParams params = buttonWrap.getLayoutParams();
+    if (params != null && params.height != targetHeight) {
+      params.height = targetHeight;
+      buttonWrap.setLayoutParams(params);
+    }
   }
 
   @Override
@@ -656,7 +672,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     videoButtonView.setVisibility(View.GONE);
 
     buttonWrap = new FrameLayoutFix(context);
-    buttonWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(76f), Gravity.BOTTOM));
+    buttonWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(76f) + extraBottomInset, Gravity.BOTTOM));
     buttonWrap.addView(muteButtonView);
     buttonWrap.addView(videoButtonView);
     buttonWrap.addView(messageButtonView);
@@ -1067,9 +1083,12 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void updateControlsAlpha () {
-    float alpha = lastHeaderFactor * buttonsFactor;
-    buttonWrap.setAlpha(alpha);
-    buttonWrap.setTranslationY((1f - lastHeaderFactor) * buttonWrap.getMeasuredHeight() * .2f);
+    // The in-call control row (mute / video / speaker) must follow the call-active state only, NOT the
+    // navigation header reveal factor: lastHeaderFactor legitimately drops to 0 (e.g. when the call
+    // screen is presented without nav chrome), which previously zeroed these controls mid-call and
+    // left only the hang-up button visible.
+    buttonWrap.setAlpha(buttonsFactor);
+    buttonWrap.setTranslationY((1f - buttonsFactor) * buttonWrap.getMeasuredHeight() * .2f);
   }
 
   private void updateCallButtons () {
