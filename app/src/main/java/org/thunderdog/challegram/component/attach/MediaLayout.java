@@ -109,6 +109,17 @@ public class MediaLayout extends FrameLayoutFix implements
     void onSendPhoto (ImageGalleryFile file, boolean isFirst);
   }
 
+  /**
+   * Receives a map point committed by the user in {@link #MODE_LOCATION}.
+   * Lets a non-{@link MessagesController} owner (e.g. a business-location editor)
+   * reuse the same map picker UI. When unset, the picked location is delivered
+   * to the {@link MessagesController} target via {@link MessagesController#sendPickedLocation},
+   * preserving the existing chat attach-location behavior exactly.
+   */
+  public interface LocationPickerCallback {
+    void onLocationPicked (TdApi.Location location, int heading, TdApi.MessageSendOptions sendOptions);
+  }
+
   public static final long REVEAL_DURATION = 220l;
   public static final long REVEAL_HIDE_DURATION = 285l;
 
@@ -126,6 +137,7 @@ public class MediaLayout extends FrameLayoutFix implements
   // Data
   private boolean noMediaAccess;
   private @Nullable MessagesController target;
+  private @Nullable LocationPickerCallback locationPickerCallback;
 
   // Children
   private MediaBottomBaseController<?>[] controllers;
@@ -210,6 +222,18 @@ public class MediaLayout extends FrameLayoutFix implements
     int getDefaultItemIndex ();
     MediaBottomBaseController<?> createControllerForIndex(int index);
     boolean needBottomBar ();
+  }
+
+  /**
+   * Opens the map picker in {@link #MODE_LOCATION} for an owner that is not a
+   * {@link MessagesController} (e.g. the business-location editor). The committed
+   * point is delivered to {@code callback} instead of a chat. No chat target is
+   * set, so all chat-specific branches (live location, slow mode, scheduling)
+   * stay disabled exactly as they already are in {@link #inSpecificMode()}.
+   */
+  public void initLocationPicker (@NonNull LocationPickerCallback callback) {
+    this.locationPickerCallback = callback;
+    init(MODE_LOCATION, null);
   }
 
   public void init (int mode, MessagesController target) {
@@ -1362,8 +1386,11 @@ public class MediaLayout extends FrameLayoutFix implements
 
   public void sendLocation (double latitude, double longitude, double accuracy, int heading, int livePeriod) {
     pickDateOrProceed((sendOptions, disableMarkdown) -> {
-      if (target != null) {
-        TdApi.Location location = new TdApi.Location(latitude, longitude, accuracy);
+      TdApi.Location location = new TdApi.Location(latitude, longitude, accuracy);
+      if (locationPickerCallback != null) {
+        // Non-chat owner (e.g. business-location editor) picked a point on the map.
+        locationPickerCallback.onLocationPicked(location, heading, sendOptions);
+      } else if (target != null) {
         if (inSpecificMode()) {
           target.sendPickedLocation(location, heading, sendOptions);
         } else {

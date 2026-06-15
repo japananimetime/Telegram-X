@@ -315,7 +315,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   ViewPager.OnPageChangeListener, ViewPagerTopView.OnItemClickListener,
   TGMessage.SelectableDelegate, GlobalAccountListener, EmojiToneHelper.Delegate, ComplexHeaderView.Callback, LiveLocationHelper.Callback, CreatePollController.Callback,
   HapticMenuHelper.Provider, HapticMenuHelper.OnItemClickListener, TdlibSettingsManager.DismissRequestsListener, InputView.SelectionChangeListener,
-  SavedMessagesTagsListener {
+  SavedMessagesTagsListener, MediaLayout.LocationPickerCallback {
 
   private boolean reuseEnabled;
   private boolean destroyInstance;
@@ -8167,6 +8167,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
         onDestroyCommandKeyboard();
       }
     }
+  }
+
+  @Override
+  public void onLocationPicked (TdApi.Location location, int heading, TdApi.MessageSendOptions sendOptions) {
+    // MediaLayout.LocationPickerCallback adapter — delegates to the existing chat path.
+    sendPickedLocation(location, heading, sendOptions);
   }
 
   private void shareCurrentLocation (final boolean destroyKeyboard, Location location) {

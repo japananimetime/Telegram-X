@@ -6320,6 +6320,9 @@
   <string name="BusinessLocation">Location</string>
   <string name="BusinessLocationAddress">Address</string>
   <string name="BusinessLocationHint">Display the location of your business on your account.</string>
+  <string name="BusinessLocationMap">Set on map</string>
+  <string name="BusinessLocationMapSet">Point selected</string>
+  <string name="BusinessLocationMapEmpty">Not selected</string>
   <string name="BusinessOpeningHours">Opening Hours</string>
   <string name="BusinessEdit">Edit</string>
   <string name="BusinessQuickReplyShortcut">Quick reply</string>

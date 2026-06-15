@@ -22,6 +22,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.attach.MediaLayout;
+import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
@@ -39,10 +41,11 @@ import me.vkryl.core.StringUtils;
 /**
  * Editor for the Telegram Business location. Sets a textual address via
  * {@link TdApi.SetBusinessLocation}; clearing the address removes the location.
- * Pinning an exact point on a map is a follow-up — when editing an existing
- * location its map point (if any) is preserved.
+ * An exact map point ({@link TdApi.Location}) can be pinned via the shared
+ * {@link MediaLayout} location picker ({@link MediaLayout#MODE_LOCATION}); when
+ * editing an existing location its map point (if any) is preserved.
  */
-public class BusinessLocationController extends EditBaseController<TdApi.BusinessLocation> implements SettingsAdapter.TextChangeListener {
+public class BusinessLocationController extends EditBaseController<TdApi.BusinessLocation> implements SettingsAdapter.TextChangeListener, View.OnClickListener, MediaLayout.LocationPickerCallback {
 
   private SettingsAdapter adapter;
   private String address = "";
@@ -80,6 +83,13 @@ public class BusinessLocationController extends EditBaseController<TdApi.Busines
         Views.setSingleLine(editText.getEditText(), false);
         editText.setMaxLength(96);
       }
+
+      @Override
+      protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
+        if (item.getId() == R.id.btn_chooseLocationOnMap) {
+          view.setData(existingPoint != null ? R.string.BusinessLocationMapSet : R.string.BusinessLocationMapEmpty);
+        }
+      }
     };
 
     List<ListItem> items = new ArrayList<>();
@@ -87,6 +97,8 @@ public class BusinessLocationController extends EditBaseController<TdApi.Busines
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_EDITTEXT_REUSABLE, R.id.input, 0, R.string.BusinessLocationAddress)
       .setStringValue(address));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_chooseLocationOnMap, 0, R.string.BusinessLocationMap));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.BusinessLocationHint).setTextColorId(ColorId.textLight));
 
@@ -105,7 +117,38 @@ public class BusinessLocationController extends EditBaseController<TdApi.Busines
   }
 
   @Override
+  public void onClick (View v) {
+    if (v.getId() == R.id.btn_chooseLocationOnMap) {
+      MediaLayout mediaLayout = new MediaLayout(this);
+      mediaLayout.initLocationPicker(this);
+      mediaLayout.show();
+    }
+  }
+
+  @Override
+  public void onLocationPicked (TdApi.Location location, int heading, TdApi.MessageSendOptions sendOptions) {
+    // User committed a point in the shared map picker. Store it and refresh the row.
+    this.existingPoint = location;
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_chooseLocationOnMap);
+    }
+    // SetBusinessLocation requires a 1-96 character address (the point alone is
+    // not a valid business location). If we already have one, persist the new
+    // point right away; otherwise keep it locally — it will be saved on Done once
+    // an address is entered.
+    if (!StringUtils.isEmpty(this.address.trim())) {
+      saveLocation(false);
+    } else {
+      UI.showToast(R.string.BusinessLocationAddress, android.widget.Toast.LENGTH_SHORT);
+    }
+  }
+
+  @Override
   protected boolean onDoneClick () {
+    return saveLocation(true);
+  }
+
+  private boolean saveLocation (boolean navigateBackOnSuccess) {
     if (isInProgress()) {
       return true;
     }
@@ -121,7 +164,7 @@ public class BusinessLocationController extends EditBaseController<TdApi.Busines
       setInProgress(false);
       if (error != null) {
         UI.showToast(TD.toErrorString(error), android.widget.Toast.LENGTH_SHORT);
-      } else {
+      } else if (navigateBackOnSuccess) {
         onSaveCompleted();
       }
     }));

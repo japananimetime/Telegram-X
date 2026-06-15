@@ -428,6 +428,7 @@
   <item type="id" name="btn_setEmojiStatusTimed2Days" />
   <item type="id" name="btn_setEmojiStatusTimedCustom" />
   <item type="id" name="btn_places" />
+  <item type="id" name="btn_chooseLocationOnMap" />
   <item type="id" name="btn_shareLiveLocation" />
   <item type="id" name="btn_messageLiveStop" />
   <item type="id" name="btn_messageLiveTemp" />
