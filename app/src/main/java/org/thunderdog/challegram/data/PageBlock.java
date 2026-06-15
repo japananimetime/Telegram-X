@@ -377,6 +377,9 @@ public abstract class PageBlock {
 
     private ListItemInfo[] openedList;
     private PageBlock detailsBlock;
+    // Set only for the rich-message (chat-bubble) path, so audio/voice blocks can render an
+    // interactive, canvas-drawable player (PageBlockRichFile) tied to this message.
+    private TGMessage richMessageHost;
 
     public ParseContext (String url, TdApi.WebPageInstantView instantView, TGPlayerController.PlayListBuilder playListBuilder) {
       this.url = url;
@@ -502,9 +505,10 @@ public abstract class PageBlock {
    * it does not emit RecyclerView-specific decoration blocks (shadows, offsets)
    * and replaces blocks that require dedicated views with canvas-drawable substitutes.
    */
-  public static ArrayList<PageBlock> parseRichMessage (ViewController<?> parent, @NonNull TdApi.RichMessage richMessage, @Nullable TdlibUi.UrlOpenParameters urlOpenParameters) throws UnsupportedPageBlockException {
+  public static ArrayList<PageBlock> parseRichMessage (ViewController<?> parent, @Nullable TGMessage host, @NonNull TdApi.RichMessage richMessage, @Nullable TdlibUi.UrlOpenParameters urlOpenParameters) throws UnsupportedPageBlockException {
     TdApi.WebPageInstantView fakeInstantView = new TdApi.WebPageInstantView(richMessage.blocks, 0, 2, richMessage.isRtl, true, null);
-    ParseContext context = new ParseContext(null, fakeInstantView, null);
+    ParseContext context = new ParseContext(null, fakeInstantView, host != null ? host.manager : null);
+    context.richMessageHost = host;
     ArrayList<PageBlock> out = new ArrayList<>(richMessage.blocks.length);
     for (TdApi.PageBlock rawPageBlock : richMessage.blocks) {
       final int sizeBefore = out.size();
@@ -553,17 +557,26 @@ public abstract class PageBlock {
       // the canvas-drawn bubble yet; show the track's real metadata instead of a generic placeholder.
       case TdApi.PageBlockAudio.CONSTRUCTOR: {
         TdApi.PageBlockAudio audio = (TdApi.PageBlockAudio) block;
-        parse(parent, out, context, placeholderParagraph(buildAudioLabel(audio.audio)), openParameters);
+        if (context.richMessageHost != null && audio.audio != null) {
+          // Interactive, canvas-drawable player wired to the audio player.
+          context.process(new PageBlockRichFile(parent, context.richMessageHost, audio), out);
+        } else {
+          parse(parent, out, context, placeholderParagraph(buildAudioLabel(audio.audio)), openParameters);
+        }
         context.processCaption(parent, audio, audio.caption, openParameters, out);
         break;
       }
       case TdApi.PageBlockVoiceNote.CONSTRUCTOR: {
         TdApi.PageBlockVoiceNote voiceNote = (TdApi.PageBlockVoiceNote) block;
-        String voiceLabel = "🎤 " + Lang.getString(R.string.ChatContentVoice);
-        if (voiceNote.voiceNote != null && voiceNote.voiceNote.duration > 0) {
-          voiceLabel += "  " + Strings.buildDuration(voiceNote.voiceNote.duration);
+        if (context.richMessageHost != null && voiceNote.voiceNote != null) {
+          context.process(new PageBlockRichFile(parent, context.richMessageHost, voiceNote), out);
+        } else {
+          String voiceLabel = "🎤 " + Lang.getString(R.string.ChatContentVoice);
+          if (voiceNote.voiceNote != null && voiceNote.voiceNote.duration > 0) {
+            voiceLabel += "  " + Strings.buildDuration(voiceNote.voiceNote.duration);
+          }
+          parse(parent, out, context, placeholderParagraph(voiceLabel), openParameters);
         }
-        parse(parent, out, context, placeholderParagraph(voiceLabel), openParameters);
         context.processCaption(parent, voiceNote, voiceNote.caption, openParameters, out);
         break;
       }
