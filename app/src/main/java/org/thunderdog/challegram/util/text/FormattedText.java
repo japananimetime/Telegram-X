@@ -511,8 +511,19 @@ public class FormattedText {
       }
       case TdApi.RichTextCustomEmoji.CONSTRUCTOR: {
         TdApi.RichTextCustomEmoji customEmoji = (TdApi.RichTextCustomEmoji) in;
-        // TODO: render the actual custom emoji (customEmoji.customEmojiId); alternative text is rendered for now
-        parseRichText(context, new TdApi.RichTextPlain(customEmoji.alternativeText), out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        // Render the actual custom emoji over its alternative text: Text draws the glyph for any
+        // entity whose isCustomEmoji() is true, via the same text-media receiver path as RichTextIcon.
+        final String altText = customEmoji.alternativeText != null ? customEmoji.alternativeText : "";
+        out.append(altText);
+        TextEntityCustom custom = new TextEntityCustom(context, context.tdlib(), altText, offset[0], offset[0] + altText.length(), flags, linkCached ? new TdlibUi.UrlOpenParameters(openParameters).forceInstantView() : openParameters)
+          .setReferenceAnchorName(referenceAnchorName).setCopyLink(copyLink)
+          .setCustomEmojiId(customEmoji.customEmojiId);
+        if (linkType != TextEntityCustom.LINK_TYPE_NONE) {
+          custom.setLink(linkOffset, linkLength, linkType, link, linkCached);
+          linkLength[0] += altText.length();
+        }
+        entities.add(custom);
+        offset[0] += altText.length();
         break;
       }
       case TdApi.RichTextDateTime.CONSTRUCTOR: {

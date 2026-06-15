@@ -72,6 +72,7 @@ public class TextEntityCustom extends TextEntity {
   private String anchorName;
   private String referenceAnchorName;
   private TdApi.RichTextIcon icon;
+  private long customEmojiId;
   private String copyLink;
 
   public TextEntityCustom (@Nullable ViewController<?> context, @Nullable Tdlib tdlib, String in, int offset, int end, int flags, @Nullable TdlibUi.UrlOpenParameters openParameters) {
@@ -86,6 +87,11 @@ public class TextEntityCustom extends TextEntity {
 
   public TextEntityCustom setIcon (TdApi.RichTextIcon icon) {
     this.icon = icon;
+    return this;
+  }
+
+  public TextEntityCustom setCustomEmojiId (long customEmojiId) {
+    this.customEmojiId = customEmojiId;
     return this;
   }
 
@@ -148,6 +154,9 @@ public class TextEntityCustom extends TextEntity {
     if (icon != null) {
       copy.setIcon(icon);
     }
+    if (customEmojiId != 0) {
+      copy.setCustomEmojiId(customEmojiId);
+    }
     return copy;
   }
 
@@ -201,12 +210,12 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public boolean isCustomEmoji () {
-    return false;
+    return customEmojiId != 0;
   }
 
   @Override
   public long getCustomEmojiId () {
-    return 0;
+    return customEmojiId;
   }
 
   @Override
@@ -216,7 +225,7 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public boolean hasMedia () {
-    return isIcon();
+    return isIcon() || isCustomEmoji();
   }
 
   @Override
