@@ -26,6 +26,7 @@ import androidx.annotation.Nullable;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.MediaCollectorDelegate;
 import org.thunderdog.challegram.core.Lang;
@@ -458,6 +459,16 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
         preview.draw(c);
       }
       receiver.draw(c);
+      if (map != null) {
+        // Neither the Google static-map URL nor TDLib's GetMapThumbnailFile bakes in a location pin,
+        // so draw a marker overlay whose tip points at the map centre (the location), like a real client.
+        Drawable pinIcon = view.getSparseDrawable(R.drawable.baseline_location_on_24, ColorId.NONE);
+        int cx = (receiver.getLeft() + receiver.getRight()) / 2;
+        int cy = (receiver.getTop() + receiver.getBottom()) / 2;
+        float pinW = pinIcon.getMinimumWidth();
+        float pinH = pinIcon.getMinimumHeight();
+        Drawables.draw(c, pinIcon, cx - pinW / 2f, cy - pinH, Paints.getPorterDuffPaint(0xffeb5757));
+      }
     } else if (collageContext != null) {
       // Instant View provides the multi-image receiver from the PageBlockView; the chat-bubble
       // (TGMessageRich) shares one ComplexReceiver and passes it via iconReceiver + a key offset.

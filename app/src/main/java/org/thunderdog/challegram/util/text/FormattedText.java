@@ -566,9 +566,10 @@ public class FormattedText {
         break;
       }
       case TdApi.RichTextMentionName.CONSTRUCTOR: {
-        // Mention of a user without username: open the user profile, like TextEntityTypeMentionName
+        // Mention of a user without username: open the user profile, like TextEntityTypeMentionName.
+        // LINK_TYPE_MENTION_USER carries the userId (tg://user?id= is not a handled deep link).
         TdApi.RichTextMentionName mentionName = (TdApi.RichTextMentionName) in;
-        parseRichText(context, mentionName.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_URL, "tg://user?id=" + mentionName.userId, false, referenceAnchorName, null, openParameters);
+        parseRichText(context, mentionName.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_MENTION_USER, Long.toString(mentionName.userId), false, referenceAnchorName, null, openParameters);
         break;
       }
       case TdApi.RichTextHashtag.CONSTRUCTOR: {
@@ -593,12 +594,22 @@ public class FormattedText {
       }
       case TdApi.RichTextMathematicalExpression.CONSTRUCTOR: {
         TdApi.RichTextMathematicalExpression mathematicalExpression = (TdApi.RichTextMathematicalExpression) in;
+        // Prefer true typeset rendering (matches Telegram Desktop): render the expression to a
+        // tintable bitmap with the jlatexmath engine and emit it as a zero-width inline-media entity.
+        android.graphics.Bitmap mathBitmap = context != null && context.tdlib() != null
+          ? LatexRenderer.render(mathematicalExpression.expression)
+          : null;
+        if (mathBitmap != null) {
+          // Zero-width inline-media entity, exactly like RichTextIcon: the bitmap occupies the slot.
+          entities.add(new TextEntityCustom(context, context.tdlib(), "", offset[0], offset[0], flags, openParameters)
+            .setMath(mathematicalExpression.expression, mathBitmap));
+          break;
+        }
+        // Fallback when jlatexmath cannot parse it: decompose caret/underscore into real super/subscripts.
         TdApi.RichText math = buildMathRichText(mathematicalExpression.expression);
         if (math != null) {
-          // Render decomposed super/subscripts inline (NOT monospace) so x^2 shows a real superscript.
           parseRichText(context, math, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
         } else {
-          // Markup too complex to decompose: keep a non-boxed plain fallback.
           String mathFallback = mathematicalExpression.expression != null ? mathematicalExpression.expression : "";
           parseRichText(context, new TdApi.RichTextPlain(mathFallback), out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
         }

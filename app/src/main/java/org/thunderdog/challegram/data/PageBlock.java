@@ -560,11 +560,25 @@ public abstract class PageBlock {
         }
         break;
       }
-      // Slideshow pager is impractical on the canvas bubble; render its photos as stacked media.
       case TdApi.PageBlockSlideshow.CONSTRUCTOR: {
+        // A swipeable pager is impractical in a chat bubble (its paging is view-layer-only, and a
+        // horizontal swipe collides with swipe-to-reply). Render the slideshow's photos as a grid
+        // (same as collage) when they're all media; otherwise fall back to stacked.
         TdApi.PageBlockSlideshow slideshow = (TdApi.PageBlockSlideshow) block;
+        boolean isOk = slideshow.blocks.length > 0;
         for (TdApi.PageBlock child : slideshow.blocks) {
-          parseForChat(parent, out, context, child, openParameters);
+          int c = child.getConstructor();
+          if (c != TdApi.PageBlockPhoto.CONSTRUCTOR && c != TdApi.PageBlockVideo.CONSTRUCTOR && c != TdApi.PageBlockAnimation.CONSTRUCTOR) {
+            isOk = false;
+            break;
+          }
+        }
+        if (isOk) {
+          context.process(new PageBlockMedia(parent, new TdApi.PageBlockCollage(slideshow.blocks, slideshow.caption)), out);
+        } else {
+          for (TdApi.PageBlock child : slideshow.blocks) {
+            parseForChat(parent, out, context, child, openParameters);
+          }
         }
         context.processCaption(parent, slideshow, slideshow.caption, openParameters, out);
         break;
@@ -621,6 +635,11 @@ public abstract class PageBlock {
         // True typeset math via the vendored jlatexmath engine (rich-message bubble only;
         // Instant View keeps its existing monospace/decomposed rendering through parse()).
         context.process(new PageBlockLatex(parent, (TdApi.PageBlockMathematicalExpression) block), out);
+        break;
+      }
+      case TdApi.PageBlockPreformatted.CONSTRUCTOR: {
+        // Render as a proper code block: rounded box with an integrated language header.
+        context.process(new PageBlockCode(parent, (TdApi.PageBlockPreformatted) block), out);
         break;
       }
       default: {
