@@ -76,7 +76,13 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   // their screen presentation can be broadcast simultaneously as distinct sources.
   // Non-null only while a screen share is active (or starting).
   private @Nullable volatile GroupCallInstance presentationInstance;
-  private int groupCallId;
+  // Whether the active presentation has been announced to the server (StartGroupCallScreenSharing
+  // handshake emitted). Gates whether an onScreencastUnavailable needs to send EndGroupCallScreenSharing.
+  // Touched only on the main thread.
+  private boolean screencastAnnounced;
+  // Read on the native screencast callback thread (onPresentationJoinPayloadEmitted) as well as
+  // the UI thread, so it must not be seen torn/stale across threads.
+  private volatile int groupCallId;
   private int state = STATE_NONE;
   private boolean micMuted = true;
 
@@ -228,6 +234,17 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   }
 
   /**
+   * Whether the screen presentation is actually LIVE — the capturer started and the join handshake
+   * has been announced to the server. Distinct from {@link #isScreenSharing()}, which is also true
+   * during the brief "starting" window before {@link #onScreencastStarted}. The UI uses this to
+   * gate creating the self-screen preview tile so it isn't orphaned if startCapture fails.
+   */
+  @AnyThread
+  public boolean isScreenSharingActive () {
+    return presentationInstance != null && screencastAnnounced;
+  }
+
+  /**
    * Starts a server-side screen-sharing presentation: a SECOND group connection
    * (videoContentType = Screencast) joins the call via
    * {@link TdApi.StartGroupCallScreenSharing} and streams the screen as a distinct
@@ -235,13 +252,21 @@ public class GroupCallManager implements GroupCallInstance.Listener {
    *
    * <p>The MediaProjection permission result must already be stored in
    * {@link org.thunderdog.challegram.voip.VoIPScreenCapture}. Returns {@code true} once the
-   * presentation instance + capturer are up and the join handshake has been kicked off;
-   * {@code false} (after rolling everything back) if the mediaProjection FGS type couldn't be
-   * asserted, the native presentation instance couldn't be created, or the screencast capturer
-   * failed to come up — the caller must surface an error / re-prompt.</p>
+   * presentation instance + capturer have been provisioned and the screencast capturer is coming
+   * up; {@code false} (after rolling everything back) if the mediaProjection FGS type couldn't be
+   * asserted or the native presentation instance couldn't be created — the caller must surface an
+   * error / re-prompt.</p>
    *
-   * <p>Handshake: the presentation instance emits a join payload (ssrc + JSON); the ssrc becomes
-   * the {@code audioSourceId} and the JSON the {@code payload} for
+   * <p><b>Deferred handshake.</b> Returning {@code true} does NOT mean the screen is live: the
+   * native capturer pointer is created synchronously, but {@code ScreenCapturerAndroid.startCapture}
+   * runs later on tgcalls' media thread and can still fail (missing/denied projection). So we DON'T
+   * announce to the server here — we wait for {@link #onScreencastStarted()} (driven from the
+   * capturer once startCapture actually succeeds) before emitting the join payload. If startCapture
+   * fails instead, {@link #onScreencastUnavailable()} tears the presentation down WITHOUT ever
+   * having announced it.</p>
+   *
+   * <p>Handshake: once started, the presentation instance emits a join payload (ssrc + JSON); the
+   * ssrc becomes the {@code audioSourceId} and the JSON the {@code payload} for
    * {@code StartGroupCallScreenSharing(groupCallId, audioSourceId, payload)}, whose
    * {@code Text} response is fed back via {@code setJoinResponsePayload}.</p>
    */
@@ -264,25 +289,33 @@ public class GroupCallManager implements GroupCallInstance.Listener {
     GroupCallInstance presentation = new GroupCallInstance(true, true);
     if (!presentation.isValid()) {
       presentation.stop();
-      org.thunderdog.challegram.voip.VoIPScreenCapture.clear();
-      org.thunderdog.challegram.service.GroupCallService.setScreenSharing(false);
+      this.presentationInstance = presentation; // so tearDownPresentation owns the cleanup below
+      // Run the shared teardown so the (about-to-be-registered) callback isn't leaked, the FGS
+      // type is dropped, and the projection token is cleared — single cleanup path, no leaks.
+      tearDownPresentation();
       notifyVideoListeners();
       return false;
     }
     presentation.setListener(presentationListener);
     this.presentationInstance = presentation;
-    // Register the teardown callback (system-revoke / start-failure) before starting capture.
-    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(this::onScreencastUnavailable);
-    // Attach the screencast capturer (ScreenCapturerAndroid via the static screencast flag).
+    // Register the started/teardown callbacks BEFORE the capturer comes up:
+    //   - onScreencastStarted  → startCapture succeeded; only THEN announce the handshake.
+    //   - onScreencastUnavailable → start failed / system revoked; tear down (never announced).
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(
+      new org.telegram.messenger.voip.VideoCameraCapturer.ScreencastStateCallback() {
+        @Override
+        public void onScreencastStarted () {
+          GroupCallManager.this.onScreencastStarted(presentation);
+        }
+
+        @Override
+        public void onScreencastUnavailable () {
+          GroupCallManager.this.onScreencastUnavailable();
+        }
+      });
+    // Attach the screencast capturer (ScreenCapturerAndroid via the FIFO screencast flag). The
+    // join handshake is deferred to onScreencastStarted — see this method's contract.
     presentation.enableOutgoingScreencast(localSink);
-    if (!presentation.isScreencast()) {
-      // Capturer failed to come up — roll the whole presentation back.
-      tearDownPresentation();
-      notifyVideoListeners();
-      return false;
-    }
-    // Kick off the screencast join handshake; payload arrives in presentationListener.
-    presentation.emitJoinPayload();
     notifyVideoListeners();
     return true;
   }
@@ -319,6 +352,7 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   private void tearDownPresentation () {
     final GroupCallInstance presentation = this.presentationInstance;
     this.presentationInstance = null;
+    this.screencastAnnounced = false;
     // Stop listening for this presentation's teardown and drop the stale projection token so a
     // later capture can't reuse it.
     org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
@@ -333,12 +367,42 @@ public class GroupCallManager implements GroupCallInstance.Listener {
   /**
    * Drives screen-share teardown when the source becomes unavailable below the controller layer
    * (system revoked the projection, or the screencast capturer failed to start). Invoked on the
-   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}. Notifies TDLib so the
-   * server-side presentation is ended too.
+   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}.
+   *
+   * <p>If we already announced the presentation (handshake emitted), tell TDLib to end it too via
+   * {@link #stopScreenSharing()}. If we never announced (start failed before
+   * {@link #onScreencastStarted}), just tear down locally — there is nothing to end server-side.</p>
    */
   @MainThread
   private void onScreencastUnavailable () {
-    stopScreenSharing();
+    if (presentationInstance == null) {
+      return;
+    }
+    if (screencastAnnounced) {
+      stopScreenSharing();
+    } else {
+      tearDownPresentation();
+      notifyVideoListeners();
+    }
+  }
+
+  /**
+   * The screencast capturer actually started capturing (startCapture succeeded on the media
+   * thread). Only now is it safe to announce the presentation to the server — so kick off the
+   * deferred join handshake. Invoked on the main thread by
+   * {@link org.telegram.messenger.voip.VideoCameraCapturer}.
+   */
+  @MainThread
+  private void onScreencastStarted (GroupCallInstance presentation) {
+    // Ignore a stale callback from a presentation that was already torn down / replaced.
+    if (presentationInstance != presentation || groupCallId == 0 || state == STATE_NONE) {
+      return;
+    }
+    screencastAnnounced = true;
+    // Kick off the screencast join handshake; payload arrives in presentationListener.
+    presentation.emitJoinPayload();
+    // Now that the screen is actually live, let the UI provision the self-screen preview tile.
+    notifyVideoListeners();
   }
 
   @MainThread

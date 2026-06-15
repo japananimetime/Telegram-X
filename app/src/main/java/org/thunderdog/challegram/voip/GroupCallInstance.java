@@ -174,11 +174,11 @@ public class GroupCallInstance {
       disableOutgoingVideo();
     }
     // Hand off the screencast intent to the Java VideoCameraCapturer out-of-band: upstream
-    // tgcalls only passes useFrontCamera to init(), so the volatile flag (set immediately
-    // before the native create, which constructs the capturer on tgcalls' media thread) tells
-    // init() to build a ScreenCapturerAndroid instead of a camera. Relies on a single outgoing
-    // capturer being created at a time (camera/screen are mutually exclusive here).
-    org.telegram.messenger.voip.VideoCameraCapturer.setNextCaptureIsScreencast(true);
+    // tgcalls only passes useFrontCamera to init(), so we enqueue the flag (TRUE = screencast)
+    // IMMEDIATELY before the native create, which constructs the capturer on tgcalls' media
+    // thread. The FIFO queue keeps this correct even when a camera (main instance) and screen
+    // (presentation instance) capturer are created concurrently — see PENDING_SCREENCAST.
+    org.telegram.messenger.voip.VideoCameraCapturer.enqueueNextCaptureIsScreencast(true);
     videoCapturePtr = nativeCreateVideoCapturer("screen", true);
     if (videoCapturePtr != 0) {
       screencast = true;
@@ -210,6 +210,10 @@ public class GroupCallInstance {
       // Switching screen -> camera: tear down the screencast capturer first.
       disableOutgoingVideo();
     }
+    // Enqueue the camera flag (FALSE) right before the native create so the concurrent-capturer
+    // FIFO in VideoCameraCapturer routes THIS init() to a camera, not a screencast. See
+    // PENDING_SCREENCAST + the create→init FIFO invariant.
+    org.telegram.messenger.voip.VideoCameraCapturer.enqueueNextCaptureIsScreencast(false);
     videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
     if (videoCapturePtr != 0) {
       screencast = false;

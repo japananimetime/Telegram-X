@@ -336,7 +336,11 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       } else {
         view.removeTile(GroupCallVideoView.SELF_ENDPOINT);
       }
-      if (calls.isScreenSharing()) {
+      // Only provision the self-screen tile once the screencast is actually LIVE (capturer started
+      // + handshake announced) — not during the brief "starting" window — so a failed startCapture
+      // never leaves an orphaned tile. isScreenSharingActive() flips on in onScreencastStarted,
+      // which re-runs this sync.
+      if (calls.isScreenSharingActive()) {
         if (!view.hasTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT)) {
           VideoSink screenSink = view.obtainTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT, false);
           if (screenSink != null) {
@@ -581,19 +585,18 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         return;
       }
       GroupCallVideoView view = ensureVideoView();
-      // Screen-share self preview is never mirrored, and lives in its own tile (the camera self
-      // tile, if any, stays).
+      // Don't provision the self-screen tile up front: the capturer may fail to start on the media
+      // thread, which would orphan it. The tile is created in syncVideoTiles once the screencast is
+      // actually live (isScreenSharingActive, driven by onScreencastStarted → notifyVideoListeners),
+      // and the preview is routed there via setScreenPreviewSink. Clear any stale tile from a prior
+      // attempt first.
       if (view != null) {
         view.removeTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT);
       }
-      VideoSink selfSink = view != null ? view.obtainTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT, false) : null;
-      boolean started = calls.startScreenSharing(selfSink);
+      boolean started = calls.startScreenSharing(null);
       if (!started) {
-        // FGS re-assert / presentation create / screencast capturer failed: clear the self tile
-        // we provisioned and surface an error so the user can retry.
-        if (view != null) {
-          view.removeTile(GroupCallVideoView.SELF_SCREEN_ENDPOINT);
-        }
+        // FGS re-assert / presentation create failed synchronously — surface an error so the user
+        // can retry. (No tile was provisioned, so there's nothing to clean up.)
         UI.showToast(R.string.VoipScreenShareFailed, android.widget.Toast.LENGTH_SHORT);
       }
       buildCells();

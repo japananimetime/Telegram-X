@@ -751,8 +751,19 @@ public class TGCallService extends Service implements
         notifyVideoStateChanged();
         return false;
       }
-      // Register the teardown callback (system-revoke / start-failure) before starting.
-      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(this::onScreencastUnavailable);
+      // Register the teardown callback (system-revoke / start-failure) before starting. For 1:1
+      // calls the started-callback is a no-op (no server-side presentation handshake to defer —
+      // the screencast is just attached to the existing call); only the unavailable path matters.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(
+        new org.telegram.messenger.voip.VideoCameraCapturer.ScreencastStateCallback() {
+          @Override
+          public void onScreencastStarted () { }
+
+          @Override
+          public void onScreencastUnavailable () {
+            TGCallService.this.onScreencastUnavailable();
+          }
+        });
       tgcalls.enableOutgoingScreencast();
       // Reconcile: if creation failed, the capturer's failure path already cleared things; drop
       // the FGS type back and report failure so we don't pretend screen sharing is live.

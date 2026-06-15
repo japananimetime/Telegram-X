@@ -406,7 +406,14 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
         final int openMinute = parsed;
         boolean isNew = index < 0 || index >= dayIntervals[day].size();
         int currentClose = isNew ? DEFAULT_CLOSE_MINUTE : dayIntervals[day].get(index).end;
-        tdlib.ui().post(() -> promptCloseTime(day, index, openMinute, currentClose));
+        // The close-time prompt is posted to the next frame; guard against the controller being
+        // destroyed in between (navigated away) so we don't open a dialog on a dead screen.
+        tdlib.ui().post(() -> {
+          if (isDestroyed()) {
+            return;
+          }
+          promptCloseTime(day, index, openMinute, currentClose);
+        });
         return true;
       }, true);
   }
@@ -436,6 +443,11 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
   }
 
   private void applyInterval (int day, int index, int openMinute, int closeMinute) {
+    // Reached from the close-time dialog callback, which can fire after the controller is gone.
+    // Don't mutate state / touch the adapter on a destroyed screen.
+    if (isDestroyed()) {
+      return;
+    }
     if (index < 0 || index >= dayIntervals[day].size()) {
       dayIntervals[day].add(new Interval(openMinute, closeMinute));
     } else {
@@ -503,7 +515,10 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
       return true;
     }
 
-    List<TdApi.BusinessOpeningHoursInterval> intervals = new ArrayList<>();
+    // Flatten every day's intervals into absolute minute-of-week ranges. An overnight interval
+    // keeps its spill (end may exceed the day base + MINUTES_PER_DAY), so adjacent/overlapping
+    // ranges across a day boundary are caught by the merge below.
+    List<int[]> ranges = new ArrayList<>();
     for (int day = 0; day < 7; day++) {
       List<Interval> dayList = dayIntervals[day];
       if (dayList == null) {
@@ -512,8 +527,21 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
       int base = day * MINUTES_PER_DAY;
       for (Interval interval : dayList) {
         if (interval.end > interval.start) {
-          intervals.add(new TdApi.BusinessOpeningHoursInterval(base + interval.start, base + interval.end));
+          ranges.add(new int[] {base + interval.start, base + interval.end});
         }
+      }
+    }
+
+    // Merge touching/overlapping ranges (range[i].start <= range[i-1].end), accounting for
+    // overnight spill (end > a day base + MINUTES_PER_DAY). Sunday's overnight interval may spill
+    // past the end of the week (end > MINUTES_PER_WEEK): wrap that tail to the week start and let it
+    // merge with Monday's opening range, matching TDLib's circular minute-of-week representation.
+    List<int[]> merged = mergeWeeklyRanges(ranges);
+
+    List<TdApi.BusinessOpeningHoursInterval> intervals = new ArrayList<>();
+    for (int[] range : merged) {
+      if (range[1] > range[0]) {
+        intervals.add(new TdApi.BusinessOpeningHoursInterval(range[0], range[1]));
       }
     }
 
@@ -537,5 +565,72 @@ public class BusinessOpeningHoursController extends EditBaseController<TdApi.Bus
       }
     }));
     return true;
+  }
+
+  /**
+   * Merges overlapping/touching minute-of-week ranges into the minimal disjoint set TDLib expects.
+   *
+   * <p>Handles three cases the per-day editor can produce: (1) two ranges on the same day that
+   * overlap; (2) an overnight range whose spill into the next day overlaps that day's first range;
+   * (3) a Sunday overnight range that spills past the end of the week ({@code end > MINUTES_PER_WEEK})
+   * — its tail is wrapped to the week start ({@code [0, end - MINUTES_PER_WEEK]}) so it can merge
+   * with Monday's opening range, matching TDLib's circular representation. The result is sorted by
+   * start and contains no overlaps or touching boundaries.</p>
+   */
+  private static List<int[]> mergeWeeklyRanges (List<int[]> ranges) {
+    if (ranges.isEmpty()) {
+      return ranges;
+    }
+    // 1. Split any range that spills past the end of the week into a head within the week and a
+    //    wrapped tail at the week start, so the linear merge below sees everything in [0, week].
+    List<int[]> normalized = new ArrayList<>();
+    for (int[] range : ranges) {
+      int start = range[0];
+      int end = range[1];
+      if (end > MINUTES_PER_WEEK) {
+        normalized.add(new int[] {start, MINUTES_PER_WEEK});
+        int wrap = end - MINUTES_PER_WEEK;
+        // Clamp the wrapped tail to at most the whole week (a > 1-week interval is nonsensical;
+        // collapse it rather than wrapping multiple times).
+        normalized.add(new int[] {0, Math.min(wrap, MINUTES_PER_WEEK)});
+      } else {
+        normalized.add(new int[] {start, end});
+      }
+    }
+    // 2. Sort by start, then by end.
+    Collections.sort(normalized, new Comparator<int[]>() {
+      @Override
+      public int compare (int[] a, int[] b) {
+        if (a[0] != b[0]) {
+          return Integer.compare(a[0], b[0]);
+        }
+        return Integer.compare(a[1], b[1]);
+      }
+    });
+    // 3. Linear merge of touching/overlapping ranges.
+    List<int[]> merged = new ArrayList<>();
+    for (int[] range : normalized) {
+      if (merged.isEmpty()) {
+        merged.add(new int[] {range[0], range[1]});
+        continue;
+      }
+      int[] last = merged.get(merged.size() - 1);
+      if (range[0] <= last[1]) { // overlap or touch
+        last[1] = Math.max(last[1], range[1]);
+      } else {
+        merged.add(new int[] {range[0], range[1]});
+      }
+    }
+    // 4. Circular merge: if the last range reaches the end of the week and the first starts at the
+    //    week start, they are contiguous across the wrap — fold the first into the last as a spill.
+    if (merged.size() > 1) {
+      int[] first = merged.get(0);
+      int[] last = merged.get(merged.size() - 1);
+      if (last[1] >= MINUTES_PER_WEEK && first[0] == 0) {
+        last[1] = MINUTES_PER_WEEK + first[1];
+        merged.remove(0);
+      }
+    }
+    return merged;
   }
 }

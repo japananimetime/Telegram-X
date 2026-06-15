@@ -6319,6 +6319,7 @@
   <string name="BusinessHint">Telegram Business lets you set up a business presence: opening hours, location, a custom start page, and automatic greeting and away messages.</string>
   <string name="BusinessLocation">Location</string>
   <string name="BusinessLocationAddress">Address</string>
+  <string name="BusinessLocationAddressRequired">Please enter an address first.</string>
   <string name="BusinessLocationHint">Display the location of your business on your account.</string>
   <string name="BusinessLocationMap">Set on map</string>
   <string name="BusinessLocationMapSet">Point selected</string>

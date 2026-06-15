@@ -84,33 +84,39 @@ public class VideoCameraCapturer {
   private static final String TAG = "VideoCameraCapturer";
 
   /**
-   * Out-of-band handoff flag telling the next {@link #init} to build a
-   * {@link ScreenCapturerAndroid} (screen sharing) instead of a camera capturer.
+   * Out-of-band handoff queue telling each upcoming {@link #init} whether to build a
+   * {@link ScreenCapturerAndroid} (screen sharing, {@code TRUE}) or a camera capturer
+   * ({@code FALSE}).
    *
    * <p>Upstream tgcalls' native {@code VideoCameraCapturer.cpp} only invokes Java
    * {@code init(long, boolean)} — it derives {@code useFrontCamera} from the deviceId and has
    * no parameter for the screencast intent. Rather than patch the (unpushable) tgcalls
-   * submodule to add a parameter, the screencast-create callers set this static flag
-   * immediately before the {@code nativeCreateVideoCapturer("screen", true)} call. tgcalls
-   * constructs the capturer asynchronously on its own media thread and then calls back into
-   * {@link #init}; the field is {@code volatile} and written before the native call, so the
-   * write happens-before and is visible to that thread. {@link #init} reads it once at the top
-   * and clears it, so a stale {@code true} can never leak into a later camera capture.
+   * submodule to add a parameter, EVERY outgoing-capturer create path enqueues its flag
+   * IMMEDIATELY before its {@code nativeCreateVideoCapturer(...)} call: camera paths enqueue
+   * {@link Boolean#FALSE}, screencast paths enqueue {@link Boolean#TRUE}.
    *
-   * <p>This relies on there being at most ONE outgoing capturer being created at a time
-   * (Telegram X creates outgoing camera/screen capturers serially from the UI thread and they
-   * are mutually exclusive), which holds for the VoIP / group-call flows here.
+   * <p><b>Create→init FIFO invariant.</b> A single static {@code volatile boolean} was safe only
+   * while camera and screen were mutually exclusive; the group-screencast feature now creates a
+   * camera capturer (main instance) and a screen capturer (presentation instance) CONCURRENTLY,
+   * so a shared flag could be consumed by the wrong {@code init()} (a camera slot building a
+   * ScreenCapturerAndroid, or vice-versa, plus a stray {@code dispatchScreencastUnavailable}).
+   * A FIFO queue fixes this: creates are issued from the (UI/single) thread in order, and tgcalls
+   * posts each {@code init()} FIFO onto its single media thread, so the dequeue order matches the
+   * enqueue order — each {@code init()} consumes the flag belonging to its own create.
+   * {@link #init} dequeues the head ({@code poll()}, defaulting to {@code false} if somehow empty),
+   * so a flag can never leak into a later capture.
    */
-  private static volatile boolean sNextCaptureIsScreencast;
+  private static final java.util.concurrent.ConcurrentLinkedQueue<Boolean> PENDING_SCREENCAST =
+    new java.util.concurrent.ConcurrentLinkedQueue<>();
 
   /**
-   * Marks the next {@link #init} (i.e. the capturer about to be created by the immediately
-   * following {@code nativeCreateVideoCapturer}) as a screen-share capturer. Must be called on
-   * the same logical flow right before the native create call; the camera path leaves it
-   * {@code false}.
+   * Enqueues the screencast intent for the capturer about to be created by the immediately
+   * following {@code nativeCreateVideoCapturer}. Must be called on the create flow right before
+   * the native create call; camera paths enqueue {@code false}, screencast paths {@code true}.
+   * See the create→init FIFO invariant on {@link #PENDING_SCREENCAST}.
    */
-  public static void setNextCaptureIsScreencast (boolean v) {
-    sNextCaptureIsScreencast = v;
+  public static void enqueueNextCaptureIsScreencast (boolean isScreencast) {
+    PENDING_SCREENCAST.add(isScreencast);
   }
 
   /**
@@ -127,6 +133,14 @@ public class VideoCameraCapturer {
    * exclusive here), the same invariant the screencast handoff flag depends on.
    */
   public interface ScreencastStateCallback {
+    /**
+     * The screencast capturer actually STARTED capturing (ScreenCapturerAndroid.startCapture
+     * returned without throwing). Invoked on the main thread. Only after this should the
+     * server-side screen-sharing handshake be announced — the native capturer POINTER exists
+     * synchronously at create time, but the projection/startCapture runs later here and may fail.
+     */
+    void onScreencastStarted ();
+
     /**
      * Screen sharing is no longer available (revoked by the system or failed to start).
      * Invoked on the main thread; must run the full stop-screencast teardown.
@@ -145,6 +159,23 @@ public class VideoCameraCapturer {
   }
 
   private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+
+  /**
+   * Posts the screencast-STARTED success notification to the main thread. Does NOT clear the
+   * callback: a later system-revoke must still be able to fire {@link #dispatchScreencastUnavailable}.
+   */
+  private static void dispatchScreencastStarted () {
+    final ScreencastStateCallback callback = sScreencastStateCallback;
+    if (callback == null) {
+      return;
+    }
+    MAIN_HANDLER.post(() -> {
+      final ScreencastStateCallback cb = sScreencastStateCallback;
+      if (cb != null) {
+        cb.onScreencastStarted();
+      }
+    });
+  }
 
   /** Posts the screencast-unavailable teardown to the main thread (single-use; clears the callback). */
   private static void dispatchScreencastUnavailable () {
@@ -190,11 +221,12 @@ public class VideoCameraCapturer {
    */
   @Keep
   public void init (long ptr, boolean useFrontCamera) {
-    // Read AND clear the screencast handoff flag up front (see sNextCaptureIsScreencast):
-    // capture it into a local immediately so a stale true can never leak into a later camera
-    // capture, and so concurrent reads on the media thread can't see it twice.
-    final boolean isScreencast = sNextCaptureIsScreencast;
-    sNextCaptureIsScreencast = false;
+    // Dequeue this capturer's screencast flag (see PENDING_SCREENCAST + the create→init FIFO
+    // invariant): each create enqueued exactly one flag right before its native create, and
+    // init()s run FIFO on the single media thread, so the head belongs to THIS capturer.
+    // Default false if somehow empty so we never build a screencast for a camera slot.
+    final Boolean pending = PENDING_SCREENCAST.poll();
+    final boolean isScreencast = pending != null && pending;
 
     this.nativePtr = ptr;
     this.useFrontCamera = useFrontCamera;
@@ -238,6 +270,10 @@ public class VideoCameraCapturer {
         videoCapturer.initialize(surfaceTextureHelper, context, observer);
         videoCapturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS);
         isRunning = true;
+        // startCapture succeeded (no projection/SecurityException) — the screencast is actually
+        // live. Only now signal success so the controller can run the StartGroupCallScreenSharing
+        // handshake; before this the native capturer pointer existed but the screen wasn't streaming.
+        dispatchScreencastStarted();
       } catch (Throwable t) {
         Log.e(TAG, "Failed to start screen capture", t);
         try {

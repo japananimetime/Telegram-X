@@ -139,7 +139,9 @@ public class BusinessLocationController extends EditBaseController<TdApi.Busines
     if (!StringUtils.isEmpty(this.address.trim())) {
       saveLocation(false);
     } else {
-      UI.showToast(R.string.BusinessLocationAddress, android.widget.Toast.LENGTH_SHORT);
+      // A business location needs an address (the map point alone isn't valid). Prompt the user
+      // to enter one — the point is kept and saved together on Done.
+      UI.showToast(R.string.BusinessLocationAddressRequired, android.widget.Toast.LENGTH_SHORT);
     }
   }
 
