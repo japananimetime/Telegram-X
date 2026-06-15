@@ -6267,6 +6267,7 @@
   <string name="GroupCallStopVideo">Stop video</string>
   <string name="GroupCallStartScreen">Share screen</string>
   <string name="GroupCallStopScreen">Stop screen sharing</string>
+  <string name="GroupCallSwitchCamera">Switch camera</string>
   <string name="GroupCallConnecting">Connecting…</string>
   <string name="GroupCallManage">Manage</string>
   <string name="GroupCallStartNow">Start now</string>

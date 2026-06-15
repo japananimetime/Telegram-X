@@ -22,6 +22,8 @@ import android.view.ViewGroup;
 import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.component.base.SettingView;
+import org.thunderdog.challegram.util.SenderAvatarDrawModifier;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
@@ -102,7 +104,22 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
-    adapter = new SettingsAdapter(this);
+    adapter = new SettingsAdapter(this) {
+      @Override
+      protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
+        // Info rows (Type/Status/Participants) and recent-speaker rows carry their value text in
+        // stringValue; the base adapter leaves valued settings blank unless this is overridden.
+        view.setData(item.getStringValue());
+        // Recent-speaker rows additionally show the participant's avatar on the left.
+        if (item.getId() == R.id.btn_groupCallParticipant && item.getData() instanceof TdApi.MessageSender) {
+          view.forcePadding(Screen.dp(SenderAvatarDrawModifier.LEFT_PADDING_DP), 0);
+          view.setDrawModifier(new SenderAvatarDrawModifier((TdApi.MessageSender) item.getData()).requestFiles(view.getComplexReceiver(), tdlib));
+        } else {
+          view.forcePadding(0, 0);
+          view.setDrawModifier(null);
+        }
+      }
+    };
     recyclerView.setAdapter(adapter);
     buildLoadingCells();
     tdlib.listeners().subscribeToGroupCallUpdates(groupCallId, this);
@@ -204,6 +221,16 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       toggleOutgoingVideo();
     } else if (id == R.id.btn_groupCallScreenShare) {
       toggleScreenShare();
+    } else if (id == R.id.btn_camera_switch) {
+      final GroupCallManager calls = tdlib.groupCalls();
+      if (calls.isVideoEnabled()) {
+        calls.switchCamera(!calls.isFrontCamera());
+      }
+    } else if (id == R.id.btn_groupCallParticipant) {
+      Object data = v.getTag() instanceof ListItem ? ((ListItem) v.getTag()).getData() : null;
+      if (data instanceof TdApi.MessageSender) {
+        tdlib.ui().openSenderProfile(this, (TdApi.MessageSender) data, null);
+      }
     } else {
       handleAdminClick(id);
     }
@@ -271,6 +298,9 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       // Drop the roster so a re-join doesn't replay stale tiles / requested
       // channels; it is rebuilt from a fresh LoadGroupCallParticipants on re-join.
       participants.clear();
+      // Restore the recycler inset (the early return below would otherwise leave the 184dp video
+      // gap reserved after leaving the call).
+      updateVideoInset();
       return;
     }
 
@@ -365,6 +395,32 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
     } else {
       calls.setRequestedVideoChannels(new String[0], new int[0], new String[0]);
     }
+
+    updateVideoInset();
+  }
+
+  /**
+   * The video-tiles overlay is pinned to the top {@value} dp of the screen, floating over the
+   * recycler. Without reserving space it covers the list's top items (Leave / Mute / Stop video /
+   * Share screen) — so once video starts the user can't reach "Stop video". Reserve matching top
+   * padding while the overlay shows content, and hide the empty overlay otherwise.
+   */
+  private void updateVideoInset () {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return;
+    }
+    final GroupCallManager calls = tdlib.groupCalls();
+    boolean hasVideo = videoView != null &&
+      (!attachedEndpoints.isEmpty() || calls.isVideoEnabled() || calls.isScreenSharingActive());
+    int topPadding = hasVideo ? Screen.dp(184f) : 0;
+    if (recyclerView.getPaddingTop() != topPadding) {
+      recyclerView.setClipToPadding(true);
+      recyclerView.setPadding(recyclerView.getPaddingLeft(), topPadding, recyclerView.getPaddingRight(), recyclerView.getPaddingBottom());
+    }
+    if (videoView != null) {
+      videoView.setVisibility(hasVideo ? View.VISIBLE : View.GONE);
+    }
   }
 
   /** Encodes a participant's video source groups as "SEMANTICS:ssrc,ssrc;..." for the given endpoint. */
@@ -441,7 +497,7 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     }
     ListItem item = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, 0, 0, title, false);
-    item.setData(value);
+    item.setStringValue(value);
     items.add(item);
   }
 
@@ -474,6 +530,10 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
           boolean screenOn = tdlib.groupCalls().isScreenSharing();
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallVideo, R.drawable.baseline_videocam_24,
             videoOn ? R.string.GroupCallStopVideo : R.string.GroupCallStartVideo));
+          if (videoOn) {
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+            items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_camera_switch, R.drawable.baseline_camera_front_24, R.string.GroupCallSwitchCamera));
+          }
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_groupCallScreenShare, R.drawable.baseline_devices_other_24,
             screenOn ? R.string.GroupCallStopScreen : R.string.GroupCallStartScreen));
@@ -501,9 +561,12 @@ public class GroupCallController extends RecyclerViewController<GroupCallControl
         }
         first = false;
         String name = tdlib.senderName(speaker.participantId);
-        ListItem item = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, 0, 0, name, false);
+        // Tappable → opens the participant's profile. The sender is carried in data; the value text
+        // (e.g. "speaking now") lives in stringValue so setValuedSetting can render it.
+        ListItem item = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_groupCallParticipant, 0, name, false);
+        item.setData(speaker.participantId);
         if (speaker.isSpeaking) {
-          item.setData(Lang.getString(R.string.GroupCallSpeakingNow));
+          item.setStringValue(Lang.getString(R.string.GroupCallSpeakingNow));
         }
         items.add(item);
       }

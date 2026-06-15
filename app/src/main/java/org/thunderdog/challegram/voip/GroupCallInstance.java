@@ -15,6 +15,8 @@ package org.thunderdog.challegram.voip;
 import androidx.annotation.Keep;
 import androidx.annotation.Nullable;
 
+import org.thunderdog.challegram.tool.UI;
+
 /**
  * Java handle to the native tgcalls GROUP engine (GroupInstanceCustomImpl), used
  * to join video chats / voice chats. Native methods live in
@@ -86,6 +88,12 @@ public class GroupCallInstance {
    */
   public GroupCallInstance (boolean muted, boolean presentation) {
     this.presentation = presentation;
+    // Initialize the WebRTC Java application context (ContextUtils) + native buffer size BEFORE
+    // creating the native group instance. The 1:1 path does this in TGCallService.initialize(); the
+    // group path uses a separate service that never did, so org.webrtc.ApplicationContextProvider
+    // returned a null context and tgcalls' CreateAndroidAudioDeviceModule aborted on join (native
+    // SIGABRT: Check failed: !env->ExceptionCheck()). VoIP.initialize() is idempotent.
+    VoIP.initialize(UI.getAppContext());
     this.nativePtr = newInstance(muted, presentation);
   }
 

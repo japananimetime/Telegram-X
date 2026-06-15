@@ -1,0 +1,19 @@
+diff --git a/tgcalls/v2/InstanceV2Impl.cpp b/tgcalls/v2/InstanceV2Impl.cpp
+index 91571d2..bb05076 100644
+--- a/tgcalls/v2/InstanceV2Impl.cpp
++++ b/tgcalls/v2/InstanceV2Impl.cpp
+@@ -2148,6 +2148,14 @@ public:
+         if (_outgoingVideoChannel) {
+             _outgoingVideoChannel->setMaxBitrate(1000 * 1024);
+         }
++        if (_outgoingScreencastChannel) {
++            // Screen content (text/UI, esp. static) needs a much higher ceiling than camera video to
++            // stay legible: the camera's ~1 Mbps cap forces heavy compression and leaves shared screens
++            // blurry. The screencast channel was never given a max here, so it fell back to the encoder
++            // default. Allow up to ~4 Mbps; with MAINTAIN_RESOLUTION the encoder keeps sharpness and
++            // spends bitrate on detail (and naturally uses almost none while the screen is static).
++            _outgoingScreencastChannel->setMaxBitrate(4000 * 1024);
++        }
+     }
+ 
+ private:

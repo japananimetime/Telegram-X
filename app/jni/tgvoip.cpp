@@ -858,11 +858,23 @@ JNI_OBJECT_FUNC(jlong, voip_TgCallsController, nativeCreateVideoCapturer, jstrin
 }
 
 // Switches the camera (front <-> back) on an existing capturer.
+//
+// See the matching note in group_call.cpp: switchToDevice() recreates the native capturer and
+// re-runs Java init() on the same singleton VideoCameraCapturer without disposing the old camera,
+// so the switch leaks and never takes. Call the Java switchCamera(boolean) directly instead, which
+// switches in-place on the live CameraVideoCapturer.
 JNI_OBJECT_FUNC(void, voip_TgCallsController, nativeSwitchCamera, jlong capturePtr, jboolean jUseFrontCamera) {
   auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
-  if (captureContext != nullptr && captureContext->capture != nullptr) {
-    bool useFront = jUseFrontCamera == JNI_TRUE;
-    captureContext->capture->switchToDevice(useFront ? "front" : "back", false);
+  if (captureContext != nullptr && captureContext->platformContext != nullptr) {
+    auto *androidContext = static_cast<tgcalls::AndroidContext *>(captureContext->platformContext.get());
+    jobject javaCapturer = androidContext->getJavaCapturer();
+    jclass capturerClass = androidContext->getJavaCapturerClass();
+    if (javaCapturer != nullptr && capturerClass != nullptr) {
+      jmethodID methodId = env->GetMethodID(capturerClass, "switchCamera", "(Z)V");
+      if (methodId != nullptr) {
+        env->CallVoidMethod(javaCapturer, methodId, jUseFrontCamera);
+      }
+    }
   }
 }
 

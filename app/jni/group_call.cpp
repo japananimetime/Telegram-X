@@ -123,9 +123,26 @@ namespace {
 // isPresentation selects the SECOND group connection used for screen sharing: it
 // sets videoContentType = Screencast so tgcalls joins the call as a distinct
 // "screen sharing" participant whose emitted ssrc becomes the audioSourceId for
-// TDLib's StartGroupCallScreenSharing. The main call instance passes false (None),
-// keeping the camera/voice connection it always had. Both share this same bridge.
+// TDLib's StartGroupCallScreenSharing.
+//
+// The MAIN call instance uses videoContentType = Generic (NOT None). None makes
+// GroupInstanceCustomImpl::createOutgoingVideoChannel() bail out, so the outgoing video
+// channel is never created and the join payload declares no video — the camera never
+// actually transmits, and the server registers us as an audio-only participant. A
+// screen-share presentation then has no video-capable main participant to attach to and the
+// server rejects phone.joinGroupCallPresentation with 403 PARTICIPANT_JOIN_MISSING. Generic
+// gives the main connection a real outgoing video channel (camera works) and declares video
+// capability so presentations are accepted. Both kinds share this same bridge.
 JNI_OBJECT_FUNC(jlong, voip_GroupCallInstance, newInstance, jboolean muted, jboolean isPresentation) {
+  // Initialize WebRTC's Android JNI/JVM + application context BEFORE creating the group instance.
+  // GroupInstanceCustomImpl::start() builds the audio device module via CreateAndroidAudioDeviceModule,
+  // which calls IsLowLatencyInputSupported(env, appContext); without this init the app context is null,
+  // the JNI call throws, and WebRTC aborts (Check failed: !env->ExceptionCheck()) — crashing on join.
+  // 1:1 calls never hit this because every tgvoip.cpp entry point already calls initialize().
+  if (!tgcalls::initialize(env)) {
+    return 0;
+  }
+
   if (g_vm == nullptr) {
     env->GetJavaVM(&g_vm);
   }
@@ -142,7 +159,7 @@ JNI_OBJECT_FUNC(jlong, voip_GroupCallInstance, newInstance, jboolean muted, jboo
   descriptor.useDummyChannel = true;
   descriptor.videoContentType = (isPresentation == JNI_TRUE)
     ? tgcalls::VideoContentType::Screencast
-    : tgcalls::VideoContentType::None;
+    : tgcalls::VideoContentType::Generic;
   descriptor.networkStateUpdated = [ctx](tgcalls::GroupNetworkState state) {
     bool connected = state.isConnected;
     ctx->callOnJava([connected](JNIEnv *env, jobject obj, jclass cls) {
@@ -245,11 +262,27 @@ JNI_OBJECT_FUNC(jlong, voip_GroupCallInstance, nativeCreateVideoCapturer, jstrin
 }
 
 // Switches the camera (front <-> back) on an existing capturer.
+//
+// We deliberately do NOT use VideoCaptureInterface::switchToDevice() here. On Android that
+// tears down and RECREATES the native VideoCameraCapturer, which re-invokes Java init() on the
+// SAME (per-context) singleton org.telegram.messenger.voip.VideoCameraCapturer object without
+// first disposing the previous camera — leaking the old Camera2Capturer/SurfaceTextureHelper and
+// leaving the old camera still feeding the source, so the switch never visibly takes. Instead we
+// call the Java capturer's switchCamera(boolean) directly, which switches in-place on the live
+// CameraVideoCapturer (proper stop-old/open-new on one capturer). Runs on the UI thread; the
+// underlying CameraVideoCapturer.switchCamera() posts to the camera thread itself.
 JNI_OBJECT_FUNC(void, voip_GroupCallInstance, nativeSwitchCamera, jlong capturePtr, jboolean jUseFrontCamera) {
   auto captureContext = jni::jlong_to_ptr<VideoCaptureContext *>(capturePtr);
-  if (captureContext != nullptr && captureContext->capture != nullptr) {
-    bool useFront = jUseFrontCamera == JNI_TRUE;
-    captureContext->capture->switchToDevice(useFront ? "front" : "back", false);
+  if (captureContext != nullptr && captureContext->platformContext != nullptr) {
+    auto *androidContext = static_cast<tgcalls::AndroidContext *>(captureContext->platformContext.get());
+    jobject javaCapturer = androidContext->getJavaCapturer();
+    jclass capturerClass = androidContext->getJavaCapturerClass();
+    if (javaCapturer != nullptr && capturerClass != nullptr) {
+      jmethodID methodId = env->GetMethodID(capturerClass, "switchCamera", "(Z)V");
+      if (methodId != nullptr) {
+        env->CallVoidMethod(javaCapturer, methodId, jUseFrontCamera);
+      }
+    }
   }
 }
 

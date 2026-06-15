@@ -539,6 +539,7 @@ public class GroupCallManager implements GroupCallInstance.Listener {
         }
         if (error != null) {
           // Server rejected the presentation: tear it down locally so we don't pretend it's live.
+          org.thunderdog.challegram.Log.e(org.thunderdog.challegram.Log.TAG_VOIP, "StartGroupCallScreenSharing failed: %d %s", error.code, error.message);
           tearDownPresentation();
           notifyVideoListeners();
           return;

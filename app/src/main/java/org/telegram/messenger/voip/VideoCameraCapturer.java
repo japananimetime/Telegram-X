@@ -411,12 +411,21 @@ public class VideoCameraCapturer {
   }
 
   /**
-   * Switches between front and back cameras on the running capturer.
+   * Switches between front and back cameras on the running capturer. Invoked from native
+   * (nativeSwitchCamera in tgvoip.cpp / group_call.cpp) on the caller (UI) thread; the underlying
+   * {@link CameraVideoCapturer#switchCamera} posts to the camera thread itself.
+   *
+   * <p>{@code CameraVideoCapturer.switchCamera(null)} always toggles to the OTHER camera, so we
+   * no-op when the requested facing already matches the current one — otherwise a redundant call
+   * would flip us away from the requested camera.</p>
    */
   @Keep
   public void switchCamera (boolean useFront) {
     if (!(videoCapturer instanceof CameraVideoCapturer)) {
       return;
+    }
+    if (useFront == this.useFrontCamera) {
+      return; // already on the requested facing
     }
     this.useFrontCamera = useFront;
     ((CameraVideoCapturer) videoCapturer).switchCamera(null);

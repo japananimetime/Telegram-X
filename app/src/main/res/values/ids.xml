@@ -1639,6 +1639,7 @@
   <item type="id" name="btn_groupCallMute" />
   <item type="id" name="btn_groupCallVideo" />
   <item type="id" name="btn_groupCallScreenShare" />
+  <item type="id" name="btn_groupCallParticipant" />
   <item type="id" name="btn_groupCallInvite" />
   <item type="id" name="btn_groupCallRename" />
   <item type="id" name="btn_groupCallStart" />
