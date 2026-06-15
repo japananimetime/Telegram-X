@@ -536,15 +536,31 @@ public abstract class PageBlock {
 
   private static void parseForChat (ViewController<?> parent, ArrayList<PageBlock> out, ParseContext context, TdApi.PageBlock block, @Nullable TdlibUi.UrlOpenParameters openParameters) throws UnsupportedPageBlockException {
     switch (block.getConstructor()) {
-      // TODO(rich-media): proper collage grid & slideshow pager; rendered as vertically stacked media for now
       case TdApi.PageBlockCollage.CONSTRUCTOR: {
         TdApi.PageBlockCollage collage = (TdApi.PageBlockCollage) block;
+        boolean isOk = collage.blocks.length > 0;
         for (TdApi.PageBlock child : collage.blocks) {
-          parseForChat(parent, out, context, child, openParameters);
+          int c = child.getConstructor();
+          if (c != TdApi.PageBlockPhoto.CONSTRUCTOR && c != TdApi.PageBlockVideo.CONSTRUCTOR && c != TdApi.PageBlockAnimation.CONSTRUCTOR) {
+            isOk = false;
+            break;
+          }
         }
-        context.processCaption(parent, collage, collage.caption, openParameters, out);
+        if (isOk) {
+          // Real grid (same as Instant View). Key offsets for the shared bubble receiver are
+          // assigned later in TGMessageRich.
+          context.process(new PageBlockMedia(parent, collage), out);
+          context.processCaption(parent, collage, collage.caption, openParameters, out);
+        } else {
+          // Mixed/unsupported children: fall back to vertically stacked media.
+          for (TdApi.PageBlock child : collage.blocks) {
+            parseForChat(parent, out, context, child, openParameters);
+          }
+          context.processCaption(parent, collage, collage.caption, openParameters, out);
+        }
         break;
       }
+      // Slideshow pager is impractical on the canvas bubble; render its photos as stacked media.
       case TdApi.PageBlockSlideshow.CONSTRUCTOR: {
         TdApi.PageBlockSlideshow slideshow = (TdApi.PageBlockSlideshow) block;
         for (TdApi.PageBlock child : slideshow.blocks) {

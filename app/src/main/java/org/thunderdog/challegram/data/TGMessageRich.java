@@ -57,12 +57,14 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
   private static final int MEDIA_MODE_NONE = 0;
   private static final int MEDIA_MODE_IMAGE = 1;
   private static final int MEDIA_MODE_GIF = 2;
+  private static final int MEDIA_MODE_COLLAGE = 3;
 
   private TdApi.RichMessage richMessage;
   private final ArrayList<PageBlock> blocks = new ArrayList<>();
   private final ClickHelper clickHelper = new ClickHelper(this);
 
   private int contentWidth, contentHeight;
+  private int totalReceiverKeys; // upper bound of media-receiver keys in use (incl. collage images)
 
   // "Show more" affordance for truncated (isFull == false) messages
   private @Nullable Text showMoreText;
@@ -125,6 +127,16 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
       block.setViewWidthOverride(layoutWidth);
       totalHeight += block.getHeight(view, layoutWidth);
     }
+    // Assign each collage block a key range on the shared media receiver, beyond the per-block
+    // preview/content keys ([0, blockCount*2)), so its N images don't collide with other blocks.
+    int collageKeyCursor = blocks.size() * 2;
+    for (PageBlock block : blocks) {
+      if (block instanceof PageBlockMedia && getMediaMode(block) == MEDIA_MODE_COLLAGE) {
+        ((PageBlockMedia) block).setCollageKeyOffset(collageKeyCursor);
+        collageKeyCursor += ((PageBlockMedia) block).getCollageItemCount();
+      }
+    }
+    this.totalReceiverKeys = collageKeyCursor;
     if (needShowMore()) {
       this.showMoreText = new Text.Builder(Lang.getString(R.string.RichMessageShowMore), maxWidth - getShowMorePaddingLeft(), PageBlockRichText.getParagraphProvider(), getShowMoreColorSet())
         .singleLine()
@@ -189,6 +201,8 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
         return MEDIA_MODE_IMAGE;
       case ListItem.TYPE_PAGE_BLOCK_GIF:
         return MEDIA_MODE_GIF;
+      case ListItem.TYPE_PAGE_BLOCK_COLLAGE:
+        return MEDIA_MODE_COLLAGE;
     }
     return MEDIA_MODE_NONE;
   }
@@ -226,9 +240,14 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
           block.requestGif(receiver.getGifReceiver(contentKey(i)));
           break;
         }
+        case MEDIA_MODE_COLLAGE: {
+          // Collage requests its own images on the shared receiver at the offset assigned in buildContent.
+          block.requestFiles(receiver, invalidate);
+          break;
+        }
       }
     }
-    receiver.clearReceiversWithHigherKey(blockCount * 2L);
+    receiver.clearReceiversWithHigherKey(Math.max(blockCount * 2L, totalReceiverKeys));
   }
 
   @Override
@@ -273,7 +292,15 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
       final int blockHeight = block.getHeight(view, contentWidth - reserve);
       final int mediaMode = getMediaMode(block);
       Receiver preview = null, content = null;
-      if (mediaMode != MEDIA_MODE_NONE) {
+      ComplexReceiver blockComplexReceiver = iconReceiver;
+      if (mediaMode == MEDIA_MODE_COLLAGE) {
+        if (receiver == null) {
+          y += blockHeight;
+          continue;
+        }
+        // Collage draws its grid from the shared media receiver (its images live at an offset key range).
+        blockComplexReceiver = receiver;
+      } else if (mediaMode != MEDIA_MODE_NONE) {
         if (receiver == null) {
           // Media blocks cannot be drawn without their receivers
           y += blockHeight;
@@ -290,7 +317,7 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
       }
       final int saveCount = Views.save(c);
       c.translate(blockX, y);
-      block.draw(view, c, preview, content, iconReceiver);
+      block.draw(view, c, preview, content, blockComplexReceiver);
       Views.restore(c, saveCount);
       // List markers (bullets / checkboxes / numbers): Instant View draws these in an ItemDecoration;
       // replicate here in the reserved left column [startX, blockX).

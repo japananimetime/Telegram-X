@@ -155,6 +155,18 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
 
   private CollageContext collageContext;
 
+  // Used by the chat-bubble (TGMessageRich) path so a shared ComplexReceiver can host this
+  // collage's images at a non-colliding key range.
+  public void setCollageKeyOffset (int keyOffset) {
+    if (collageContext != null) {
+      collageContext.setKeyOffset(keyOffset);
+    }
+  }
+
+  public int getCollageItemCount () {
+    return collageContext != null && wrappers != null ? wrappers.size() : 0;
+  }
+
   public PageBlockMedia (ViewController<?> context, TdApi.PageBlockCollage collage) {
     super(context, collage);
     setCaption(collage.caption);
@@ -446,11 +458,16 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
         preview.draw(c);
       }
       receiver.draw(c);
-    } else if (collageContext != null && view instanceof PageBlockView) {
-      int maxWidth = getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false);
-      int collageWidth = collageContext.getWidth();
-      int x = !isIndependent() ? getMinimumContentPadding(true) : collageWidth < maxWidth ? (maxWidth - collageWidth) / 2 : 0;
-      collageContext.draw(view, c, x, getContentTop(), ((PageBlockView) view).getMultipleReceiver());
+    } else if (collageContext != null) {
+      // Instant View provides the multi-image receiver from the PageBlockView; the chat-bubble
+      // (TGMessageRich) shares one ComplexReceiver and passes it via iconReceiver + a key offset.
+      ComplexReceiver multipleReceiver = (view instanceof PageBlockView) ? ((PageBlockView) view).getMultipleReceiver() : iconReceiver;
+      if (multipleReceiver != null) {
+        int maxWidth = getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false);
+        int collageWidth = collageContext.getWidth();
+        int x = !isIndependent() ? getMinimumContentPadding(true) : collageWidth < maxWidth ? (maxWidth - collageWidth) / 2 : 0;
+        collageContext.draw(view, c, x, getContentTop(), multipleReceiver);
+      }
     } else if (wrapper != null) {
       final int x = ((getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false)) / 2 - wrapper.getCellWidth() / 2) + getMinimumContentPadding(true);
       wrapper.draw(view, c, x, getContentTop(), preview, receiver, 1f);
