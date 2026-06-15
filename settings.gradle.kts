@@ -31,6 +31,8 @@ include(
   ":vkryl:leveldb",
   ":vkryl:core",
 
+  ":jlatexmath",
+
   ":extension:bridge",
   ":extension:${extra["extension"]}",
 

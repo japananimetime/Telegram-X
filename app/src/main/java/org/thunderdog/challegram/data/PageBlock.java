@@ -617,6 +617,12 @@ public abstract class PageBlock {
         context.processCaption(parent, embedded, embedded.caption, openParameters, out);
         break;
       }
+      case TdApi.PageBlockMathematicalExpression.CONSTRUCTOR: {
+        // True typeset math via the vendored jlatexmath engine (rich-message bubble only;
+        // Instant View keeps its existing monospace/decomposed rendering through parse()).
+        context.process(new PageBlockLatex(parent, (TdApi.PageBlockMathematicalExpression) block), out);
+        break;
+      }
       default: {
         parse(parent, out, context, block, openParameters);
         break;

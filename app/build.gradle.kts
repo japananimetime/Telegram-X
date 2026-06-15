@@ -485,6 +485,7 @@ dependencies {
   implementation(project(":vkryl:leveldb"))
   implementation(project(":vkryl:android"))
   implementation(project(":vkryl:td"))
+  implementation(project(":jlatexmath"))
   // AndroidX: https://developer.android.com/jetpack/androidx/versions
   flavorImplementation(
     libs.androidx.activity.legacy,
