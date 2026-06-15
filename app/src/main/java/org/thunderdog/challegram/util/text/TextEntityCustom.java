@@ -62,6 +62,7 @@ public class TextEntityCustom extends TextEntity {
   public static final int LINK_TYPE_CASHTAG = 7;
   public static final int LINK_TYPE_BANK_CARD = 8;
   public static final int LINK_TYPE_BOT_COMMAND = 9;
+  public static final int LINK_TYPE_MENTION_USER = 10; // link carries the userId as a string
 
   private final ViewController<?> context; // TODO move to TextEntity
 
@@ -80,6 +81,8 @@ public class TextEntityCustom extends TextEntity {
   private long customEmojiId;
   private TdApi.TextEntity spoilerEntity;
   private String copyLink;
+  private android.graphics.Bitmap mathBitmap;
+  private String mathExpression;
 
   public TextEntityCustom (@Nullable ViewController<?> context, @Nullable Tdlib tdlib, String in, int offset, int end, int flags, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     this(context, tdlib, (flags & FLAG_BOLD) != 0 && Text.needFakeBold(in), offset, end, flags, openParameters);
@@ -93,6 +96,12 @@ public class TextEntityCustom extends TextEntity {
 
   public TextEntityCustom setIcon (TdApi.RichTextIcon icon) {
     this.icon = icon;
+    return this;
+  }
+
+  public TextEntityCustom setMath (String expression, android.graphics.Bitmap bitmap) {
+    this.mathExpression = expression;
+    this.mathBitmap = bitmap;
     return this;
   }
 
@@ -168,6 +177,9 @@ public class TextEntityCustom extends TextEntity {
     if (customEmojiId != 0) {
       copy.setCustomEmojiId(customEmojiId);
     }
+    if (mathBitmap != null) {
+      copy.setMath(mathExpression, mathBitmap);
+    }
     if (spoilerEntity != null) {
       copy.setSpoiler(spoilerEntity);
     }
@@ -239,12 +251,27 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public boolean hasMedia () {
-    return isIcon() || isCustomEmoji();
+    return isIcon() || isCustomEmoji() || isMath();
   }
 
   @Override
   public TdApi.RichTextIcon getIcon () {
     return icon;
+  }
+
+  @Override
+  public boolean isMath () {
+    return mathBitmap != null;
+  }
+
+  @Override
+  public android.graphics.Bitmap getMathBitmap () {
+    return mathBitmap;
+  }
+
+  @Override
+  public String getMathExpression () {
+    return mathExpression;
   }
 
   @Override
@@ -349,6 +376,19 @@ public class TextEntityCustom extends TextEntity {
   @Override
   public void performClick (View view, Text text, TextPart part, @Nullable Text.ClickCallback callback, boolean isFromLongPressMenu) {
     switch (linkType) {
+      case LINK_TYPE_MENTION_USER: {
+        // Mention of a user without a username (RichTextMentionName): open their profile directly,
+        // exactly like a normal-message TextEntityTypeMentionName. (tg://user?id= is not a handled
+        // deep link, so routing it through openLinkAlert silently does nothing.)
+        long userId = 0;
+        try {
+          userId = Long.parseLong(link);
+        } catch (NumberFormatException ignored) { }
+        if (userId != 0 && (callback == null || !callback.onUserClick(userId)) && context != null) {
+          context.tdlib().ui().openPrivateProfile(context, userId, this.openParameters(view, text, part, isFromLongPressMenu));
+        }
+        break;
+      }
       case LINK_TYPE_EMAIL: {
         if (callback == null || !callback.onEmailClick(link)) {
           Intents.sendEmail(link);

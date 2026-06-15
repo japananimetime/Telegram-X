@@ -735,7 +735,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
       int entityStart = entities[entityIndex].getStart();
       int entityEnd = entities[entityIndex].getEnd();
 
-      if (entityEnd - entityStart == 0 && !entities[entityIndex].isIcon()) // Ignore anchors
+      if (entityEnd - entityStart == 0 && !entities[entityIndex].isIcon() && !entities[entityIndex].isMath()) // Ignore anchors (icons/math are zero-width media)
         continue;
 
       if (end <= entityStart || start < entityEnd || (entityEnd == entityStart && start == entityStart)) {
@@ -1211,6 +1211,8 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
     if (end - start == 0) {
       if (entity != null && entity.isIcon()) {
         processIcon(in, start, out, entity);
+      } else if (entity != null && entity.isMath()) {
+        processMath(in, start, out, entity);
       }
       return;
     }
@@ -1263,6 +1265,51 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
 
     currentX += iconWidth;
     maxPartHeight = Math.max(iconHeight, maxPartHeight);
+  }
+
+  private void processMath (String in, int index, ArrayList<TextPart> out, @NonNull TextEntity entity) {
+    lastPart = null;
+
+    if (entity.tdlib == null)
+      throw new IllegalArgumentException();
+
+    android.graphics.Bitmap bitmap = entity.getMathBitmap();
+    if (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
+      return;
+    }
+
+    TextPaint paint = getTextPaint(entity);
+    Paint.FontMetricsInt fontMetricsInt = Paints.getFontMetricsInt(paint);
+    int mathHeight = Math.abs(fontMetricsInt.descent - fontMetricsInt.ascent) + Screen.dp(2f);
+    float aspect = (float) bitmap.getWidth() / (float) bitmap.getHeight();
+    int mathWidth = Math.round(mathHeight * aspect);
+
+    int maxWidth = getLineMaxWidth(getLineCount(), currentY);
+    if (currentX > 0 && currentX + mathWidth > maxWidth) {
+      newLineOrEllipsis(out, in);
+      maxWidth = getLineMaxWidth(getLineCount(), currentY);
+    }
+    if (mathWidth > maxWidth && mathWidth > 0) {
+      mathHeight = (int) (mathHeight * ((float) maxWidth / (float) mathWidth));
+      mathWidth = maxWidth;
+    }
+
+    TextPart part = new TextPart(this, in, index, index, getLineCount(), paragraphCount);
+    part.setXY(currentX, currentY);
+    part.setWidth(mathWidth);
+    part.setHeight(mathHeight);
+    part.setEntity(entity);
+    part.setBidiEntity(getBidiEntity(index));
+    final int mediaWidth = mathWidth;
+    final int mediaHeight = mathHeight;
+    part.attachToMedia(newOrExistingMedia(TextMedia.keyForMath(entity.getMathExpression(), mediaHeight), index, index, (keyId, id) ->
+      new TextMedia(this, entity.tdlib, keyId, id, bitmap, mediaWidth, mediaHeight)
+    ));
+
+    out.add(part);
+
+    currentX += mathWidth;
+    maxPartHeight = Math.max(mathHeight, maxPartHeight);
   }
 
   private void processEmoji (String in, int start, int end, @Nullable EmojiInfo info, ArrayList<TextPart> out, @Nullable TextEntity entity) {

@@ -41,6 +41,8 @@ import org.thunderdog.challegram.util.text.TextColorSets;
 
 import java.util.ArrayList;
 
+import me.vkryl.android.AnimatorUtils;
+import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.util.ClickHelper;
 import me.vkryl.core.lambda.Destroyable;
 
@@ -69,6 +71,32 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
   // "Show more" affordance for truncated (isFull == false) messages
   private @Nullable Text showMoreText;
   private boolean showMoreLoading;
+
+  // Smooth expand/collapse of PageBlockDetails ("Structure"-style collapsibles). detailsExpandDelta is
+  // (oldHeight - newHeight); during the animation getContentHeight() interpolates back over it so the
+  // bubble grows/shrinks instead of snapping, and drawContent clips the revealed region.
+  private static final int ANIMATOR_DETAILS = 1;
+  private float detailsExpandDelta;
+  private final FactorAnimator detailsExpand = new FactorAnimator(ANIMATOR_DETAILS, new FactorAnimator.Target() {
+    @Override
+    public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+      if (contentWidth > 0) {
+        buildBubble(false);
+        requestLayout();
+      }
+      invalidate();
+    }
+
+    @Override
+    public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
+      detailsExpandDelta = 0f;
+      if (contentWidth > 0) {
+        buildBubble(false);
+        requestLayout();
+      }
+      invalidate();
+    }
+  }, AnimatorUtils.DECELERATE_INTERPOLATOR, 220L);
 
   public TGMessageRich (MessagesManager context, TdApi.Message msg, @NonNull TdApi.RichMessage richMessage) {
     super(context, msg);
@@ -156,6 +184,9 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
 
   @Override
   protected int getContentHeight () {
+    if (detailsExpandDelta != 0f) {
+      return Math.round(contentHeight + (1f - detailsExpand.getFactor()) * detailsExpandDelta);
+    }
     return contentHeight;
   }
 
@@ -284,6 +315,14 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
   protected void drawContent (MessageView view, Canvas c, int startX, int startY, int maxWidth, @Nullable ComplexReceiver receiver) {
     final ComplexReceiver iconReceiver = view.getTextMediaReceiver();
     final int blockCount = blocks.size();
+    // While a details section is expanding/collapsing, clip the content to the animated height so the
+    // revealed blocks unfold into the growing bubble instead of overflowing it.
+    final boolean clipForDetails = detailsExpandDelta != 0f;
+    int detailsClipRestore = -1;
+    if (clipForDetails) {
+      detailsClipRestore = Views.save(c);
+      c.clipRect(startX, startY, startX + maxWidth, startY + getContentHeight());
+    }
     int y = startY;
     for (int i = 0; i < blockCount; i++) {
       PageBlock block = blocks.get(i);
@@ -338,6 +377,9 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
     }
     if (showMoreText != null) {
       showMoreText.draw(c, startX + getShowMorePaddingLeft(), startX + maxWidth, 0, y + Screen.dp(6f), null, showMoreLoading ? 0.6f : 1f);
+    }
+    if (clipForDetails) {
+      Views.restore(c, detailsClipRestore);
     }
   }
 
@@ -424,9 +466,20 @@ public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
         PageBlock block = findBlockAt(y - getContentY());
         if (block instanceof PageBlockRichText) {
           TdApi.PageBlockDetails details = (TdApi.PageBlockDetails) block.getOriginalBlock();
+          final int oldHeight = contentHeight;
           details.isOpen = !details.isOpen;
           parseBlocks();
+          if (contentWidth > 0) {
+            buildContent(contentWidth); // recompute contentHeight to the new (toggled) state
+            // forceFactor() may fire onFactorChangeFinished (which zeroes the delta), so reset the
+            // animator FIRST and only then seed the height delta the animation interpolates over.
+            detailsExpand.forceFactor(0f);
+            detailsExpandDelta = oldHeight - contentHeight;
+          }
           rebuildAndUpdateContent();
+          if (contentWidth > 0) {
+            detailsExpand.animateTo(1f);
+          }
           invalidateContentReceiver();
           invalidateTextMediaReceiver();
         }
