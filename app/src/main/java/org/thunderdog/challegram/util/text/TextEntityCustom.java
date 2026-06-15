@@ -50,6 +50,7 @@ public class TextEntityCustom extends TextEntity {
   public static final int FLAG_MARKED = 1 << 7;
   public static final int FLAG_CLICKABLE = 1 << 10;
   public static final int FLAG_ANCHOR = 1 << 11;
+  public static final int FLAG_SPOILER = 1 << 12;
 
   public static final int LINK_TYPE_NONE = 0;
   public static final int LINK_TYPE_EMAIL = 1;
@@ -77,6 +78,7 @@ public class TextEntityCustom extends TextEntity {
   private String referenceAnchorName;
   private TdApi.RichTextIcon icon;
   private long customEmojiId;
+  private TdApi.TextEntity spoilerEntity;
   private String copyLink;
 
   public TextEntityCustom (@Nullable ViewController<?> context, @Nullable Tdlib tdlib, String in, int offset, int end, int flags, @Nullable TdlibUi.UrlOpenParameters openParameters) {
@@ -96,6 +98,11 @@ public class TextEntityCustom extends TextEntity {
 
   public TextEntityCustom setCustomEmojiId (long customEmojiId) {
     this.customEmojiId = customEmojiId;
+    return this;
+  }
+
+  public TextEntityCustom setSpoiler (TdApi.TextEntity spoilerEntity) {
+    this.spoilerEntity = spoilerEntity;
     return this;
   }
 
@@ -160,6 +167,9 @@ public class TextEntityCustom extends TextEntity {
     }
     if (customEmojiId != 0) {
       copy.setCustomEmojiId(customEmojiId);
+    }
+    if (spoilerEntity != null) {
+      copy.setSpoiler(spoilerEntity);
     }
     return copy;
   }
@@ -278,7 +288,7 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public TdApi.TextEntity getSpoiler () {
-    return null;
+    return spoilerEntity;
   }
 
   @Override
@@ -481,6 +491,13 @@ public class TextEntityCustom extends TextEntity {
   @Override
   public boolean equals (TextEntity bRaw, int compareMode, @Nullable String originalText) {
     TextEntityCustom b = (TextEntityCustom) bRaw;
+    if (compareMode == COMPARE_MODE_SPOILER) {
+      // Group parts that belong to the same spoiler region (same full-span entity), regardless of
+      // their inner formatting (bold/italic/etc.).
+      return this.spoilerEntity != null && b.spoilerEntity != null
+        && this.spoilerEntity.offset == b.spoilerEntity.offset
+        && this.spoilerEntity.length == b.spoilerEntity.length;
+    }
     if (isClickable() != b.isClickable()) {
       return false;
     }

@@ -505,8 +505,19 @@ public class FormattedText {
         break;
       }
       case TdApi.RichTextSpoiler.CONSTRUCTOR: {
-        // TODO: hide contents behind a spoiler effect, like TextEntityTypeSpoiler (requires spoiler support in TextEntityCustom)
-        parseRichText(context, ((TdApi.RichTextSpoiler) in).text, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        // Hide contents behind a spoiler effect, like TextEntityTypeSpoiler. FLAG_SPOILER forces an
+        // entity to be created even for plain text; then tag every part of the region with one
+        // full-span spoiler entity so Text groups and obscures them together.
+        final int spoilerStart = offset[0];
+        final int firstEntity = entities.size();
+        parseRichText(context, ((TdApi.RichTextSpoiler) in).text, out, entities, offset, flags | TextEntityCustom.FLAG_SPOILER, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        final int spoilerLength = offset[0] - spoilerStart;
+        if (spoilerLength > 0) {
+          TdApi.TextEntity spoilerEntity = new TdApi.TextEntity(spoilerStart, spoilerLength, new TdApi.TextEntityTypeSpoiler());
+          for (int i = firstEntity; i < entities.size(); i++) {
+            entities.get(i).setSpoiler(spoilerEntity);
+          }
+        }
         break;
       }
       case TdApi.RichTextCustomEmoji.CONSTRUCTOR: {
