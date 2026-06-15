@@ -108,9 +108,22 @@ public class CollageContext {
     return collageHeight;
   }
 
+  // Key offset for the shared receiver case (e.g. a chat-bubble rich message where one
+  // ComplexReceiver is shared across many blocks). 0 means this collage owns the receiver
+  // (Instant View, where each PageBlockView has its own receiver).
+  private int keyOffset = 0;
+
+  public void setKeyOffset (int keyOffset) {
+    this.keyOffset = keyOffset;
+  }
+
   public final void requestFiles (ComplexReceiver multipleReceiver, boolean invalidate) {
-    multipleReceiver.clearReceiversWithHigherKey(items.size());
-    int i = 0;
+    if (keyOffset == 0) {
+      // Owns the receiver — safe to clear higher keys. When sharing (keyOffset != 0) the owner
+      // (e.g. TGMessageRich) manages clearing, so we must not wipe other blocks' receivers.
+      multipleReceiver.clearReceiversWithHigherKey(items.size());
+    }
+    int i = keyOffset;
     for (CollageItem item : items) {
       if (!invalidate) {
         item.wrapper.requestPreview(multipleReceiver.getPreviewReceiver(i));
@@ -141,7 +154,7 @@ public class CollageContext {
   }
 
   public final <T extends View & DrawableProvider> void draw (T view, Canvas c, int startX, int startY, ComplexReceiver multipleReceiver) {
-    int i = 0;
+    int i = keyOffset;
     for (CollageItem item : items) {
       item.wrapper.draw(view, c, startX + item.x, startY + item.y, multipleReceiver.getPreviewReceiver(i), multipleReceiver.getReceiver(i, item.wrapper.needGif()), 1f);
       i++;
