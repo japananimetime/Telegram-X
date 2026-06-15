@@ -38,6 +38,7 @@ import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.util.DrawableProvider;
@@ -548,16 +549,21 @@ public abstract class PageBlock {
         context.processCaption(parent, slideshow, slideshow.caption, openParameters, out);
         break;
       }
-      // TODO(rich-media): PageBlockFile requires a dedicated inline view (TYPE_CUSTOM_INLINE); rendered as a text placeholder for now
+      // TODO(rich-media): interactive playback (FileComponent + TGPlayerController) is not wired in
+      // the canvas-drawn bubble yet; show the track's real metadata instead of a generic placeholder.
       case TdApi.PageBlockAudio.CONSTRUCTOR: {
         TdApi.PageBlockAudio audio = (TdApi.PageBlockAudio) block;
-        parse(parent, out, context, placeholderParagraph(Lang.getString(R.string.Audio)), openParameters);
+        parse(parent, out, context, placeholderParagraph(buildAudioLabel(audio.audio)), openParameters);
         context.processCaption(parent, audio, audio.caption, openParameters, out);
         break;
       }
       case TdApi.PageBlockVoiceNote.CONSTRUCTOR: {
         TdApi.PageBlockVoiceNote voiceNote = (TdApi.PageBlockVoiceNote) block;
-        parse(parent, out, context, placeholderParagraph(Lang.getString(R.string.ChatContentVoice)), openParameters);
+        String voiceLabel = "🎤 " + Lang.getString(R.string.ChatContentVoice);
+        if (voiceNote.voiceNote != null && voiceNote.voiceNote.duration > 0) {
+          voiceLabel += "  " + Strings.buildDuration(voiceNote.voiceNote.duration);
+        }
+        parse(parent, out, context, placeholderParagraph(voiceLabel), openParameters);
         context.processCaption(parent, voiceNote, voiceNote.caption, openParameters, out);
         break;
       }
@@ -583,6 +589,22 @@ public abstract class PageBlock {
 
   private static TdApi.PageBlock placeholderParagraph (String text) {
     return new TdApi.PageBlockParagraph(new TdApi.RichTextItalic(new TdApi.RichTextPlain(text)));
+  }
+
+  private static String buildAudioLabel (@Nullable TdApi.Audio audio) {
+    if (audio == null) {
+      return "🎵 " + Lang.getString(R.string.Audio);
+    }
+    String name = !StringUtils.isEmpty(audio.title) ? audio.title :
+      (!StringUtils.isEmpty(audio.fileName) ? audio.fileName : Lang.getString(R.string.Audio));
+    StringBuilder b = new StringBuilder("🎵 ").append(name);
+    if (!StringUtils.isEmpty(audio.performer)) {
+      b.append(" — ").append(audio.performer);
+    }
+    if (audio.duration > 0) {
+      b.append("  ").append(Strings.buildDuration(audio.duration));
+    }
+    return b.toString();
   }
 
   public static class UnsupportedPageBlockException extends Exception { }
