@@ -45,6 +45,7 @@ import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.ListItem;
+import org.thunderdog.challegram.util.text.FormattedText;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.util.text.TextColorSet;
 import org.thunderdog.challegram.util.text.TextColorSets;
@@ -374,15 +375,20 @@ public class PageBlockRichText extends PageBlock {
   // "Thinking..." placeholder; for pending rich messages only
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockThinking thinking, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, thinking);
-    // TODO: shimmer animation instead of a plain italic paragraph
-    setText(new TdApi.RichTextItalic(thinking.text), getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+    // TODO(rich-text phase 4): shimmer animation instead of a plain italic paragraph
+    TdApi.RichText thinkingText = thinking.text != null ? thinking.text : new TdApi.RichTextPlain("");
+    setText(new TdApi.RichTextItalic(thinkingText), getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
   }
 
   // Mathematical expression in LaTeX format
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockMathematicalExpression mathematicalExpression, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, mathematicalExpression);
-    // TODO: proper rendering of LaTeX markup; rendered as a monospace paragraph for now
-    setText(new TdApi.RichTextFixed(new TdApi.RichTextPlain(mathematicalExpression.expression)), getPreformattedProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+    // Decompose simple caret/underscore notation into real super/subscripts; fall back to plain text.
+    TdApi.RichText math = FormattedText.buildMathRichText(mathematicalExpression.expression);
+    if (math == null) {
+      math = new TdApi.RichTextPlain(mathematicalExpression.expression != null ? mathematicalExpression.expression : "");
+    }
+    setText(math, getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
   }
 
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockPullQuote pullQuote, boolean isCredit, @Nullable TdlibUi.UrlOpenParameters openParameters) {
