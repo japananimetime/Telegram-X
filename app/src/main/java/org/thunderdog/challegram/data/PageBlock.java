@@ -596,16 +596,24 @@ public abstract class PageBlock {
         context.processCaption(parent, voiceNote, voiceNote.caption, openParameters, out);
         break;
       }
-      // TODO(rich-media): embedded web content requires a WebView (PageBlockWrapView); rendered as a link placeholder for now
       case TdApi.PageBlockEmbedded.CONSTRUCTOR: {
         TdApi.PageBlockEmbedded embedded = (TdApi.PageBlockEmbedded) block;
-        TdApi.RichText placeholderText;
-        if (!StringUtils.isEmpty(embedded.url)) {
-          placeholderText = new TdApi.RichTextUrl(new TdApi.RichTextPlain(embedded.url), embedded.url, false);
+        // Like the official client (and Instant View): render a recognized embed (YouTube/Vimeo/…)
+        // as its poster photo + a play overlay; tapping opens the embed. A live inline WebView is
+        // not used in chat bubbles. Embeds without a poster/known service fall back to a link.
+        EmbeddedService service = embedded.posterPhoto != null ? EmbeddedService.parse(embedded) : null;
+        if (service != null) {
+          TdApi.PageBlockPhoto fakePhoto = new TdApi.PageBlockPhoto(embedded.posterPhoto, embedded.caption, embedded.url, false);
+          context.process(new PageBlockMedia(parent, fakePhoto, service, openParameters), out);
         } else {
-          placeholderText = new TdApi.RichTextItalic(new TdApi.RichTextPlain(Lang.getString(R.string.Link)));
+          TdApi.RichText placeholderText;
+          if (!StringUtils.isEmpty(embedded.url)) {
+            placeholderText = new TdApi.RichTextUrl(new TdApi.RichTextPlain(embedded.url), embedded.url, false);
+          } else {
+            placeholderText = new TdApi.RichTextItalic(new TdApi.RichTextPlain(Lang.getString(R.string.Link)));
+          }
+          parse(parent, out, context, new TdApi.PageBlockParagraph(placeholderText), openParameters);
         }
-        parse(parent, out, context, new TdApi.PageBlockParagraph(placeholderText), openParameters);
         context.processCaption(parent, embedded, embedded.caption, openParameters, out);
         break;
       }
