@@ -8856,7 +8856,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
             break;
           }
           case TdApi.Error.CONSTRUCTOR: {
-            UI.showError(result);
+            // Background prefetch of a chat's active stories — a failure here (e.g. transient or a
+            // chat with no readable stories) must not surface a toast to the user; just log it.
+            Log.i("GetChatActiveStories failed for chatId %d: %s", chatId, TD.toErrorString(result));
             break;
           }
         }

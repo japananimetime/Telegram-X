@@ -563,13 +563,23 @@ public class StoryViewController extends ViewController<StoryViewController.Args
             // Update progress view with fresh story count
             if (storyProgressView != null) {
               int storyCount = freshStories.stories.length;
-              // Find current story index in fresh data
-              currentStoryIndex = 0;
+              // Find the currently-open story in the fresh data. If it's no longer present (it
+              // expired or was deleted between open and refresh), keep the previous index clamped to
+              // the new range rather than snapping the highlighted segment to 0, which would
+              // mislabel the still-displayed story as the first one.
+              int foundIndex = -1;
               for (int i = 0; i < freshStories.stories.length; i++) {
                 if (freshStories.stories[i].storyId == currentStoryId) {
-                  currentStoryIndex = i;
+                  foundIndex = i;
                   break;
                 }
+              }
+              if (foundIndex >= 0) {
+                currentStoryIndex = foundIndex;
+              } else if (storyCount > 0) {
+                currentStoryIndex = Math.min(currentStoryIndex, storyCount - 1);
+              } else {
+                currentStoryIndex = 0;
               }
               storyProgressView.setStoryCount(storyCount, currentStoryIndex);
             }

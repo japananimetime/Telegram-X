@@ -3347,9 +3347,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     if (adapter == null) {
       return;
     }
-    // Get the main story list. SortedList holds listeners weakly and exposes no unsubscribe, so
-    // subscribe exactly once (loadActiveStories is also re-invoked when "hide stories" is toggled
-    // back on). If already subscribed, just repopulate the (possibly recreated) overlay snapshot.
+    // Get the main story list. Subscribe exactly once (loadActiveStories is also re-invoked when
+    // "hide stories" is toggled back on); the listener is detached deterministically in destroy()
+    // via unsubscribeFromUpdates. If already subscribed, just repopulate the (possibly recreated)
+    // overlay snapshot.
     StoryList storyList = tdlib.getStoryList(new TdApi.StoryListMain());
     if (storyListListener != null) {
       updateStoryBar(storyList);
