@@ -2,101 +2,82 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What this is
+
+**Neurogram X** — a feature-extended Android fork of [Telegram X](https://github.com/TGX-Android/Telegram-X) (TDLib-based Telegram client), renamed in honour of the AI VTuber Neuro-sama.
+
+* Application id: `space.hikaro.tgx`, display name `Neurogram X` (set via `app.name` in `local.properties` → generated `AppName` string).
+* Upstream is read-only; all original Telegram X architecture still applies. This file documents the fork's specifics on top of it.
+* User-facing build/run docs live in [README.md](/README.md).
+
+## Environment & Build (Windows)
+
+Development happens on **Windows** with **JDK 21**. Two shells are in play: **PowerShell** (gradle, git, adb) and **Git Bash** (POSIX `scripts/*.sh`).
+
+**Always set `GRADLE_USER_HOME` before building** — there is a Gradle junction bug on this machine that fails builds otherwise (point it at any stable path outside the repo):
+
+```powershell
+$env:GRADLE_USER_HOME = "<path-outside-the-repo>\.gradle"
+.\gradlew.bat :app:compileLatestX64DebugJavaWithJavac   # fast compile check
+.\gradlew.bat :app:assembleLatestArm64Debug             # device (ARM64) APK
+.\gradlew.bat :app:assembleLatestX64Debug               # emulator (x86_64) APK
+.\gradlew.bat assembleUniversalRelease                   # release
+```
+
+* APK outputs: `app/build/outputs/apk/`, named `Neurogram-X-<version>-<abi>-<type>.apk`.
+* Native build works (`externalNativeBuild*`); `app/.cxx` may be junctioned to another drive to dodge a full `F:`.
+* The `F:` drive is chronically near-full — prefer `C:`/`G:` for heavy/cold builds.
+* Setup after fresh clone: `scripts/setup.sh` (Git Bash), or `scripts/setup.sh --skip-sdk-setup`.
+
+### Signing & the "experimental build" flag (important)
+
+A build is flagged **experimental** when no keystore is configured (`buildSrc/.../ConfigurationPlugin.kt`: `isExperimentalBuild = isExampleBuild || keystore == null || app.experimental`). An experimental build **short-circuits FCM push registration** (`TdlibManager.checkDeviceToken` → `EXPERIMENTAL_BUILD_DETECTED`) **and skips applying the `google-services` plugin** (`app/build.gradle.kts`). So:
+
+* Push / notifications only work in a **keystore-signed** build.
+* The keystore lives in a gitignored, never-committed `keystore/` dir (a `.jks` + a `key.properties`), pointed to by `keystore.file` in `local.properties`. `/keystore` and `/local.properties` are gitignored.
+* The keystore signs **both debug and release**, so even debug device builds register push.
+* Changing the signing key requires an **uninstall+reinstall** on-device (signature mismatch).
+* Note: `app.ntgcalls` in `local.properties` is a **dead/no-op flag** (referenced nowhere in the build) — see calls note below.
+
+### On-device testing
+
+The dev device is a phone over **wireless ADB** (`adb connect <ip:port>`). Build the matching ABI (the phone is ARM → `assembleLatestArm64Debug`), `adb install -r`, and read crashes with `adb logcat`. Prefer verifying by building/running over guessing.
+
 ## Git Workflow
 
-**Always push to fork, not origin:**
-```bash
-git push fork <branch-name>
-# NOT: git push origin
-```
-
-### Feature Branch Workflow
-
-When developing new features, follow this workflow:
-
-1. **Start from `main`** - Create feature branch from latest `origin/main`:
-   ```bash
-   git fetch origin
-   git checkout -b feature/my-feature origin/main
-   ```
-
-2. **Develop in feature branch** - Make commits, test, iterate
-
-3. **Push feature branch** - Push to fork for backup/review:
-   ```bash
-   git push fork feature/my-feature
-   ```
-
-4. **Merge to `all-features-combined`** - After feature is complete:
-   ```bash
-   git checkout all-features-combined
-   git merge feature/my-feature
-   git push fork all-features-combined
-   ```
-
-### Available Feature Branches
-
-Each feature has its own branch based on `main`. Use these for isolated features:
-
-| Branch | Description |
-|--------|-------------|
-| `feature/calls` | NTgCalls integration, video chat, group calls |
-| `feature/mini-apps` | Web Apps (Mini Apps) support |
-| `feature/quotes` | Quote messages, reply in other chat |
-| `feature/stories-implementation` | Stories viewing and posting |
-| `feature/forum-topics-implementation` | Forum topics support |
-| `feature/premium-billing` | Premium billing, Stars |
-| `feature/saved-tags` | Saved Messages Tags |
-| `feature/profile-notes` | Profile notes feature |
-| `feature/playback-speed` | Playback speed controls |
-| `feature/disposable-voices` | Disposable voice messages |
-| `feature/reactions-improvements` | Big reactions, attach button improvements |
-| `feature/community-features` | Photo resolution, clear calls, messages filter (from PRs) |
-
-### Branch Hierarchy
-
-```
-origin/main (upstream)
-    │
-    ├── feature/calls
-    ├── feature/mini-apps
-    ├── feature/quotes
-    ├── feature/stories-implementation
-    ├── feature/forum-topics-implementation
-    ├── feature/premium-billing
-    ├── feature/saved-tags
-    ├── feature/profile-notes
-    ├── feature/playback-speed
-    ├── feature/disposable-voices
-    ├── feature/reactions-improvements
-    └── feature/community-features
-            │
-            └──► all-features-combined (all features merged)
-```
-
-**Important:** Never commit directly to `all-features-combined`. Always work in a feature branch first, then merge.
-
-## Build Commands
+**Push to `fork`, not `origin`:**
 
 ```bash
-# Debug builds (most common for development)
-./gradlew assembleLatestArm64Debug    # ARM64 emulator/device
-./gradlew assembleLatestX64Debug      # x86_64 emulator
-./gradlew assembleDebug               # All debug variants
-
-# Release builds
-./gradlew assembleUniversalRelease    # Universal release APK
-
-# Setup tasks (run after fresh clone)
-./scripts/setup.sh                    # Full setup (SDK + native deps)
-./scripts/setup.sh --skip-sdk-setup   # Skip SDK, build native only
-
-# Clean builds
-./scripts/reset.sh                    # Reset submodules + clean
-./scripts/force-clean.sh              # Force clean build files
+git push fork <branch-name>     # fork = git@github.com:japananimetime/Telegram-X.git
 ```
 
-Build outputs: `app/build/outputs/apk/`
+* `fork` is SSH; if SSH fails on this machine, push over HTTPS to the same repo.
+* `origin` / `upstream` = `TGX-Android/Telegram-X` (read-only).
+* Commit/push only when asked. Never commit directly to `all-features-combined` — work in a `feature/*` branch and merge.
+
+### Branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Tracks upstream Telegram X |
+| `base/tdlib`, `core/tdlib` | Shared core (TDLib upgrade + crash routing) |
+| `feature/*` | Isolated features: `native-video-calls`/`calls`, `stories`, `mini-apps`, `gifts`, `stars`, `premium-billing`, `quotes`, `forum-topics`, `saved-tags`, `profile-notes`, `playback-speed`, `disposable-voices`, `reactions-improvements`, `voice-transcription`, `rich-messages`, `community-features` |
+| `all-features-combined` | Integration of feature branches |
+| `parity-fixes/*` | Active working branch (calls + parity fixes + on-device hardening) |
+
+## Calls (native tgcalls)
+
+Voice/video calling is **native `tgcalls`** (with `libtgvoip` + `webrtc`), built via `app/jni/BuildTgCalls.cmake`; sources under `app/jni/third_party/{tgcalls,libtgvoip,webrtc}`. It supports 1:1 video, group video chats, and screen sharing. The **`NTgCalls`** library was evaluated and **abandoned** — `deprecated/ntgcalls*` branches are superseded by the native tgcalls work (#856). Do not reintroduce ntgcalls.
+
+## Issue Tracking (MantisBT)
+
+**Project ID: 1**. Categories: General, Interface, Purchases, Stories, Topics (created via web UI only).
+
+Workflow: before work, check/assign an issue; during, add progress notes; when done, add an implementation summary note (files modified, key changes, TDLib functions used, **commit hash + branch + PR link**) and set status `resolved` / resolution `fixed`. Create issues for bugs discovered during development. Statuses: `new` → `assigned` → `resolved` → `closed`. Reached via `mcp__mantisbt__*` MCP tools (requires `MANTIS_API_TOKEN`).
+
+## Local tooling (neuro-pipeline)
+
+This repo has a local, gitignored `.claude/` toolset (Ollama executor + MantisBT tracker + autonomous audit loop). Relevant agents/skills: `code-author`, `code-reviewer`, `commit-msg`, `ticket-triager`, and the `/audit-loop`, `/parity-*`, `*-regression` skills. They delegate to local Ollama (`mcp__ollama__*`) and are local-only (not part of the app).
 
 ## Project Architecture
 
@@ -114,7 +95,7 @@ Build outputs: `app/build/outputs/apk/`
 | `tool/` | Static utilities (`Screen`, `Fonts`, `Views`, `Strings`, `Drawables`) |
 | `util/` | Helper classes, text rendering (`Text.java`), formatters |
 
-### Submodules
+### Submodules / native
 
 | Module | Path | Purpose |
 |--------|------|---------|
@@ -123,6 +104,7 @@ Build outputs: `app/build/outputs/apk/`
 | `vkryl:android` | `/vkryl/android/` | Android utilities, animators |
 | `vkryl:leveldb` | `/vkryl/leveldb/` | LevelDB Java bindings |
 | `vkryl:td` | `/vkryl/td/` | TDLib utility extensions |
+| native calls | `app/jni/third_party/{tgcalls,libtgvoip,webrtc}` | Native voice/video calling |
 
 ### Navigation System (NOT standard Android)
 
@@ -137,94 +119,40 @@ Creating a new screen:
 2. Create class in `ui/` package extending `ViewController<T>` or subclass
 3. Navigate via `navigationController.navigateTo(new MyController(context, tdlib))`
 
-Key lifecycle methods:
-- `onCreateView()` → Build UI (called once)
-- `onFocus()` / `onBlur()` → Visibility changes
-- `needAsynchronousAnimation()` → Delay transition until data loads
-- `destroy()` → Cleanup
+Key lifecycle methods: `onCreateView()`, `onFocus()`/`onBlur()`, `needAsynchronousAnimation()`, `destroy()`. `ViewController` implements `BaseActivity.ActivityListener` and self-registers (`context.addActivityListener(this)`), so `onActivityPause()`/`onActivityResume()` reach it even inside a `PopupLayout`.
 
-Common controller types:
-- `RecyclerViewController<T>` → List screens
-- `ViewPagerController<T>` → Tabbed screens
-- `EditBaseController<T>` → Edit screens with done button
+Common controller types: `RecyclerViewController<T>` (lists), `ViewPagerController<T>` (tabs), `EditBaseController<T>` (edit screens).
 
 ### Animation System
 
-Use `me.vkryl.android.animator` classes instead of standard Android animators:
-- `BoolAnimator` → Animate between two states (preferred)
-- `FactorAnimator` → Animate float values
-- `ListAnimator<T>` → Animate list changes
-- `ReplaceAnimator<T>` → Animate single item replacement
+Use `me.vkryl.android.animator` classes instead of standard Android animators: `BoolAnimator`, `FactorAnimator`, `ListAnimator<T>`, `ReplaceAnimator<T>`.
 
 ### Theme Colors
 
-Access colors via `Theme.getColor(R.id.theme_color_*)` - optimized for use in `onDraw()`.
-Color definitions: `app/src/main/other/themes/colors-and-properties.xml`
+Access colors via `Theme.getColor(R.id.theme_color_*)` — optimized for `onDraw()`. Definitions: `app/src/main/other/themes/colors-and-properties.xml`.
 
 ### Strings/Translations
 
-- Main strings: `app/src/main/res/values/strings.xml` (English only)
-- Use `Lang.getString()`, `Lang.plural()`, `Lang.getRelativeDate()`
-- Translations managed via translations.telegram.org (not local files)
-
-## Issue Tracking (MantisBT)
-
-**Project ID: 1** (Telegram X)
-
-Use MantisBT for all task/issue tracking.
-
-### Workflow:
-1. **Before starting work:** Check MantisBT for assigned issues or pick from unassigned
-2. **When starting:** Update issue status to "assigned" and assign to yourself
-3. **During work:** Add notes with progress updates if work spans multiple sessions
-4. **When done:** Add implementation summary note with:
-   - Files modified
-   - Key changes made
-   - TDLib functions used (if applicable)
-   - **Git links** (where available):
-     - Commit hash or link
-     - Branch name (e.g., `feature/my-feature`)
-     - PR link if created
-5. **After testing:** Update status to "resolved" with resolution "fixed"
-
-### Categories:
-- General, Interface, Purchases, Stories, Topics
-
-**Note:** Categories can only be created via web UI (API limitation). If a bug doesn't fit any existing category, inform the user so they can create a new one.
-
-### Issue Statuses:
-- `new` → Unreviewed
-- `assigned` → Being worked on
-- `resolved` → Fix implemented, awaiting verification
-- `closed` → Verified and complete
-
-### Proactive Behavior:
-- When user mentions a bug or feature, check if MantisBT issue exists
-- Create new issues for discovered bugs during development
-- Link commits to issues in notes when applicable
+- Main strings: `app/src/main/res/values/strings.xml` (English only). The launcher label `AppName` is **generated** from `app.name` (do not add `AppName` to strings.xml).
+- Use `Lang.getString()`, `Lang.plural()`, `Lang.getRelativeDate()`. Translations are managed via translations.telegram.org.
 
 ## TDLib Integration
 
 TDLib functions are accessed via the `Tdlib` class:
-- Synchronous: `tdlib.client().send(new TdApi.Function(), handler)`
+- `tdlib.client().send(new TdApi.Function(), handler)` / `tdlib.send(fn, (result, error) -> {})`
 - Async helpers: `tdlib.getChat()`, `tdlib.getUser()`, etc.
-- Listeners: Implement interfaces in `telegram/` (e.g., `ChatListener`, `MessageListener`)
+- Listeners: implement interfaces in `telegram/` (`ChatListener`, `MessageListener`, …)
 
-Common TDLib patterns:
 ```java
-// Send request with callback
 tdlib.client().send(new TdApi.GetChat(chatId), result -> {
   if (result.getConstructor() == TdApi.Chat.CONSTRUCTOR) {
     TdApi.Chat chat = (TdApi.Chat) result;
     // handle chat
   }
 });
-
-// Listen for updates
-class MyController extends ViewController implements ChatListener {
-  @Override public void onChatUpdated(TdApi.Chat chat) { /* ... */ }
-}
 ```
+
+**Never hand-edit** `TdCompileAssert.kt` / `TdUnsupported.kt` / `TdEqualsTo.kt` in `vkryl/td` — they are regenerated from `TdApi.java` by `generateResourcesAndThemes`.
 
 ## Key Implementation Patterns
 
@@ -233,24 +161,16 @@ New message types go in `data/TGMessage*.java`. Register in `TGMessage.valueOf()
 
 ### Custom Views
 - Inherit from `View` or `BaseView` (for 3D-touch/preview support)
-- Use `Screen.dp()` for dimensions
-- Draw directly on canvas in `onDraw()` for performance
-- Never allocate objects in drawing methods
+- Use `Screen.dp()` for dimensions; draw in `onDraw()`; **never allocate in drawing methods**
 
 ### Resources
 - IDs: `app/src/main/res/values/ids.xml`
 - Strings: `app/src/main/res/values/strings.xml`
-- Icons: Vector drawables with 24x24 viewport
-
-## Windows Build Notes
-
-The project includes a workaround for Windows file locking:
-- `kotlin.compiler.execution.strategy=in-process` in `gradle.properties`
-- Prevents Kotlin daemon memory-mapped file lock issues
+- Icons: vector drawables, 24×24 viewport, size in filename suffix
 
 ## Code Style
 
 - Double whitespace as tab
 - Space before method parameter brace: `void method () {`
 - Kotlin allowed in `me.vkryl.*` packages only (must interop with Java)
-- Vector drawables: 24x24 viewport, size in filename suffix
+- Match surrounding code's comment density, naming, and idiom

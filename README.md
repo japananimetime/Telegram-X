@@ -1,135 +1,138 @@
-# [Telegram X](https://play.google.com/store/apps/details?id=org.thunderdog.challegram) — a slick experimental Telegram client based on [TDLib](https://core.telegram.org/tdlib).
+# Neurogram X
 
-![Telegram X](/images/feature.png)
+**Neurogram X** is a feature-extended Android fork of [Telegram X](https://github.com/TGX-Android/Telegram-X) — the slick, [TDLib](https://core.telegram.org/tdlib)-based alternative Telegram client. It is named in honour of [**Neuro-sama**](https://en.wikipedia.org/wiki/Neuro-sama), the AI VTuber created by Vedal.
 
-This is the complete source code and the build instructions for the official alternative Android client for the Telegram messenger, based on the [Telegram API](https://core.telegram.org/api) and the [MTProto](https://core.telegram.org/mtproto) secure protocol via [TDLib](https://github.com/TGX-Android/tdlib).
+> This is an **unofficial** fork maintained for personal use and experimentation. It is **not** affiliated with, endorsed by, or supported by Telegram or the Telegram X team. For the official client, use [Telegram X](https://play.google.com/store/apps/details?id=org.thunderdog.challegram).
 
-* [**Telegram X** on Google Play](http://play.google.com/store/apps/details?id=org.thunderdog.challegram) ([subscribe to beta](https://play.google.com/apps/testing/org.thunderdog.challegram))
-* [APKs and Build Info](https://t.me/tgx_log)
-* [Bot to verify APK hash](https://t.me/tgx_bot)
+* Application id: `space.hikaro.tgx`
+* Based on: [TGX-Android/Telegram-X](https://github.com/TGX-Android/Telegram-X) (`origin` / `upstream`)
+* License: GPL-3.0 (inherited from Telegram X) — see [LICENSE](/LICENSE)
 
-<details>
-<summary>Other sources</summary>
+## What this fork adds
 
-* [**Telegram X** on Huawei AppGallery](https://appgallery.huawei.com/app/C101754199)
-* [**GitHub Releases**](https://github.com/TGX-Android/Telegram-X/releases)
+Work in Neurogram X extends stock Telegram X across these areas (developed across `feature/*` branches and integrated on working branches such as `parity-fixes/*`):
 
-</details>
+| Area | Highlights |
+|------|-----------|
+| **Calls** | Native 1:1 **video calls** and **group video chats**, screen sharing (incl. group server-side presentation) via native `tgcalls` (`libtgvoip` + `webrtc`) |
+| **Stories** | Viewing + posting, story bar in the chat list, story composer/preview, viewer with reactions/replies |
+| **Mini Apps** | Full Web Apps (Mini Apps) support — `WebAppController` + JS bridge |
+| **Gifts & Stars** | Telegram Stars balance/purchases, TON, gift economy |
+| **Premium / Billing** | Payment forms, Stars store purchases via Play Billing |
+| **Messaging** | Quotes / reply-in-other-chat, forum topics, saved-message tags, rich (formatted) messages with inline math/code |
+| **Media & Voice** | Playback-speed controls, disposable voice messages, voice transcription |
+| **Reactions** | Big reactions, attach-button improvements |
+| **Profile / Community** | Profile notes, photo-resolution and community quality-of-life features |
+| **Push** | Reworked FCM registration (Android-12+ FGS fix), self-hosted Firebase project |
 
-## Build instructions
+Not everything above is merged into a single branch at once — see **Branches** below.
+
+## Build
+
+Neurogram X is developed and built primarily on **Windows** (PowerShell + Git Bash). The original Telegram X Linux/macOS instructions still apply; the notes below cover this fork's specifics.
 
 ### Prerequisites
 
-* At least **5,34GB** of free disk space: **487,10MB** for source codes and around **4,85GB** for files generated after building all variants
-* **4GB** of RAM
-* **macOS** or **Linux**-based operating system. **Windows** platform is supported by using [MSYS](https://www.msys2.org/) (e.g., [Git Bash](https://gitforwindows.org/)).
+* **Android SDK** (with NDK `23.2.8568313`, CMake `3.22.1` — pinned in `version.properties`)
+* **JDK 21** (e.g. Eclipse Temurin)
+* **git** with **LFS**: `git lfs install`
+* ~**5 GB+** free disk for sources + build outputs
+* Windows: a POSIX shell (Git Bash / MSYS2) for `scripts/setup.sh`
 
-#### macOS
+### 1. Clone with submodules
 
-* [Homebrew](https://brew.sh)
-* git with LFS, wget and sed: `$ brew install git git-lfs wget gsed && git lfs install`
+```bash
+git clone --recursive https://github.com/japananimetime/Telegram-X tgx
+cd tgx
+# if you forgot --recursive:
+git submodule update --init --recursive --depth=1
+```
 
-#### Ubuntu
+### 2. `local.properties`
 
-* git with LFS: `# apt install git git-lfs`
-* Run `$ git lfs install` for the current user, if you didn't have `git-lfs` previously installed
+Create `local.properties` in the project root ([obtain Telegram API credentials](https://core.telegram.org/api/obtaining_api_id)):
 
-#### Windows
+```properties
+# Android SDK location
+sdk.dir=C:\\Users\\you\\AppData\\Local\\Android\\Sdk
 
-* **Telegram X** does not provide official build instructions for Windows platform. It is recommended to rely on Linux distributions instead.
-
-### Building
-
-1. `$ git clone --recursive --depth=1 --shallow-submodules https://github.com/TGX-Android/Telegram-X tgx` — clone **Telegram X** with submodules
-2. In case you forgot the `--recursive` flag, `cd` into `tgx` directory and: `$ git submodule init && git submodule update --init --recursive --depth=1`
-3. Create `keystore.properties` file outside of source tree with the following properties:<br/>`keystore.file`: absolute path to the keystore file<br/>`keystore.password`: password for the keystore<br/>`key.alias`: key alias that will be used to sign the app<br/>`key.password`: key password.<br/>**Warning**: keep this file safe and make sure nobody, except you, has access to it. For production builds one could use a separate user with home folder encryption to avoid harm from physical theft
-4. `$ cd tgx`
-5. Run `$ scripts/./setup.sh` and follow up the instructions
-6. If you specified package name that's different from the one Telegram X uses, [setup Firebase](https://firebase.google.com/docs/android/setup) and replace `google-services.json` with the one that's suitable for the `app.id` you need
-7. Now you can open the project using **[Android Studio](https://developer.android.com/studio/)** or build manually from the command line: `./gradlew assembleUniversalRelease`.
-
-#### Available flavors
-
-* `arm64`: **arm64-v8a** build with `minSdkVersion` set to `21` (**Lollipop**)
-* `arm32`: **armeabi-v7a** build
-* `x64`: **x86_64** build with `minSdkVersion` set to `21` (**Lollipop**)
-* `x86`: **x86** build
-* `universal`: universal build that includes native bundles for all platforms.
-
-### Quick setup for development
-
-If you are developing a [contribution](https://github.com/TGX-Android/Telegram-X/blob/main/docs/PULL_REQUEST_TEMPLATE.md) to the project, you may follow the simpler building steps:
-
-1. `$ git clone --recursive https://github.com/TGX-Android/Telegram-X tgx`
-2. `$ cd tgx`
-3. [Obtain Telegram API credentials](https://core.telegram.org/api/obtaining_api_id)
-4. Create `local.properties` file in the root project folder using any text editor:<br/><pre># Location where you have Android SDK installed
-sdk.dir=YOUR_ANDROID_SDK_FOLDER
-\# Telegram API credentials obtained at previous step
+# Telegram API credentials
 telegram.api_id=YOUR_TELEGRAM_API_ID
-telegram.api_hash=YOUR_TELEGRAM_API_HASH</pre>
-5. Run `$ scripts/./setup.sh` — this will download required Android SDK packages and build native dependencies that aren't part of project's [CMakeLists.txt](/app/jni/CMakeLists.txt)
-6. Open and build project via [Android Studio](https://developer.android.com/studio) or by using one of `./gradlew assemble` commands in terminal
+telegram.api_hash=YOUR_TELEGRAM_API_HASH
 
-After submitting a pull request and its initial review, special build including your contribution will be published in [@tgx_prs](https://t.me/tgx_prs) channel, where it can be tested by the community. In case any issues or bugs found, you may push more commits to an existing PR that address them and request to publish a newer build by using comments section of pull request or in [@tgx_dev](https://t.me/tgx_dev) chat.
+# App identity (the fork)
+app.id=space.hikaro.tgx
+app.name=Neurogram X
 
-## Reproducing public builds
+# Signing keystore — see step 3. REQUIRED for working push / Firebase.
+keystore.file=ABSOLUTE/PATH/TO/keystore/key.properties
+```
 
-In order to verify that there is no additional source code injected inside official APKs, you must use one of the following versions of **Ubuntu**:
+### 3. Signing keystore (required for push)
 
-* **21.04**: for builds published before [26th May 2023](https://github.com/TGX-Android/Telegram-X/commit/e9a054a0f469a98a13f7e0d751539687fef8759b)
-* **22.04.2 LTS**: for builds published before 27th September 2025
-* **24.04 LTS**: for any newer releases.
+The build is flagged **experimental** when no keystore is configured (`ConfigurationPlugin.kt`), and an experimental build **disables FCM push registration and skips the `google-services` plugin**. To get working notifications you must sign with a real keystore:
 
-And update its configuration:
+```bash
+keytool -genkeypair -v -keystore keystore/neurogram.jks \
+  -alias neurogram -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass <pw> -keypass <pw> \
+  -dname "CN=Neurogram X, O=Neurogram, C=US"
+```
 
-1. Create user called `vk` with the home directory located at `/home/vk`
-2. Clone `tgx` repository to `/home/vk/tgx`
-3. Check out the specific commit you want to verify
-4. In rare cases of builds that include unmerged pull requests, you must follow actions performed by [Publisher's](https://github.com/TGX-Android/Publisher/blob/main/main.js) `fetchPr` and `squashPr` tasks
-5. `cd` into `tgx` folder and install dependencies: `# apt install $(cat reproducible-builds/dependencies.txt)`
-6. Follow up the build instruction from the previous section
-7. Run `$ apkanalyzer apk compare --different-only <remote-apk> <reproduced-apk>`
-8. If only signature files and metadata differ, build reproduction is successful.
+Then point `keystore.file` (in `local.properties`) at a `key.properties` that contains the real values:
 
-In future build reproduction might become easier. Here's a list of related PR-welcome TODOs:
+```properties
+keystore.file=ABSOLUTE/PATH/TO/keystore/neurogram.jks
+keystore.password=<pw>
+key.alias=neurogram
+key.password=<pw>
+```
 
-* Project path must not affect the resulting `.so` files, so user & project location requirement could be removed
-* When building native binaries on **macOS**, `.comment` ELF section differs from the one built with **Linux** version of NDK. It must be removed or made deterministic without any side-effects like breaking `native-debug-symbols.zip` (or should be reported to NDK team?)
-* Checksums of cold APK builds always differ, even though the same keystore applied and generated inner APK contents do not differ. Real cause must be investigated and fixed, if possible.<br/>To generate cold build, invoke `$ scripts/./reset.sh` and `$ scripts/./setup.sh --skip-sdk-setup`.<br/>**Warning**: this will also reset changes inside some of the submodules ([ffmpeg](/app/jni/thirdparty/ffmpeg), [libvpx](/app/jni/thirdparty/libvpx), [webp](/app/jni/thirdparty/webp), [opus](/app/jni/thirdparty/opus) and [ExoPlayer](/app/jni/thirdparty/exoplayer))
-* Move local pull requests squash-merging from [Publisher](https://github.com/TGX-Android/Publisher) to some script inside this repository to make reproduction of builds that include them easier.
+> Keep the keystore safe — it is the app's signing identity. Changing it requires uninstalling the app on-device (signature mismatch). `/keystore` and `/local.properties` are gitignored.
 
-<i>PS: [Docker](https://www.docker.com) is not considered an option, as it just hides away these tasks, and requires that all published APKs must be built using it.</i>
+### 4. Firebase
 
-## Verifying side-loaded APKs
+This fork ships an `app/google-services.json` for the `space.hikaro.tgx` package (Firebase project `telegram-x-9e82c`). If you change `app.id`, [set up your own Firebase project](https://firebase.google.com/docs/android/setup) and replace `app/google-services.json`.
 
-If you downloaded **Telegram X** APK from somewhere and would like to simply verify whether it's an original APK without any injected malicious source code, you need to get checksum (`SHA-256`, `SHA-1` or `MD5`) of the downloaded APK file and find whether it corresponds to any known **Telegram X** version.
+### 5. Native dependencies & build
 
-In order to obtain **SHA-256** of the APK:
+```bash
+scripts/setup.sh                 # downloads SDK packages + builds native deps
+# or, if the SDK is already set up:
+scripts/setup.sh --skip-sdk-setup
+```
 
-* `$ sha256sum <path-to-apk>` on **Ubuntu**
-* `$ shasum -a 256 <path-to-apk>` on **macOS**
-* `$ certutil -hashfile <path-to-apk> SHA256` on **Windows**
+Build (Windows / PowerShell — if you hit a Gradle file-lock/junction error, point `GRADLE_USER_HOME` at any stable path outside the repo first):
 
-Once obtained, there are three ways to find out the commit for the specific checksum:
+```powershell
+$env:GRADLE_USER_HOME = "<path-outside-the-repo>\.gradle"
+.\gradlew.bat assembleLatestArm64Debug     # ARM64 device build
+.\gradlew.bat assembleLatestX64Debug       # x86_64 emulator build
+.\gradlew.bat assembleUniversalRelease      # release
+```
 
-* Sending checksum to [`@tgx_bot`](https://t.me/tgx_bot)
-* Searching for a checksum in [`@tgx_log`](https://t.me/tgx_log). You can do so without need in installing any Telegram client by using this URL format: [`https://t.me/s/tgx_log?q={checksum}`](https://t.me/s/tgx_log?q=c541ebb0a3ae7bb6e6bd155530f375d567b8aef1761fdd942fb5d69af62e24ae) (click to see in action). Note: unpublished builds cannot be verified this way.
+Outputs land in `app/build/outputs/apk/`, named `Neurogram-X-<version>-<abi>-<type>.apk`.
+
+#### ABI flavors
+
+`arm64` (arm64-v8a), `arm32` (armeabi-v7a), `x64` (x86_64), `x86`, and `universal` (all ABIs). SDK dimension: `latest` / `legacy`.
+
+## Branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Tracks upstream Telegram X |
+| `base/tdlib` / `core/tdlib` | Shared core (TDLib upgrade, crash routing) |
+| `feature/*` | Isolated feature work (calls, stories, mini-apps, gifts, stars, quotes, forum topics, rich-messages, …) |
+| `all-features-combined` | Integration of feature branches |
+| `parity-fixes/*` | Active working branch (calls + parity fixes + on-device hardening) |
+
+Remotes: `fork` = `git@github.com:japananimetime/Telegram-X.git` (push here), `origin`/`upstream` = read-only TGX-Android.
+
+## Credits
+
+Neurogram X is built entirely on top of [**Telegram X**](https://github.com/TGX-Android/Telegram-X) by the TGX-Android team, which is in turn based on [TDLib](https://github.com/tdlib/td) and the [Telegram API](https://core.telegram.org/api). All credit for the underlying client belongs to them. This fork merely extends it.
 
 ## License
 
-`Telegram X` is licensed under the terms of the GNU General Public License v3.0.
-
-For more information, see [LICENSE](/LICENSE) file.
-
-License of components and third-party dependencies it relies on might differ, check `LICENSE` file in the corresponding folder.
-
-### Third-party dependencies
-
-List of third-party components used in **Telegram X** can be found [here](/docs/THIRDPARTY.md). Additionally you can check the specific commit of the third-party component used, for example, [here](/app/jni/thirdparty) and [here](/thirdparty).
-
-## Contributions
-
-**Telegram X** welcomes contributions. Check out [pull request template](/docs/PULL_REQUEST_TEMPLATE.md) and [guide for contributors](/docs/GUIDE.md) to learn more about Telegram X internals before creating the first pull request.
-
-If you are a regular user and experience a problem with Telegram X, the best place to look for solution is [Telegram X chat](https://t.me/tgandroidtests) — a community with over 4 thousand members. Please do not use this repository to ask questions: if you have general issue with Telegram, refer to [FAQ](http://telegram.org/faq) or contact [Telegram Support](https://telegram.org/faq#telegram-support).
+`Neurogram X`, like `Telegram X`, is licensed under the **GNU General Public License v3.0**. See [LICENSE](/LICENSE). Third-party components are listed in [docs/THIRDPARTY.md](/docs/THIRDPARTY.md) and may carry their own licenses.
