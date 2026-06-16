@@ -8396,12 +8396,33 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   // Silent mode
 
+  // Width of the attach buttons that REMAIN on the bar while typing — i.e. the visible cluster
+  // minus the ones that fade out (the disabled "show while typing" toggles). Using this settled
+  // width instead of the live getVisibleChildrenWidth() keeps dependent layout (input padding,
+  // sender-button X) from fluctuating on every frame of the send-in/out animation.
+  private int getSettledAttachButtonsWidth () {
+    int width = attachButtons.getVisibleChildrenWidth();
+    if (!Settings.instance().getShowCameraWhileTyping() && cameraButton != null && cameraButton.getVisibility() == View.VISIBLE) {
+      width -= cameraButton.getLayoutParams().width;
+    }
+    if (!Settings.instance().getShowAttachWhileTyping() && mediaButton != null && mediaButton.getVisibility() == View.VISIBLE) {
+      width -= mediaButton.getLayoutParams().width;
+    }
+    if (!Settings.instance().getShowVoiceWhileTyping() && recordButton != null && recordButton.getVisibility() == View.VISIBLE) {
+      width -= recordButton.getLayoutParams().width;
+    }
+    return Math.max(0, width);
+  }
+
   public int getHorizontalInputPadding () {
-    int padding = attachButtons.getVisibleChildrenWidth() + (canSelectSender() ? Screen.dp(47) : 0);
-    // Add send button width when it's visible and attach buttons are also staying visible
     boolean anyButtonStaysVisible = Settings.instance().getShowCameraWhileTyping() ||
                                     Settings.instance().getShowAttachWhileTyping() ||
                                     Settings.instance().getShowVoiceWhileTyping();
+    // When the "keep buttons while typing" feature is on, measure the settled cluster so the sender
+    // button doesn't drift while disabled buttons fade out; otherwise keep the plain visible width.
+    int attachWidth = anyButtonStaysVisible ? getSettledAttachButtonsWidth() : attachButtons.getVisibleChildrenWidth();
+    int padding = attachWidth + (canSelectSender() ? Screen.dp(47) : 0);
+    // Add send button width when it's visible and attach buttons are also staying visible
     if (anyButtonStaysVisible && sendShown.getValue()) {
       padding += Screen.dp(55f);
     }
@@ -10188,17 +10209,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
         tooltipInfo.reposition();
       }
 
-      // Update input view padding dynamically based on actual visible buttons width
+      // Reserve the input's right padding for the SETTLED button cluster — the attach buttons that
+      // stay on the bar while typing (the enabled toggles), excluding the ones that fade out. We do
+      // NOT scale this by the animating `factor`: doing so rewrote the EditText padding (a full text
+      // relayout) on every animation frame, which made the text jitter and wrap to multiline early.
+      // The value is stable, so setExtraRightPadding() (which no-ops on an unchanged value) applies
+      // it exactly once. The base 55dp padding already covers the send button's slot.
       if (inputView != null) {
-        if (anyButtonVisible) {
-          // Get actual width of visible attach buttons + send button width (55dp)
-          int buttonsWidth = attachButtons.getVisibleChildrenWidth() + Screen.dp(55f);
-          // Subtract base padding (55dp) that InputView already has
-          int extraPadding = (int) ((buttonsWidth - Screen.dp(55f)) * factor);
-          inputView.setExtraRightPadding(extraPadding);
-        } else {
-          inputView.setExtraRightPadding(0);
-        }
+        inputView.setExtraRightPadding(anyButtonVisible ? getSettledAttachButtonsWidth() : 0);
         inputView.checkPlaceholderWidth();
       }
     }
