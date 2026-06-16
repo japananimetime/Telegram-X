@@ -10348,6 +10348,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     if (clearInput) {
+      // Cancel the "typing…" action up-front, the moment the send is committed, rather than waiting
+      // for the async send round-trip to complete (clearInputAfterSend). On a slow connection that
+      // gap left other participants seeing a stale "typing…" indicator after the message was already
+      // on its way out. The input is about to be cleared anyway, so there is nothing left to type.
+      setTyping(false);
       final List<TdApi.Message> sentMessages = new ArrayList<>(functions.size());
       setIsSendingText(true);
       manager.setSentMessages(sentMessages);
