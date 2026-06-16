@@ -57,7 +57,9 @@ Root cause: `TGMessageRich.drawContent` draws blocks on Canvas; list markers + b
 **PHASE 3 COMPLETE (spoiler, custom emoji, clickable hashtag/cashtag/bot-command/bank-card).**
 
 ## PHASE 4 — Block media/structure downgrades (placeholder/flattened today)
-## Plus deferred: 2.4 code language header (low value), 2.5 full LaTeX (needs math engine).
+## (No LaTeX deferral remains: full jlatexmath typeset covers both inline RichTextMathematicalExpression
+##  AND block PageBlockMathematicalExpression — block math was routed through the same path 2026-06-17,
+##  so the two are now at equal fidelity; super/subscript decomposition stays only as the parse-fail fallback.)
 | 4.9 | "Jump to" anchor links did nothing (no onAnchorClick in chat) | MessagesController/TGMessageRich | implement Text.ClickCallback.onAnchorClick → findAnchorContentY + smooth-scroll | ✅ device-verified (25969fbc7) |
 
 | # | Gap | File:line | Fix | Status |
@@ -68,7 +70,7 @@ Root cause: `TGMessageRich.drawContent` draws blocks on Canvas; list markers + b
 | 4.4 | Collage → flattened to stacked media | parseForChat:522 | real grid via CollageContext (key-offset for shared bubble receiver) | ✅ device-verified grid (6b3f53a32) |
 | 4.5 | Slideshow → flattened to stacked media | parseForChat:530 | kept STACKED — swipeable pager impractical on canvas bubble | ⬜ won't-do (functional fallback) |
 | 4.8 | MessageRichMessage unhandled in preview/notification switches → crash (pinned bar) | MediaPreview/Lang/TGMessageService | added cases (no-preview / default text / "pinned a message") | ✅ device-verified (e7b5747d6) |
-| 4.6 | PageBlockThinking → static italic (no shimmer) | PageBlockRichText:375 | shimmer animation | ⬜ |
+| 4.6 | PageBlockThinking → static italic (no shimmer) | PageBlockRichText:375 | breathing-alpha pulse (0.4↔1.0) via FactorAnimator ping-pong, gated on attached views; literal gradient sweep skipped (needs Text-internal shader work, marginal benefit) | ✅ (2026-06-17) thematically fitting for AI-generated pending messages |
 | 4.7 | Unknown future PageBlock → throws UnsupportedOperationException, collapses whole msg | PageBlock.java:974 | per-block try/catch in parseRichMessage → roll back + placeholder + continue | ✅ (commit 10bbcc5d1) |
 
 ## Session 2 (2026-06-15 PM) — polish + interaction fixes

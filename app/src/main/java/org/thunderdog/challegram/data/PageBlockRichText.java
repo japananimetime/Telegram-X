@@ -62,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.animator.BoolAnimator;
+import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.util.ClickHelper;
 import me.vkryl.core.ColorUtils;
 import me.vkryl.core.DateUtils;
@@ -372,23 +373,54 @@ public class PageBlockRichText extends PageBlock {
     }
   }
 
-  // "Thinking..." placeholder; for pending rich messages only
+  private static final int ANIMATOR_THINKING_PULSE = 1;
+  private boolean isThinking;
+  private FactorAnimator thinkingPulse;
+
+  // "Thinking..." placeholder; for pending rich messages only. Pulses the text opacity (a
+  // breathing effect) to signal the message is still being generated server-side.
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockThinking thinking, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, thinking);
-    // TODO(rich-text phase 4): shimmer animation instead of a plain italic paragraph
+    this.isThinking = true;
+    // Ping-pong 0<->1 driven from onFactorChangeFinished; each frame invalidates the attached
+    // view(s). The loop self-stops when the block scrolls off (no targets to invalidate) and is
+    // re-kicked from drawInternal when it's drawn again, so it never spins off-screen.
+    this.thinkingPulse = new FactorAnimator(ANIMATOR_THINKING_PULSE, new FactorAnimator.Target() {
+      @Override
+      public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+        currentViews.invalidate();
+      }
+      @Override
+      public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
+        if (isThinking && currentViews != null && currentViews.hasAnyTargetToInvalidate()) {
+          callee.animateTo(finalFactor >= 1f ? 0f : 1f);
+        }
+      }
+    }, AnimatorUtils.DECELERATE_INTERPOLATOR, 720l, 0f);
     TdApi.RichText thinkingText = thinking.text != null ? thinking.text : new TdApi.RichTextPlain("");
     setText(new TdApi.RichTextItalic(thinkingText), getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+  }
+
+  // Breathing opacity for the "Thinking..." placeholder; 1f for every other block. Lazily kicks the
+  // ping-pong loop on first draw (so it only runs while the block is actually on screen).
+  private float thinkingAlpha () {
+    if (!isThinking || thinkingPulse == null) {
+      return 1f;
+    }
+    if (!thinkingPulse.isAnimating()) {
+      thinkingPulse.animateTo(thinkingPulse.getFactor() >= 1f ? 0f : 1f);
+    }
+    return 0.4f + 0.6f * thinkingPulse.getFactor();
   }
 
   // Mathematical expression in LaTeX format
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockMathematicalExpression mathematicalExpression, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, mathematicalExpression);
-    // Decompose simple caret/underscore notation into real super/subscripts; fall back to plain text.
-    TdApi.RichText math = FormattedText.buildMathRichText(mathematicalExpression.expression);
-    if (math == null) {
-      math = new TdApi.RichTextPlain(mathematicalExpression.expression != null ? mathematicalExpression.expression : "");
-    }
-    setText(math, getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+    // Route block-level math through the same inline RichTextMathematicalExpression path as inline
+    // math: parseRichText renders it with the jlatexmath engine (true typeset of \sum, \frac, … as
+    // a tintable bitmap) and only decomposes caret/underscore super/subscripts when jlatexmath can't
+    // parse it — keeping block and inline math at the same fidelity.
+    setText(new TdApi.RichTextMathematicalExpression(mathematicalExpression.expression), getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
   }
 
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockPullQuote pullQuote, boolean isCredit, @Nullable TdlibUi.UrlOpenParameters openParameters) {
@@ -700,7 +732,7 @@ public class PageBlockRichText extends PageBlock {
         textLeft += (avatarSize + (forceBackground ? avatarPadding / 2 : avatarPadding)) * subtitleFactor;
         Views.restore(c, restoreCount);
       }
-      text.draw(c, textLeft, textEndX, 0,  textTop, null, 1f, iconReceiver);
+      text.draw(c, textLeft, textEndX, 0,  textTop, null, thinkingAlpha(), iconReceiver);
       if (subtitle != null) {
         subtitle.draw(c, textLeft, textEndX, 0, textTop + text.getHeight(), null, subtitleVisible != null ? subtitleVisible.getFloatValue() * .8f : .8f);
       }
