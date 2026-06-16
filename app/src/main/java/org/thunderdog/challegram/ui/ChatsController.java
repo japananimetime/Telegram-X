@@ -2889,7 +2889,12 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     tdlib.contacts().removeListener(this);
     tdlib.context().dateManager().removeListener(this);
     tdlib.listeners().removeChatFolderListener(chatFolderId(), this);
-    storyListListener = null; // drop the strong ref so the weak story-list listener can be collected
+    if (storyListListener != null) {
+      // Deterministically detach instead of relying on GC of the weak listener (avoids stale
+      // story-list updates firing after the controller is gone).
+      tdlib.getStoryList(new TdApi.StoryListMain()).unsubscribeFromUpdates(storyListListener);
+      storyListListener = null;
+    }
     storyBarView = null;
   }
 
