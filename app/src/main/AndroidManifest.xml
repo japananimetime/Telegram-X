@@ -75,7 +75,10 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
   <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-  <uses-permission android:name="android.permission.BLUETOOTH" />
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+  <!-- Android 12+ requires BLUETOOTH_CONNECT (runtime) to enumerate/route to Bluetooth audio
+       devices during calls; without it getAvailableCommunicationDevices() hides BT headsets. -->
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
   <!--<uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />-->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
     tools:ignore="RequestInstallPackagesPolicy" />

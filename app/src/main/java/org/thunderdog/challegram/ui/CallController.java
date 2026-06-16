@@ -1253,6 +1253,32 @@ public class CallController extends ViewController<CallController.Arguments> imp
       oneShot = true;
     }
     tdlib.context().calls().acknowledgeCurrentCall(call.id);
+    requestBluetoothConnectForCall();
+  }
+
+  private boolean requestedBluetoothConnect;
+
+  // Android 12+ needs the runtime BLUETOOTH_CONNECT grant before getAvailableCommunicationDevices()
+  // will expose Bluetooth headsets — without it, call audio can't route to BT. Request it once,
+  // non-blocking (the call proceeds regardless); on grant, re-apply call settings so the audio
+  // service re-evaluates devices and the BT route becomes selectable.
+  private void requestBluetoothConnectForCall () {
+    if (requestedBluetoothConnect || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+      return;
+    }
+    if (context().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      requestedBluetoothConnect = true;
+      return;
+    }
+    requestedBluetoothConnect = true;
+    context().requestCustomPermissions(new String[] {Manifest.permission.BLUETOOTH_CONNECT}, (code, permissions, grantResults, grantCount) -> {
+      if (grantCount > 0 && call != null) {
+        CallSettings settings = tdlib.cache().getCallSettings(call.id);
+        if (settings != null) {
+          tdlib.cache().onUpdateCallSettings(call.id, settings);
+        }
+      }
+    });
   }
 
   @Override

@@ -4506,6 +4506,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     super.onBlur();
 
+    // Cancel a pending "typing…" action when leaving the chat, so the recipient doesn't keep
+    // seeing the indicator until the server timeout if we navigated away mid-typing.
+    setTyping(false);
+
     messagesView.stopScroll();
 
     if (preventHideKeyboard) {
@@ -11222,6 +11226,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       UI.post(() -> {
         if (inputView != null) {
           inputView.setInput("", true, false);
+          // The clear above is byUserAction=false, so the input TextWatcher does NOT fire and the
+          // pending ChatActionTyping is never cancelled — the recipient keeps seeing "typing…" until
+          // the server timeout. Cancel it explicitly (no-ops if no typing action was active).
+          setTyping(false);
         }
       });
     }
