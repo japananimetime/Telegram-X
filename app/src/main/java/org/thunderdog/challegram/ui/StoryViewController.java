@@ -579,16 +579,21 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     });
   }
 
+  // Bumped on every story (re)load so a slow response from a story the user already navigated
+  // away from is dropped instead of displaying the wrong story on rapid next/prev taps.
+  private int storyLoadToken;
+
   private void loadStory () {
     // Each story may auto-advance exactly once; reset the guard as a new story starts loading.
     autoAdvanced = false;
+    final int token = ++storyLoadToken;
     loadingContainer.setVisibility(View.VISIBLE);
     tdlib.client().send(new TdApi.GetStory(currentChatId, currentStoryId, false), result -> {
       if (result.getConstructor() == TdApi.Story.CONSTRUCTOR) {
         TdApi.Story story = (TdApi.Story) result;
-        UI.post(() -> displayStory(story));
+        UI.post(() -> { if (token == storyLoadToken && !isDestroyed()) displayStory(story); });
       } else {
-        UI.post(() -> showError());
+        UI.post(() -> { if (token == storyLoadToken && !isDestroyed()) showError(); });
       }
     });
   }
@@ -656,7 +661,8 @@ public class StoryViewController extends ViewController<StoryViewController.Args
 
     // Display caption if present
     if (story.caption != null && story.caption.text != null && !story.caption.text.isEmpty()) {
-      captionView.setText(story.caption.text);
+      // Render entities (bold/italic/links/mentions/spoiler) instead of dropping them to plain text.
+      captionView.setText(TD.toCharSequence(story.caption));
       captionView.setVisibility(View.VISIBLE);
       // Adjust caption bottom margin based on reply input visibility
       FrameLayoutFix.LayoutParams captionParams = (FrameLayoutFix.LayoutParams) captionView.getLayoutParams();
@@ -745,7 +751,13 @@ public class StoryViewController extends ViewController<StoryViewController.Args
     } else {
       tdlib.files().downloadFile(file, TdlibFilesManager.PRIORITY_USER_REQUEST_DOWNLOAD, (downloadedFile, error) -> {
         if (error == null && downloadedFile != null && TD.isFileLoaded(downloadedFile)) {
-          UI.post(() -> startVideoPlayback(downloadedFile.local.path));
+          UI.post(() -> {
+            // Guard: the viewer may have been closed during the download — don't re-create the
+            // ExoPlayer after release().
+            if (!isDestroyed()) {
+              startVideoPlayback(downloadedFile.local.path);
+            }
+          });
         }
       });
     }
@@ -917,11 +929,13 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   }
 
   private void loadNextUserStories (long chatId) {
+    final int token = ++storyLoadToken;
     loadingContainer.setVisibility(View.VISIBLE);
     tdlib.client().send(new TdApi.GetChatActiveStories(chatId), result -> {
       if (result.getConstructor() == TdApi.ChatActiveStories.CONSTRUCTOR) {
         TdApi.ChatActiveStories freshStories = (TdApi.ChatActiveStories) result;
         UI.post(() -> {
+          if (token != storyLoadToken) return; // superseded by a newer navigation
           if (!isDestroyed() && freshStories.stories.length > 0) {
             // Update the list with fresh data
             if (currentUserIndex < activeStoriesList.size()) {
@@ -937,6 +951,7 @@ public class StoryViewController extends ViewController<StoryViewController.Args
         });
       } else {
         UI.post(() -> {
+          if (token != storyLoadToken) return; // superseded by a newer navigation
           // Failed to get stories, try next user or close
           navigateNext();
         });
@@ -988,7 +1003,10 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       return false;
     }
     if (currentStory.chosenReactionType.getConstructor() == TdApi.ReactionTypeEmoji.CONSTRUCTOR) {
-      return "❤".equals(((TdApi.ReactionTypeEmoji) currentStory.chosenReactionType).emoji);
+      // Normalize the variation selector (U+FE0F): the server may store the heart as "❤️" while we
+      // send "❤", which otherwise reads as un-liked.
+      String emoji = ((TdApi.ReactionTypeEmoji) currentStory.chosenReactionType).emoji;
+      return emoji != null && "❤".equals(emoji.replace("️", ""));
     }
     return false;
   }
