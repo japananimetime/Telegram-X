@@ -18,6 +18,8 @@ import android.widget.Toast;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import com.android.billingclient.api.BillingClient;
+
 import org.thunderdog.challegram.billing.BillingConfig;
 import org.thunderdog.challegram.billing.BillingManager;
 import org.thunderdog.challegram.component.base.SettingView;
@@ -249,18 +251,29 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
 
     UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
 
-    // Refresh the balance/options once TDLib confirms the assigned store transaction.
+    // The store result carries the real Google Play BillingResponseCode. Only OK (a purchase
+    // actually assigned to TDLib) is a success. If Google Play can't fulfill it — e.g. the Stars
+    // products aren't registered for this application id because the build isn't published on
+    // Play (ITEM_UNAVAILABLE), or any other store error — fall back to the out-of-store card/web
+    // payment flow, the same path Telegram Desktop uses. This keeps the GP route working for if
+    // the app is ever published, without faking success when it isn't.
     billing.addResultListener(option.storeProductId, billingResult -> runOnUiThreadOptional(() -> {
-      UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
-      fetchData();
+      billing.removeResultListener(option.storeProductId);
+      int code = billingResult.getResponseCode();
+      if (code == BillingClient.BillingResponseCode.OK) {
+        UI.showToast(R.string.StarsPaymentSuccess, Toast.LENGTH_SHORT);
+        fetchData();
+      } else if (code == BillingClient.BillingResponseCode.USER_CANCELED) {
+        // Intentional cancel — stay silent, matching the Premium store flow.
+      } else {
+        // Google Play can't sell Stars in this build → try the regular payment form instead.
+        purchaseStarsOutOfStore(option);
+      }
     }));
 
     billing.launchStarsPurchase(context(), tdlib, option, () -> runOnUiThreadOptional(() -> {
-      // Purchase canceled or could not be started: keep the screen as-is. A toast would be
-      // noisy for an intentional user cancel, matching the Premium store flow's behavior.
-      // Drop the success listener registered above so the (possibly destroyed) controller is
-      // not retained by the BillingManager singleton on cancel / launch-failure paths.
-      billing.removeResultListener(option.storeProductId);
+      // Launch could not be started; failure is delivered through the result listener above
+      // (which also handles the fallback), so nothing else is needed here.
     }));
   }
 
