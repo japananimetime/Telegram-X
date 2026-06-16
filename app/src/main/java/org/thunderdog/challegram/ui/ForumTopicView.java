@@ -220,25 +220,35 @@ public class ForumTopicView extends BaseView implements TdlibEmojiManager.Watche
     // Build title (no emoji prefixes - icons are drawn separately)
     this.titleText = topic.info.name;
 
-    // Check if we should show draft (draft exists with text content)
-    // TODO: preview fallbacks for draftMessageContentRichMessage/VideoNote/VoiceNote (currently fall through to last message preview)
-    // Only prefer the draft when it's at least as new as the last message — a newer
-    // incoming message should win, otherwise the row shows a stale draft.
+    // Prefer the draft (any content type) only when it's at least as new as the last message —
+    // a newer incoming message should win, otherwise the row shows a stale draft.
     boolean hasDraft = topic.draftMessage != null &&
       topic.draftMessage.content != null &&
-      topic.draftMessage.content.getConstructor() == TdApi.DraftMessageContentText.CONSTRUCTOR &&
       topic.draftMessage.date >= (topic.lastMessage != null ? topic.lastMessage.date : 0);
 
     if (hasDraft) {
       // Show draft preview
       this.showingDraft = true;
-      TdApi.DraftMessageContentText textDraft = (TdApi.DraftMessageContentText) topic.draftMessage.content;
-      String draftText = textDraft.text != null && !StringUtils.isEmpty(textDraft.text.text) ?
-        textDraft.text.text : "";
       this.senderText = Lang.getString(R.string.Draft);
-      this.previewText = draftText;
-      // Get FormattedText from draft for custom emoji rendering
-      this.previewFormattedText = textDraft.text;
+      this.previewFormattedText = null;
+      TdApi.DraftMessageContent draftContent = topic.draftMessage.content;
+      switch (draftContent.getConstructor()) {
+        case TdApi.DraftMessageContentText.CONSTRUCTOR: {
+          TdApi.DraftMessageContentText textDraft = (TdApi.DraftMessageContentText) draftContent;
+          this.previewText = textDraft.text != null && !StringUtils.isEmpty(textDraft.text.text) ? textDraft.text.text : "";
+          this.previewFormattedText = textDraft.text; // keep FormattedText for custom emoji rendering
+          break;
+        }
+        case TdApi.DraftMessageContentVoiceNote.CONSTRUCTOR:
+          this.previewText = Lang.getString(R.string.ChatContentVoice);
+          break;
+        case TdApi.DraftMessageContentVideoNote.CONSTRUCTOR:
+          this.previewText = Lang.getString(R.string.ChatContentRoundVideo);
+          break;
+        default: // RichMessage (mobile never creates one) and any future types — just the "Draft" label
+          this.previewText = "";
+          break;
+      }
       this.timeText = Lang.timeOrDateShort(topic.draftMessage.date, java.util.concurrent.TimeUnit.SECONDS);
       this.isOutgoing = false;
       this.isSending = false;

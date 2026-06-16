@@ -935,10 +935,6 @@ public class GiftsController extends RecyclerViewController<GiftsController.Args
     }));
   }
 
-  // TODO(slice-7): ReorderGiftCollections / ReorderGiftCollectionGifts are left
-  // unwired. Drag-reorder UI is out of scope for this slice; the functions exist
-  // and can be hooked behind move-up/move-down actions in a follow-up.
-
   // Adapter
 
   private class GiftHolder extends RecyclerView.ViewHolder {
