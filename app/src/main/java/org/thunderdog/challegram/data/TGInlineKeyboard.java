@@ -1102,9 +1102,12 @@ public class TGInlineKeyboard {
 
       switch (type.getConstructor()) {
         case TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR:
+          parent.openInvoice();
+          return;
+
         case TdApi.InlineKeyboardButtonTypeCopyText.CONSTRUCTOR:
-          // TODO
-          break;
+          UI.copyText(((TdApi.InlineKeyboardButtonTypeCopyText) type).text, R.string.CopiedText);
+          return;
 
         case TdApi.InlineKeyboardButtonTypeWebApp.CONSTRUCTOR: {
           TdApi.InlineKeyboardButtonTypeWebApp webApp = (TdApi.InlineKeyboardButtonTypeWebApp) type;

@@ -8631,6 +8631,30 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }));
   }
 
+  // Opens the payment form for this message's invoice (the reply_markup Buy button). Routes through
+  // the standard tdlib.ui().openPaymentForm(...), which handles every form type (card / Stars / …).
+  // For an already-paid invoice the same button is a "Receipt" — open the receipt instead.
+  public void openInvoice () {
+    if (msg.content instanceof TdApi.MessageInvoice) {
+      long receiptMessageId = ((TdApi.MessageInvoice) msg.content).receiptMessageId;
+      if (receiptMessageId != 0) {
+        org.thunderdog.challegram.ui.PaymentReceiptController c = new org.thunderdog.challegram.ui.PaymentReceiptController(controller().context(), tdlib);
+        c.setArguments(new org.thunderdog.challegram.ui.PaymentReceiptController.Args(msg.chatId, receiptMessageId));
+        controller().navigateTo(c);
+        return;
+      }
+    }
+    final TdApi.InputInvoiceMessage inputInvoice = new TdApi.InputInvoiceMessage(msg.chatId, msg.id);
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (form, error) -> executeOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        tdlib.ui().openPaymentForm(controller(), form, inputInvoice);
+      }
+    }));
+  }
+
   public final TdApi.FactCheck getFactCheck () {
     return msg.factCheck;
   }

@@ -115,6 +115,15 @@ public class TGMessageInvoice extends TGMessage implements TGInlineKeyboard.Clic
   }
 
   @Override
+  public boolean needImageReceiver () {
+    // Must be true so the framework dispatches the (preview, receiver) drawContent override below
+    // and requests the photo receivers. Without it the base draws only two debug dots and the
+    // invoice content (photo/title/description/price) never renders. Returns true even when there
+    // is no photo, because title/description/price still render through that override.
+    return true;
+  }
+
+  @Override
   protected void buildContent (int maxWidth) {
     contentWidth = maxWidth;
     contentHeight = 0;
@@ -150,20 +159,25 @@ public class TGMessageInvoice extends TGMessage implements TGInlineKeyboard.Clic
       contentHeight += mediaWrapper.getCellHeight() + Screen.dp(12f);
     }
 
-    // Build button
-    String buttonText;
-    if (invoice.receiptMessageId != 0) {
-      buttonText = Lang.getString(R.string.ViewReceipt);
-    } else {
-      buttonText = Lang.getString(R.string.PaymentPay, priceText);
-    }
+    // Only synthesize a Pay/Receipt button when the message has NO native inline keyboard. Bot
+    // invoices carry a reply_markup Buy button that the framework already renders and routes
+    // through tdlib.ui().openPaymentForm(...) — drawing our own would duplicate that button and
+    // send the payment via a worse path (which surfaced PROVIDER_ACCOUNT_TIMEOUT).
+    if (!(msg.replyMarkup instanceof TdApi.ReplyMarkupInlineKeyboard)) {
+      String buttonText;
+      if (invoice.receiptMessageId != 0) {
+        buttonText = Lang.getString(R.string.ViewReceipt);
+      } else {
+        buttonText = Lang.getString(R.string.PaymentPay, priceText);
+      }
 
-    if (keyboard == null) {
-      keyboard = new TGInlineKeyboard(this, false);
-      keyboard.setViewProvider(currentViews);
+      if (keyboard == null) {
+        keyboard = new TGInlineKeyboard(this, false);
+        keyboard.setViewProvider(currentViews);
+      }
+      keyboard.setCustom(0, buttonText, maxWidth, false, this);
+      contentHeight += TGInlineKeyboard.getButtonHeight() + Screen.dp(8f);
     }
-    keyboard.setCustom(0, buttonText, maxWidth, false, this);
-    contentHeight += TGInlineKeyboard.getButtonHeight() + Screen.dp(8f);
   }
 
   @Override
@@ -223,8 +237,10 @@ public class TGMessageInvoice extends TGMessage implements TGInlineKeyboard.Clic
   @Override
   public void onClick (View view, TGInlineKeyboard keyboard, TGInlineKeyboard.Button button) {
     if (invoice.receiptMessageId != 0) {
-      // View receipt - TODO: implement receipt viewing
-      UI.showToast(R.string.ViewReceipt, Toast.LENGTH_SHORT);
+      // Open the read-only receipt for the completed payment.
+      org.thunderdog.challegram.ui.PaymentReceiptController c = new org.thunderdog.challegram.ui.PaymentReceiptController(controller().context(), tdlib);
+      c.setArguments(new org.thunderdog.challegram.ui.PaymentReceiptController.Args(msg.chatId, invoice.receiptMessageId));
+      controller().navigateTo(c);
     } else {
       // Open payment form
       TdApi.InputInvoiceMessage inputInvoice = new TdApi.InputInvoiceMessage(msg.chatId, msg.id);
