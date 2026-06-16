@@ -29,7 +29,9 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.ListUpdateCallback;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
@@ -112,17 +114,79 @@ public class StoryBarView extends RecyclerView {
   }
 
   public void setActiveStories (List<TdApi.ChatActiveStories> stories) {
-    activeStoriesList.clear();
-    if (stories != null) {
-      activeStoriesList.addAll(stories);
+    final List<TdApi.ChatActiveStories> oldList = new ArrayList<>(activeStoriesList);
+    final List<TdApi.ChatActiveStories> newList = stories != null ? stories : new ArrayList<>();
+
+    // This is called on every chat-list update, very often with an identical list. A blanket
+    // notifyDataSetChanged() rebinds every avatar and re-loads its image, producing a visible
+    // flicker each time. Diff against the previous list so only genuinely changed rows are rebound;
+    // when nothing changed we skip the rebind (and the visibility/invalidate churn) entirely.
+    if (storiesEqual(oldList, newList)) {
+      return;
     }
-    adapter.notifyDataSetChanged();
+
+    activeStoriesList.clear();
+    activeStoriesList.addAll(newList);
+
+    DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+      @Override public int getOldListSize () { return oldList.size(); }
+      @Override public int getNewListSize () { return newList.size(); }
+
+      @Override public boolean areItemsTheSame (int oldItemPosition, int newItemPosition) {
+        return oldList.get(oldItemPosition).chatId == newList.get(newItemPosition).chatId;
+      }
+
+      @Override public boolean areContentsTheSame (int oldItemPosition, int newItemPosition) {
+        return storyEntryEqual(oldList.get(oldItemPosition), newList.get(newItemPosition));
+      }
+    }, false);
+
+    // The "add story" button occupies position 0 when present, so story rows are offset by one.
+    final int headerOffset = hasAddButton() ? 1 : 0;
+    diff.dispatchUpdatesTo(new ListUpdateCallback() {
+      @Override public void onInserted (int position, int count) {
+        adapter.notifyItemRangeInserted(position + headerOffset, count);
+      }
+      @Override public void onRemoved (int position, int count) {
+        adapter.notifyItemRangeRemoved(position + headerOffset, count);
+      }
+      @Override public void onMoved (int fromPosition, int toPosition) {
+        adapter.notifyItemMoved(fromPosition + headerOffset, toPosition + headerOffset);
+      }
+      @Override public void onChanged (int position, int count, @Nullable Object payload) {
+        adapter.notifyItemRangeChanged(position + headerOffset, count, payload);
+      }
+    });
 
     // Show/hide based on content and settings
     updateVisibility();
 
     // Force redraw to ensure items render correctly
     post(this::invalidate);
+  }
+
+  private static boolean storiesEqual (List<TdApi.ChatActiveStories> a, List<TdApi.ChatActiveStories> b) {
+    if (a.size() != b.size()) {
+      return false;
+    }
+    for (int i = 0; i < a.size(); i++) {
+      if (a.get(i).chatId != b.get(i).chatId || !storyEntryEqual(a.get(i), b.get(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean storyEntryEqual (TdApi.ChatActiveStories a, TdApi.ChatActiveStories b) {
+    if (a.chatId != b.chatId || a.maxReadStoryId != b.maxReadStoryId || a.order != b.order || a.stories.length != b.stories.length) {
+      return false;
+    }
+    for (int i = 0; i < a.stories.length; i++) {
+      if (a.stories[i].storyId != b.stories[i].storyId) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public void setCanPostStory (boolean canPost) {

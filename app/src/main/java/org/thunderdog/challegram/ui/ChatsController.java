@@ -3403,24 +3403,56 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     long chatId = tdlib.selfChatId();
     tdlib.client().send(new TdApi.CanPostStory(chatId), result -> {
       runOnUiThreadOptional(() -> {
+        // Keep the "add story" entry visible whenever posting is fundamentally possible — i.e. the
+        // user is allowed to post but is only temporarily rate-limited. Hiding it on a limit result
+        // leaves the user with no affordance and no explanation; instead we keep the button and let
+        // a tap surface the concrete reason (see openStoryCompose).
         boolean canPost = result.getConstructor() == TdApi.CanPostStoryResultOk.CONSTRUCTOR;
-        // Ensure the overlay exists when the user can post a story, then forward the flag so the
-        // "add story" entry shows/hides itself.
-        if (canPost && ensureStoryBarOverlay() && storyBarView != null) {
+        boolean showButton = canPost || isStoryLimitResult(result);
+        if (showButton && ensureStoryBarOverlay() && storyBarView != null) {
           storyBarView.setCanPostStory(true);
-          if (chatsView != null) {
+          if (canPost && chatsView != null) {
             chatsView.scrollToPosition(0);
           }
         } else if (storyBarView != null) {
-          storyBarView.setCanPostStory(canPost);
+          storyBarView.setCanPostStory(showButton);
         }
       });
     });
   }
 
+  private static boolean isStoryLimitResult (TdApi.Object result) {
+    switch (result.getConstructor()) {
+      case TdApi.CanPostStoryResultActiveStoryLimitExceeded.CONSTRUCTOR:
+      case TdApi.CanPostStoryResultWeeklyLimitExceeded.CONSTRUCTOR:
+      case TdApi.CanPostStoryResultMonthlyLimitExceeded.CONSTRUCTOR:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   private boolean openingStoryCompose;
 
   private void openStoryCompose () {
+    // Re-check before composing: the cached button state can be stale, and a story we let the user
+    // compose only to silently drop on send is worse than telling them up-front why it can't go out.
+    tdlib.client().send(new TdApi.CanPostStory(tdlib.selfChatId()), result -> runOnUiThreadOptional(() -> {
+      if (result.getConstructor() == TdApi.CanPostStoryResultOk.CONSTRUCTOR) {
+        showStoryComposeChoice();
+      } else if (isStoryLimitResult(result)) {
+        UI.showToast(R.string.StoryLimitExceeded, Toast.LENGTH_LONG);
+      } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+        UI.showToast(R.string.StoryPostError, Toast.LENGTH_LONG);
+      } else {
+        // Any other non-Ok result (e.g. boost-needed, which shouldn't occur for the self chat):
+        // fall back to the generic limit message rather than failing silently.
+        UI.showToast(R.string.StoryLimitExceeded, Toast.LENGTH_LONG);
+      }
+    }));
+  }
+
+  private void showStoryComposeChoice () {
     // Show Camera/Gallery choice dialog
     showOptions(
       Lang.getString(R.string.AddStory),
