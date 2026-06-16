@@ -50,7 +50,13 @@ public class SettingsStoriesController extends RecyclerViewController<Void> impl
       @Override
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         int id = item.getId();
-        if (id == R.id.btn_storyRingColors) {
+        if (id == R.id.btn_toggleNewSetting) {
+          // Bind the switch to the persisted flag (carried via setLongId) so it opens
+          // in the correct position and can be toggled both directions.
+          view.getToggler().setRadioEnabled(Settings.instance().getNewSetting(item.getLongId()), isUpdate);
+        } else if (id == R.id.btn_showAddStoryBorder) {
+          view.getToggler().setRadioEnabled(Settings.instance().getNewSetting(Settings.SETTING_FLAG_SHOW_ADD_STORY_BORDER), isUpdate);
+        } else if (id == R.id.btn_storyRingColors) {
           int[] colors = Settings.instance().getStoryRingColors();
           view.setData(colors.length == 1 ? Lang.getString(R.string.SolidColor) :
                        Lang.plural(R.string.xColors, colors.length));

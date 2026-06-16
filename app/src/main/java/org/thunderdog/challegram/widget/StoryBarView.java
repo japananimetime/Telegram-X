@@ -95,8 +95,9 @@ public class StoryBarView extends RecyclerView {
     // Set solid background to prevent chat list from showing through
     setBackgroundColor(Theme.fillingColor());
 
-    // Visibility is controlled by ChatsAdapter.setShowStoryBar() - always VISIBLE when in adapter
-    setVisibility(VISIBLE);
+    // Start hidden: updateVisibility() reveals the overlay only once there is content to show,
+    // otherwise an empty filled bar flashes over the first chat before stories load.
+    setVisibility(GONE);
 
     adapter = new StoryBarAdapter();
     setAdapter(adapter);
@@ -135,9 +136,11 @@ public class StoryBarView extends RecyclerView {
   }
 
   private void updateVisibility () {
-    // Visibility is now controlled by ChatsAdapter.setShowStoryBar()
-    // This method just notifies listeners about content availability
+    // The story bar is a floating overlay over the chat list (see ChatsController.ensureStoryBarOverlay),
+    // so it must hide itself when there is nothing to show; otherwise an empty bar floats over the
+    // first chat. The listener additionally adjusts the list's top padding.
     boolean hasContent = shouldShow();
+    setVisibility(hasContent ? VISIBLE : GONE);
     if (visibilityChangeListener != null) {
       visibilityChangeListener.onStoryBarVisibilityChanged(hasContent);
     }

@@ -174,6 +174,7 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   // Progress animation
   private FactorAnimator progressAnimator;
   private boolean isPaused;
+  private boolean autoAdvanced; // guards against double auto-advance (video STATE_ENDED + progress-timer completion)
 
   // ExoPlayer for video stories
   private ExoPlayer exoPlayer;
@@ -579,6 +580,8 @@ public class StoryViewController extends ViewController<StoryViewController.Args
   }
 
   private void loadStory () {
+    // Each story may auto-advance exactly once; reset the guard as a new story starts loading.
+    autoAdvanced = false;
     loadingContainer.setVisibility(View.VISIBLE);
     tdlib.client().send(new TdApi.GetStory(currentChatId, currentStoryId, false), result -> {
       if (result.getConstructor() == TdApi.Story.CONSTRUCTOR) {
@@ -776,8 +779,19 @@ public class StoryViewController extends ViewController<StoryViewController.Args
         startProgressTimer(duration);
       }
     } else if (playbackState == Player.STATE_ENDED) {
-      navigateNext();
+      autoAdvanceToNext();
     }
+  }
+
+  /** Auto-advance to the next story, but only once per story (video fires both STATE_ENDED and the
+   *  progress-timer completion). Manual taps call {@link #navigateNext()} directly and are unaffected. */
+  private void autoAdvanceToNext () {
+    if (autoAdvanced) {
+      return;
+    }
+    autoAdvanced = true;
+    stopProgress();
+    navigateNext();
   }
 
   private void releasePlayer () {
@@ -819,6 +833,19 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       progressAnimator.cancel();
       progressAnimator = null;
     }
+  }
+
+  @Override
+  public void onActivityPause () {
+    super.onActivityPause();
+    // Don't let the timer/video keep advancing (and silently marking stories viewed) in the background.
+    pauseProgress();
+  }
+
+  @Override
+  public void onActivityResume () {
+    super.onActivityResume();
+    resumeProgress();
   }
 
   // Update bottom insets for navigation bar
@@ -925,9 +952,14 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       TdApi.ChatActiveStories activeStories = activeStoriesList.get(currentUserIndex);
       currentChatId = activeStories.chatId;
       currentStoryIndex = 0; // Start from first story of previous user
-      currentStoryId = activeStories.stories[0].storyId;
       currentStory = null;
-      loadStory();
+      if (activeStories.stories.length > 0) {
+        currentStoryId = activeStories.stories[0].storyId;
+        loadStory();
+      } else {
+        // Stale/empty cached entry — fetch fresh stories for this user (mirrors next-user handling).
+        loadNextUserStories(activeStories.chatId);
+      }
     } else {
       // Already at first user, just resume
       resumeProgress();
@@ -1232,7 +1264,7 @@ public class StoryViewController extends ViewController<StoryViewController.Args
       }
     } else if (id == ANIMATOR_PROGRESS) {
       if (finalFactor == 1f && !isPaused) {
-        navigateNext();
+        autoAdvanceToNext();
       }
     }
   }

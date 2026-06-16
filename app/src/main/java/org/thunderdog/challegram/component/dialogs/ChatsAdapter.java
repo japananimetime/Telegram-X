@@ -269,16 +269,15 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
 
   private boolean showStoryBar = false;
 
+  /**
+   * No-op: the story bar is rendered as a floating overlay by
+   * {@link org.thunderdog.challegram.ui.ChatsController#ensureStoryBarOverlay()}, NOT as a
+   * RecyclerView row. Inserting a VIEW_TYPE_STORY_BAR row here would crash, because
+   * {@link ChatsViewHolder#create} has no holder for it. Kept as a no-op so callers and the
+   * position-offset helpers ({@link #hasStoryBar()}) stay valid while the row path is disabled.
+   */
   public void setShowStoryBar (boolean show) {
-    if (this.showStoryBar != show) {
-      boolean hadStoryBar = hasStoryBar();
-      this.showStoryBar = show;
-      if (hadStoryBar && !hasStoryBar()) {
-        notifyItemRemoved(0);
-      } else if (!hadStoryBar && hasStoryBar()) {
-        notifyItemInserted(0);
-      }
-    }
+    // intentionally disabled — see method doc
   }
 
   public boolean hasStoryBar () {
