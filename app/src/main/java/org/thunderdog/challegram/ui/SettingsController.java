@@ -690,6 +690,7 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_privacyPolicy, R.drawable.baseline_policy_24, R.string.PrivacyPolicy));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.NeurogramAbout));
 
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     AppInstallationUtil.DownloadUrl downloadUrl = AppUpdater.getDownloadUrl(null);
