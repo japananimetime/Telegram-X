@@ -5702,8 +5702,8 @@
   <string name="xGiftCanBeSold_other">Can be converted to %1$s Stars</string>
   <!-- Received gifts surface (profile) -->
   <string name="Gifts">Gifts</string>
-  <string name="xGifts_one">%1$d Gift</string>
-  <string name="xGifts_other">%1$d Gifts</string>
+  <string name="xGifts_one">%1$s Gift</string>
+  <string name="xGifts_other">%1$s Gifts</string>
   <string name="GiftsNone">No gifts yet</string>
   <string name="GiftDetails">Gift</string>
   <string name="GiftPrivate">Hidden sender</string>
@@ -5900,8 +5900,8 @@
   <string name="BoostsToNextLevel_other">%1$d boosts to the next level</string>
   <string name="ServiceProtectedContentOn">%1$s enabled content protection</string>
   <string name="ChatListGiftedTon">TON gift</string>
-  <string name="xStars_one">%1$d Star</string>
-  <string name="xStars_other">%1$d Stars</string>
+  <string name="xStars_one">%1$s Star</string>
+  <string name="xStars_other">%1$s Stars</string>
   <string name="ShowMore">Show more</string>
   <string name="MakePrivate">Hide my name and message</string>
   <string name="PayForUpgradeStars_one">Pay %1$d Star to allow upgrade</string>
