@@ -135,23 +135,15 @@ public class SettingsStarsController extends RecyclerViewController<SettingsStar
   private void fetchPaymentOptions() {
     tdlib.send(new TdApi.GetStarPaymentOptions(), (result, error) -> {
       runOnUiThreadOptional(() -> {
-        if (error != null) {
-          showError(TD.toErrorString(error));
-        } else {
+        // A failed payment-options request must not wipe the whole screen: the balance
+        // and transaction/TON history are still useful. buildCells() guards the "Buy Stars"
+        // section on paymentOptions != null, so leaving it null just omits that section.
+        if (error == null) {
           paymentOptions = (TdApi.StarPaymentOptions) result;
-          buildCells();
         }
+        buildCells();
       });
     });
-  }
-
-  private void showError(String error) {
-    List<ListItem> items = new ArrayList<>();
-    items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.TelegramStars));
-    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, error));
-    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    adapter.setItems(items, true);
   }
 
   private void buildCells() {
