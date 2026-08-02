@@ -875,8 +875,8 @@ public class Settings {
       pmcVersion = Math.max(0, pmc.tryGetInt(KEY_VERSION));
     } catch (FileNotFoundException e) {
       if (isFreshAppInstallation()) {
-        pmc.putInt(KEY_VERSION, pmcVersion);
         pmcVersion = VERSION;
+        pmc.putInt(KEY_VERSION, pmcVersion);
       } else {
         migratePrefsToPmc();
       }
