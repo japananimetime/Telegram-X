@@ -341,6 +341,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
     updateButtonWrapHeight(extraBottomInset);
     Views.setPaddingBottom(buttonWrap, extraBottomInset);
+    Views.setLayoutHeight(buttonWrap, Screen.dp(76f) + extraBottomInset);
     Views.setPaddingBottom(callControlsLayout, extraBottomInset);
   }
 
