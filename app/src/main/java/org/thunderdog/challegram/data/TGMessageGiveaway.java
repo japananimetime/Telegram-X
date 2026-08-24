@@ -94,7 +94,7 @@ public class TGMessageGiveaway extends TGMessageGiveawayBase implements TGInline
       }
       case TdApi.GiveawayPrizeStars.CONSTRUCTOR: {
         TdApi.GiveawayPrizeStars stars = (TdApi.GiveawayPrizeStars) giveaway.prize;
-        text = Lang.pluralBold(R.string.xGiveawayPrizeStar, stars.starCount);
+        text = Lang.getMarkdownPlural(controller(), R.string.xGiveawayPrizeStar, stars.starCount, Lang.boldCreator());
         break;
       }
       default: {
