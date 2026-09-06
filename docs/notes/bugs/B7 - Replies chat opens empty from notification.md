@@ -26,4 +26,7 @@ Otherwise the highlight path: `TdlibUi.openChat` → `MessagesManager.loadFromMe
 Branch `fix/giveaway-typing-topics`, `MessagesLoader`: the one-shot "empty positioned initial load → reload from the end" fallback from B3 now applies to every plain chat, not only forum topics (`specialMode == NONE`, no search filter). The chat can no longer stay empty; at worst it opens at the bottom instead of at the highlighted message. The `TAG_MESSAGES_LOADER` warning names the message id that failed, so the root cause can still be chased from a log.
 
 ## Verification
-Not device-tested. Kill the app, get a Replies notification, tap it: chat must show messages.
+Not yet triggered on device (no Replies notification arrived during the 2026-09-06 test session).
+
+## Related observation (2026-09-06, not a client bug)
+A fresh non-member comment in t.me/yobangelion (post 19555, comment 150733) got a reply from a friend, and **no Replies message was created on the server**: neither this app nor nchat on the laptop (same account) shows anything in the Replies chat, and no notification arrived. Candidates on Telegram's side: the account had *left* the discussion group the day before (may differ from never joined), the reply may have targeted the post rather than the comment, or delayed delivery. Retest in a channel whose discussion group was never joined before filing anything.

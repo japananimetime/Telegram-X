@@ -2,7 +2,7 @@
 mantis: 
 area: Interface / messages
 severity: P0
-status: open — needs crash log
+status: not reproducible on 0.28.11.1785 (2026-09-06)
 build: all-features-combined e33134ba
 device: user's phone
 ---
@@ -26,7 +26,7 @@ Long-press chain for blockquotes: `util/text/Text.performLongPress` (≈3329) �
 3. Reply-header quote: different path entirely (`ReplyComponent` has no long-press handling; would come from `MessageView`).
 
 ## Fix
-Pending the stack trace.
+No change made. On the 2026-09-06 build (0.28.11.1785, branch `fix/giveaway-typing-topics`) the user long-pressed quote text on device with a logcat crash watcher attached: no crash. Keep this note; if it recurs, grab the trace as described above.
 
 ## Verification
 —

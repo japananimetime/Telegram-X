@@ -2,7 +2,7 @@
 mantis: 
 area: Topics
 severity: P2
-status: fixed-untested
+status: fixed, device-tested OK 2026-09-06
 build: all-features-combined e33134ba
 device: user's phone
 ---

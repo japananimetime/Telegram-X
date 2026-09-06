@@ -2,7 +2,7 @@
 mantis: 
 area: Interface / messages
 severity: P0
-status: fixed-untested
+status: fixed, device-tested OK 2026-09-06 (build 0.28.11.1785)
 build: all-features-combined e33134ba
 device: user's phone
 ---
