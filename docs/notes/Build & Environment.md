@@ -34,6 +34,8 @@ JDK 21 (`jdk21-openjdk`), Android SDK at `~/Android/Sdk` with platform 36, build
 
 Two build-script fallbacks were needed for the flat TDLib snapshot (no `tdlib/source/{td,openssl}`): `app/build.gradle.kts` now finds `opensslv.h` under `tdlib/openssl/<abi>/include` and reports the TDLib version as `prebuilt-<commit>` when `CMakeLists.txt` is absent. The Windows box may have had those directories from the old nested submodules.
 
+First full APK built here 2026-09-06 (`assembleLatestArm64Debug`, 80 MB, signed with the real keystore, signature fingerprint verified against `keystore/neurogram.jks`). Native chain that worked: `source scripts/set-env.sh`, then `bash scripts/private/patch-native-impl.sh` (the file has no exec bit in git, hence `bash`), `bash scripts/private/build-vpx-impl.sh`, `bash scripts/private/build-ffmpeg-impl.sh`, then gradle. `scripts/setup.sh` was avoided because it runs `reset.sh` when `local.properties` exists. Secrets came from the Windows box over Taildrop (never through chat): `local.properties`, `keystore/key.properties`, `keystore/neurogram.jks`, all gitignored, chmod 600.
+
 Fast loop here:
 ```bash
 export ANDROID_SDK_ROOT=$HOME/Android/Sdk ANDROID_HOME=$HOME/Android/Sdk
