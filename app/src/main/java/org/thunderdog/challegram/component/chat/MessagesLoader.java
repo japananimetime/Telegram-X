@@ -111,7 +111,7 @@ public class MessagesLoader implements Client.ResultHandler {
   private @Nullable TdApi.Chat chat;
   private @Nullable ThreadInfo messageThread;
   private @Nullable TdApi.MessageTopic topicId;
-  private boolean retriedTopicFromEnd; // one-shot fallback for empty positioned forum-topic loads
+  private boolean retriedTopicFromEnd; // one-shot fallback for empty positioned initial loads
 
   private Tdlib.CancellableResultHandler<TdApi.SponsoredMessages> sponsoredResultHandler;
   private final MessagesSearchManagerMiddleware searchManagerMiddleware;
@@ -1746,12 +1746,13 @@ public class MessagesLoader implements Client.ResultHandler {
 
       if (!loadingLocal && items.isEmpty() && loadingMode == MODE_INITIAL && !retriedTopicFromEnd &&
         lastFromMessageId != null && lastFromMessageId.getMessageId() != 0 &&
-        topicId != null && topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
-        // TDLib returned nothing (or an error) for a forum topic around the requested position,
-        // e.g. an unread/last-read id it cannot resolve. Show the latest messages of the topic
+        specialMode == SPECIAL_MODE_NONE && !hasSearchFilter()) {
+        // TDLib returned nothing (or an error) around the requested position: a forum topic
+        // opened at an unread/last-read id it cannot resolve, or a chat opened from a
+        // notification at a message that is not loadable yet. Show the latest messages
         // instead of an empty, non-loadable chat.
         retriedTopicFromEnd = true;
-        Log.w(Log.TAG_MESSAGES_LOADER, "Empty initial forum topic chunk around %d, retrying from the end", lastFromMessageId.getMessageId());
+        Log.w(Log.TAG_MESSAGES_LOADER, "Empty initial chunk around %d, retrying from the end", lastFromMessageId.getMessageId());
         synchronized (lock) {
           isLoading = false;
         }

@@ -4321,6 +4321,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onFocus () {
     super.onFocus();
+    scheduleThreadRefresh();
     if (promptDraftPrefillOnFocus) {
       promptDraftPrefillOnFocus = false;
       fillDraft(this.fillDraft, true);
@@ -4506,6 +4507,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     super.onBlur();
 
+    cancelThreadRefresh();
+
     // Cancel a pending "typing…" action when leaving the chat, so the recipient doesn't keep
     // seeing the indicator until the server timeout if we navigated away mid-typing.
     setTyping(false);
@@ -4591,6 +4594,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void destroy () {
+    cancelThreadRefresh();
     resetSelectableControl();
 
     discardAttachedFiles(false);
@@ -11091,6 +11095,59 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
       setChatAction(action, true, true);
       this.broadcastingAction = action;
+    }
+  }
+
+  // Comment threads of channels the user is not a member of: the server pushes no updates for
+  // such a supergroup, and TDLib only fetches its difference once when the chat is opened. Poll
+  // the thread tail while the screen is focused; a newer message in the result makes TDLib run
+  // getChannelDifference itself, which then delivers the regular updateNewMessage stream.
+  private static final long THREAD_REFRESH_INTERVAL_MS = 4000L;
+  private Runnable threadRefreshRunnable;
+
+  private boolean needThreadRefresh () {
+    if (messageThread == null || chat == null || isDestroyed() || inPreviewMode || isInForceTouchMode()) {
+      return false;
+    }
+    long threadChatId = messageThread.getChatId();
+    if (!ChatId.isSupergroup(threadChatId)) {
+      return false;
+    }
+    TdApi.ChatMemberStatus status = tdlib.chatStatus(threadChatId);
+    return status == null || !TD.isMember(status);
+  }
+
+  private void scheduleThreadRefresh () {
+    if (threadRefreshRunnable != null || !needThreadRefresh()) {
+      return;
+    }
+    threadRefreshRunnable = new Runnable() {
+      @Override
+      public void run () {
+        if (threadRefreshRunnable != this) {
+          return;
+        }
+        if (!needThreadRefresh()) {
+          threadRefreshRunnable = null;
+          return;
+        }
+        long threadChatId = messageThread.getChatId();
+        long threadMessageId = messageThread.getOldestMessageId();
+        tdlib.send(new TdApi.GetMessageThreadHistory(threadChatId, threadMessageId, 0, 0, 5), (messages, error) -> {
+          if (error != null) {
+            Log.i("Comment thread refresh failed for chat %d: %s", threadChatId, error.message);
+          }
+        });
+        tdlib.ui().postDelayed(this, THREAD_REFRESH_INTERVAL_MS);
+      }
+    };
+    tdlib.ui().postDelayed(threadRefreshRunnable, THREAD_REFRESH_INTERVAL_MS);
+  }
+
+  private void cancelThreadRefresh () {
+    if (threadRefreshRunnable != null) {
+      tdlib.ui().removeCallbacks(threadRefreshRunnable);
+      threadRefreshRunnable = null;
     }
   }
 
