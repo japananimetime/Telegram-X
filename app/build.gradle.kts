@@ -97,7 +97,15 @@ android {
 
     var openSslVersion = ""
     var openSslVersionFull = ""
-    val openSslVersionFile = File(project.rootDir.absoluteFile, "tdlib/source/openssl/include/openssl/opensslv.h")
+    // The flat prebuilt TDLib snapshot (japananimetime/tdlib) ships OpenSSL headers per ABI under
+    // tdlib/openssl/<abi>/include instead of the source tree; fall back to any of them.
+    val openSslVersionFile = listOf(
+      File(project.rootDir.absoluteFile, "tdlib/source/openssl/include/openssl/opensslv.h"),
+      File(project.rootDir.absoluteFile, "tdlib/openssl/arm64-v8a/include/openssl/opensslv.h"),
+      File(project.rootDir.absoluteFile, "tdlib/openssl/x86_64/include/openssl/opensslv.h"),
+      File(project.rootDir.absoluteFile, "tdlib/openssl/armeabi-v7a/include/openssl/opensslv.h"),
+      File(project.rootDir.absoluteFile, "tdlib/openssl/x86/include/openssl/opensslv.h")
+    ).firstOrNull { it.exists() } ?: error("OpenSSL version header not found under tdlib/")
     openSslVersionFile.bufferedReader().use { reader ->
       val regex = Regex("^#\\s*define OPENSSL_VERSION_NUMBER\\s*((?:0x)[0-9a-fAF]+)L?\$")
       while (true) {
@@ -132,19 +140,22 @@ android {
     var tdlibVersion = ""
     val tdlibCommit = File(project.rootDir.absoluteFile, "tdlib/version.txt").bufferedReader().readLine().take(7)
     val tdlibVersionFile = File(project.rootDir.absoluteFile, "tdlib/source/td/CMakeLists.txt")
-    tdlibVersionFile.bufferedReader().use { reader ->
-      val regex = Regex("^project\\(TDLib VERSION (\\d+\\.\\d+\\.\\d+) LANGUAGES CXX C\\)$")
-      while (true) {
-        val line = reader.readLine() ?: break
-        val result = regex.find(line)
-        if (result != null) {
-          tdlibVersion = "${result.groupValues[1]}-${tdlibCommit}"
-          break
+    if (tdlibVersionFile.exists()) {
+      tdlibVersionFile.bufferedReader().use { reader ->
+        val regex = Regex("^project\\(TDLib VERSION (\\d+\\.\\d+\\.\\d+) LANGUAGES CXX C\\)$")
+        while (true) {
+          val line = reader.readLine() ?: break
+          val result = regex.find(line)
+          if (result != null) {
+            tdlibVersion = "${result.groupValues[1]}-${tdlibCommit}"
+            break
+          }
         }
       }
     }
     if (tdlibVersion.isEmpty()) {
-      fatal("TDLib not found!")
+      // Flat prebuilt TDLib snapshot (no source tree): only the commit from tdlib/version.txt is known.
+      tdlibVersion = "prebuilt-${tdlibCommit}"
     }
 
     buildConfigString("OPENSSL_VERSION", openSslVersion)
