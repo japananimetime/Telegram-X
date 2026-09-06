@@ -148,6 +148,15 @@ public class TGMessageGiveaway extends TGMessageGiveawayBase implements TGInline
   }
 
   @Override
+  protected boolean hasButton () {
+    // The label is dynamic ("Learn more" / "Participating"), so the base
+    // getButtonText() contract can't describe it; always reserve the button.
+    // Without this the ripple keyboard stays empty and loadGiveawayInfo()
+    // crashed on firstButton() every time a giveaway card was laid out.
+    return true;
+  }
+
+  @Override
   protected void onBuildButton (int maxWidth) {
     final boolean isParticipating = TD.isParticipating(giveawayInfo);
     rippleButton.setCustom(isParticipating ? R.drawable.baseline_check_18 : 0, Lang.getString(isParticipating ? R.string.GiveawayParticipating : R.string.GiveawayLearnMore), maxWidth, false, this);

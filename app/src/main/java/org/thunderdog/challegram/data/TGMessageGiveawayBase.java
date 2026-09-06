@@ -598,10 +598,16 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
   protected @Nullable TdApi.GiveawayInfo giveawayInfo;
   protected boolean giveawayInfoLoaded;
 
+  private boolean hasRippleButton () {
+    return hasButton && rippleButton != null && !rippleButton.isEmpty();
+  }
+
   protected void loadGiveawayInfo () {
     if (!giveawayInfoLoaded) {
       tdlib.send(new TdApi.GetGiveawayInfo(msg.chatId, msg.id), (a, b) -> UI.post(() -> this.onGiveawayInfoLoaded(a, b)));
-      rippleButton.firstButton().showProgressDelayed();
+      if (hasRippleButton()) {
+        rippleButton.firstButton().showProgressDelayed();
+      }
       giveawayInfoLoaded = true;
     }
   }
@@ -609,7 +615,9 @@ public abstract class TGMessageGiveawayBase extends TGMessage implements TGInlin
   @CallSuper
   protected void onGiveawayInfoLoaded (TdApi.GiveawayInfo result, @Nullable TdApi.Error error) {
     this.giveawayInfo = result;
-    rippleButton.firstButton().hideProgress();
+    if (hasRippleButton()) {
+      rippleButton.firstButton().hideProgress();
+    }
     giveawayInfoLoaded = false;
   }
 

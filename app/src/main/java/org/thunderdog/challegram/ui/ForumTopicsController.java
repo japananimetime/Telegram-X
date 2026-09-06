@@ -946,8 +946,11 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
       highlightMessageId = new MessageId(chatId, topic.lastReadInboxMessageId);
       highlightMode = MessagesManager.HIGHLIGHT_MODE_UNREAD;
     } else if (topic.lastReadInboxMessageId == 0 && topic.unreadCount > 0) {
-      // No messages have been read yet - scroll to beginning
-      highlightMessageId = new MessageId(chatId, MessageId.MIN_VALID_ID);
+      // No messages have been read yet - scroll to the beginning of the topic. The topic's
+      // root (its "topic created" service message) has the topic id as server message id;
+      // MessageId.MIN_VALID_ID is not a real message and GetForumTopicHistory around it
+      // came back empty for large topics, leaving the screen without any messages.
+      highlightMessageId = new MessageId(chatId, MessageId.fromServerMessageId(topic.info.forumTopicId));
       highlightMode = MessagesManager.HIGHLIGHT_MODE_UNREAD;
     }
     // If all messages are read (unreadCount == 0), highlightMessageId stays null

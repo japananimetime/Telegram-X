@@ -1286,8 +1286,15 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
     String current = getInput().trim();
     controller.setInputVisible(true, current.length() > 0);
     if (!draft.equals(current)) {
+      // ignoreDraft must only cover the programmatic setInput() below: TextWatcher callbacks
+      // run synchronously inside setText(). Leaving it set permanently made every later user
+      // edit report byUserAction=false, so ChatActionTyping was never sent again for this chat.
       ignoreDraft = true;
-      setInput(draft, draft.length() > 0, false);
+      try {
+        setInput(draft, draft.length() > 0, false);
+      } finally {
+        ignoreDraft = false;
+      }
       controller.updateSendButton(draft.toString(), false);
     }
   }

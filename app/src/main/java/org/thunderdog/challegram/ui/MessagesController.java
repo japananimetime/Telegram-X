@@ -11105,8 +11105,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       actions = new SparseIntArray(5);
     }
     Tdlib.ResultHandler<TdApi.Ok> handler = (ok, error) -> {
-      if(error != null){
-        if("Chat doesn't have threads".equals(error.message) || "Chat is not a forum".equals(error.message)){
+      if (error != null) {
+        if ("Chat doesn't have threads".equals(error.message) || "Chat is not a forum".equals(error.message)) {
+          // Keep the topic-mismatch cases quiet for the user, but leave a trace: a silently
+          // rejected sendChatAction is exactly what "nobody sees me typing" looks like.
+          Log.w("sendChatAction rejected for chat %d: %s", chat.id, error.message);
           return;
         }
       }
