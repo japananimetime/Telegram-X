@@ -2,7 +2,7 @@
 mantis: 
 area: General / messaging (comment threads)
 severity: P1
-status: open — needs facts
+status: fixed-untested
 build: all-features-combined e33134ba
 device: user's phone
 ---
@@ -11,10 +11,8 @@ device: user's phone
 ## Symptom
 While chatting in a channel post's comments (message thread) **without being in the discussion chat itself**, everything arrives with roughly 30 s delay: other people's new messages, the user's own sent messages, and especially mentions that land in the "Replies" chat. Reported 2026-09-06.
 
-## Facts needed
-- Is the user a **member** of the discussion group, or only commenting through the channel? (Server pushes channel updates only to members; for non-members TDLib fetches on open and otherwise relies on explicit history requests.)
-- Does the same lag exist in the official app on the same account/network? (Separates TDLib/server behaviour from fork code.)
-- Own messages: do they show as "sending" (clock) for 30 s, or appear only after 30 s?
+## Facts (2026-09-06)
+The user comments **through the channel without being a member** of the discussion group. As a member everything is instant. That matches TDLib: the server pushes supergroup updates only to members; TDLib runs one `getChannelDifference` when a non-member opens the chat and nothing periodic afterwards.
 
 ## Where in the code
 - Thread screen: `MessagesController` with `ThreadInfo` (`data/ThreadInfo.java`); `MessagesManager.openChat` → `tdlib.openChat(chat.id)` (discussion chat) — unchanged vs upstream.
@@ -26,4 +24,7 @@ While chatting in a channel post's comments (message thread) **without being in 
 2. Pending own messages carry `topicId == null` and are filtered out by `matchesTopic` until `updateMessageSendSucceeded` delivers the server copy — would show as "appear late", not "sending". Check with `TAG_MESSAGES_LOADER` logs.
 
 ## Fix
-—
+Branch `fix/giveaway-typing-topics`, `MessagesController`: while a comment thread is focused and `tdlib.chatStatus(discussionChatId)` is not a member status, poll `GetMessageThreadHistory(chatId, root, 0, 0, 5)` every 4 s (`scheduleThreadRefresh` / `cancelThreadRefresh` on focus/blur/destroy). TDLib's `need_channel_difference_to_add_message` sees a newer message in the result and schedules its own channel difference, which delivers the normal `updateNewMessage` stream, so nothing is injected into the UI by hand. Members are unaffected.
+
+## Verification
+Not device-tested. Test as a non-member: post from another account, expect the comment within ~5 s; own replies should stop lagging too. Watch data usage: one small request every 4 s only while a non-member thread is on screen.
