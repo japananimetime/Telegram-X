@@ -22,6 +22,7 @@
 - [[Known Issues & Open Items]] — consolidated open list from all audits and handoffs
 - [[Bug Tracking]] and [[bugs/Bug Index]] — how bugs are tracked, one note per bug
 - [[Debugging Playbook]] — adb, logs, finding the code behind a screen
+- [[Upstream Sync 2026-09]] — what upstream Telegram X gained since the fork's base, conflict hot spots, sync options
 
 ## Existing project documents (same folder)
 - [[FORK_REAUDIT_2026-06-13]] — latest full audit, most items resolved; open tail listed inside
