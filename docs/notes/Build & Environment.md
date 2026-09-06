@@ -29,7 +29,18 @@ $env:GRADLE_USER_HOME = "F:\DevCache\.gradle"    # REQUIRED every time (junction
 - The 2026-06-15 handoff notes that on that machine only the **x64** ABI flavor was configured (`assembleLatestArm64Debug` did not exist). Check `local.properties` / flavor config if an ABI task is missing.
 - `gradle.properties` already forces `kotlin.compiler.execution.strategy=in-process` (Windows file-lock workaround) and `-Xmx4G`.
 
-## Fresh machine, step by step (Linux box: nothing installed yet as of 2026-09-06)
+## Linux box status (2026-09-06)
+JDK 21 (`jdk21-openjdk`), Android SDK at `~/Android/Sdk` with platform 36, build-tools 36, NDK 23.2.8568313 and CMake 3.22.1 installed by `scripts/setup-sdk.sh` (run with `ANDROID_SDK_ROOT=$HOME/Android/Sdk` exported to skip its prompt). `local.properties` exists with **dummy** `telegram.api_id=1` / `api_hash` — good for `compileLatestArm64DebugJavaWithJavac` compile checks only, never install such a build. Submodules initialised so far: `tdlib`, `vkryl/*`, `thirdparty/androidx-media/*`, `jni-utils`, `webrtc` (shallow). Native deps (`scripts/setup.sh`, ffmpeg/vpx/tgcalls) not built yet, so `assemble*` will not work here until that runs.
+
+Two build-script fallbacks were needed for the flat TDLib snapshot (no `tdlib/source/{td,openssl}`): `app/build.gradle.kts` now finds `opensslv.h` under `tdlib/openssl/<abi>/include` and reports the TDLib version as `prebuilt-<commit>` when `CMakeLists.txt` is absent. The Windows box may have had those directories from the old nested submodules.
+
+Fast loop here:
+```bash
+export ANDROID_SDK_ROOT=$HOME/Android/Sdk ANDROID_HOME=$HOME/Android/Sdk
+./gradlew --console=plain :app:compileLatestArm64DebugJavaWithJavac
+```
+
+## Fresh machine, step by step
 1. Packages: `git git-lfs` (`git lfs install`), a JDK 17 or 21 (`jdk21-openjdk` on Arch), `python`, `perl`, `cmake`, `ninja`, `wget`, `unzip`.
 2. Clone: `git clone --recursive git@github.com:japananimetime/Telegram-X.git` then `git checkout all-features-combined && git submodule update --init --recursive`. Already cloned at `~/Projects/Telegram-X` **without** submodules.
 3. `scripts/setup.sh` installs cmdline-tools + platform 36 + NDK into `ANDROID_SDK_ROOT` (default `~/Android/Sdk` on Linux, via `scripts/set-env.sh`), applies the native patches, builds vpx/ffmpeg. Expect a long run and several GB. `--skip-sdk-setup` if the SDK exists.

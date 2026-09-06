@@ -21,7 +21,7 @@ The fork's forum (topics) support for supergroups. Both layouts exist: **list** 
 
 ## Data flow
 1. `TdlibUi.openChat` → forum → `ForumTopicsController` (or tabs). `loadTopics()` calls `GetForumTopics(chatId, query="", offsets, limit=100)`, caches via `tdlib.updateForumTopicsCache`, `loadMoreTopics()` paginates while a full page came back.
-2. Live updates: `updateForumTopicInfo` → `onForumTopicInfoChanged`; `updateForumTopic` → `onForumTopicUpdated` (read positions, pin, mute, draft; **no unreadCount**), so partial reads trigger an authoritative `GetForumTopic` and `onForumTopicFullyUpdated`. New messages: `onNewMessage` → `applyNewTopicMessage` (unread++ only when `lastMessage` advances); unknown topic → `fetchAndInsertTopic` (single `GetForumTopic`, not a full reload).
+2. Live updates (also mirrored into `Tdlib.forumTopicsCache` since 2026-09-06 so the next list open is fresh): `updateForumTopicInfo` → `onForumTopicInfoChanged`; `updateForumTopic` → `onForumTopicUpdated` (read positions, pin, mute, draft; **no unreadCount**), so partial reads trigger an authoritative `GetForumTopic` and `onForumTopicFullyUpdated`. New messages: `onNewMessage` → `applyNewTopicMessage` (unread++ only when `lastMessage` advances); unknown topic → `fetchAndInsertTopic` (single `GetForumTopic`, not a full reload).
 3. Opening a topic: `openTopic` → `MessagesController` with `messageTopicId = MessageTopicForum(id)`; history via `GetForumTopicHistory`; opens at first unread. Send/typing carry the topic. Closed topics disable input unless the user can manage topics.
 4. Sorting: `resortTopicList` by pinned then TDLib `order` (draft-aware). Pinned reorder: `startPinnedReorder` → `sendPinnedTopicsOrder` (`SetPinnedForumTopics`).
 
