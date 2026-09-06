@@ -388,7 +388,10 @@ public abstract class PageBlock {
       this.playListBuilder = playListBuilder;
     }
 
-    private void processCaption (ViewController<?> parent, @NonNull TdApi.PageBlock mediaBlock, TdApi.PageBlockCaption caption, @Nullable TdlibUi.UrlOpenParameters openParameters, ArrayList<PageBlock> out) {
+    private void processCaption (ViewController<?> parent, @NonNull TdApi.PageBlock mediaBlock, @Nullable TdApi.PageBlockCaption caption, @Nullable TdlibUi.UrlOpenParameters openParameters, ArrayList<PageBlock> out) {
+      if (caption == null) {
+        return;
+      }
       // Rich-message media blocks may carry a null caption (unlike instant-view page blocks) — nothing to render.
       if (caption == null) {
         return;
