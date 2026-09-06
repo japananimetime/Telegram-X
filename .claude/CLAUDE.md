@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 * Application id: `space.hikaro.tgx`, display name `Neurogram X` (set via `app.name` in `local.properties` → generated `AppName` string).
 * Upstream is read-only; all original Telegram X architecture still applies. This file documents the fork's specifics on top of it.
 * User-facing build/run docs live in [README.md](/README.md).
+* **Knowledge base:** `docs/` is an Obsidian vault. Start at `docs/Neurogram X Home.md`; per-feature notes in `docs/notes/`, one note per bug in `docs/notes/bugs/`. Update the relevant note when you learn something non-obvious or fix a bug.
 
 ## Environment & Build (Windows)
 
