@@ -7786,6 +7786,10 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         return;
     }
 
+    if (update.message.sendingState == null) {
+      updateForumTopicsCacheOnNewMessage(update.message);
+    }
+
     listeners.updateNewMessage(update);
 
     notificationManager.onUpdateNewMessage(update);
@@ -7807,6 +7811,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
 
     notifyMessageSendCallbacks(update.message.chatId, update.oldMessageId);
+
+    updateForumTopicsCacheOnNewMessage(update.message);
 
     listeners.updateMessageSendSucceeded(update);
 
@@ -8724,13 +8730,99 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     String cacheKey = update.info.chatId + "_" + update.info.forumTopicId;
     synchronized (dataLock) {
       forumTopicInfos.put(cacheKey, update.info);
+      TdApi.ForumTopic cached = findCachedForumTopicLocked(update.info.chatId, update.info.forumTopicId);
+      if (cached != null) {
+        cached.info = update.info;
+      }
     }
     listeners.updateForumTopicInfo(update);
   }
 
   @TdlibThread
   private void updateForumTopic (TdApi.UpdateForumTopic update) {
+    synchronized (dataLock) {
+      TdApi.ForumTopic cached = findCachedForumTopicLocked(update.chatId, update.forumTopicId);
+      if (cached != null) {
+        cached.isPinned = update.isPinned;
+        cached.lastReadInboxMessageId = update.lastReadInboxMessageId;
+        cached.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
+        cached.unreadMentionCount = update.unreadMentionCount;
+        cached.unreadReactionCount = update.unreadReactionCount;
+        cached.unreadPollVoteCount = update.unreadPollVoteCount;
+        cached.notificationSettings = update.notificationSettings != null ? Td.copyOf(update.notificationSettings) : null;
+        cached.draftMessage = update.draftMessage != null ? Td.copyOf(update.draftMessage) : null;
+        // TDLib doesn't carry unreadCount here; the only safe local conclusion is "fully read".
+        if (cached.lastMessage != null && update.lastReadInboxMessageId >= cached.lastMessage.id && cached.unreadCount != 0) {
+          cached.unreadCount = 0;
+          recalculateForumUnreadTopicCountLocked(update.chatId);
+        }
+      }
+    }
     listeners.updateForumTopic(update);
+  }
+
+  /**
+   * Cached topic of a forum chat, or null. Must be called under dataLock; the returned
+   * instance is the cache-owned one (callers copy at the boundary).
+   */
+  private @Nullable TdApi.ForumTopic findCachedForumTopicLocked (long chatId, long forumTopicId) {
+    List<TdApi.ForumTopic> topics = forumTopicsCache.get(chatId);
+    if (topics != null) {
+      for (TdApi.ForumTopic topic : topics) {
+        if (topic.info.forumTopicId == forumTopicId) {
+          return topic;
+        }
+      }
+    }
+    return null;
+  }
+
+  private void recalculateForumUnreadTopicCountLocked (long chatId) {
+    List<TdApi.ForumTopic> topics = forumTopicsCache.get(chatId);
+    if (topics == null) {
+      return;
+    }
+    int totalUnread = 0;
+    for (TdApi.ForumTopic topic : topics) {
+      if (topic.unreadCount > 0 && !topic.info.isHidden) {
+        totalUnread++;
+      }
+    }
+    Integer oldCount = forumUnreadTopicCounts.get(chatId);
+    if (oldCount == null || oldCount != totalUnread) {
+      forumUnreadTopicCounts.put(chatId, totalUnread);
+      listeners().updateForumUnreadTopicCount(chatId, totalUnread);
+    }
+  }
+
+  /**
+   * Mirrors a new (non-pending) message into the cached ForumTopic of its topic, so a
+   * topic list opened later shows the right last message / unread count instantly instead
+   * of a stale snapshot that visibly jumps once GetForumTopics returns.
+   */
+  private void updateForumTopicsCacheOnNewMessage (TdApi.Message message) {
+    if (message.topicId == null || message.topicId.getConstructor() != TdApi.MessageTopicForum.CONSTRUCTOR) {
+      return;
+    }
+    final int forumTopicId = ((TdApi.MessageTopicForum) message.topicId).forumTopicId;
+    synchronized (dataLock) {
+      TdApi.ForumTopic cached = findCachedForumTopicLocked(message.chatId, forumTopicId);
+      if (cached == null) {
+        return;
+      }
+      if (cached.lastMessage != null && message.id <= cached.lastMessage.id) {
+        return;
+      }
+      cached.lastMessage = Td.copyOf(message);
+      if (!cached.isPinned) {
+        // TDLib orders non-pinned topics like chat positions: newest activity first.
+        cached.order = Math.max(cached.order, ((long) message.date) << 32);
+      }
+      if (!message.isOutgoing && message.id > cached.lastReadInboxMessageId) {
+        cached.unreadCount++;
+        recalculateForumUnreadTopicCountLocked(message.chatId);
+      }
+    }
   }
 
   @TdlibThread

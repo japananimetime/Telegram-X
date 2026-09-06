@@ -22,6 +22,7 @@ import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -67,6 +68,7 @@ import org.thunderdog.challegram.util.TopicIconModifier;
 import android.util.SparseIntArray;
 
 import tgx.td.MessageId;
+import tgx.td.Td;
 
 public class ForumTopicsController extends TelegramViewController<ForumTopicsController.Arguments> implements
   Menu, MoreDelegate, View.OnClickListener, View.OnLongClickListener,
@@ -811,6 +813,7 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         TdApi.ForumTopics forumTopics = (TdApi.ForumTopics) result;
         UI.post(() -> {
           if (isDestroyed()) return;
+          final List<TdApi.ForumTopic> previousTopics = new ArrayList<>(topics);
           topics.clear();
           for (TdApi.ForumTopic topic : forumTopics.topics) {
             topics.add(topic);
@@ -825,7 +828,13 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
                         forumTopics.nextOffsetMessageId != 0;
           // Update cache
           tdlib.updateForumTopicsCache(chatId, topics);
-          adapter.setTopics(topics, null);
+          if (adapter.isShowingTopics(topics)) {
+            // Already on screen (cached snapshot): apply the fresh data as a diff so only
+            // rows that actually changed move/redraw, instead of a full visible reset.
+            dispatchTopicsDiff(previousTopics);
+          } else {
+            adapter.setTopics(topics, null);
+          }
           isLoading = false;
           updateEmptyView();
         });
@@ -837,6 +846,85 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         });
       }
     });
+  }
+
+  /**
+   * Dispatches the difference between {@code oldTopics} and the current {@link #topics}
+   * to the adapter (which shares the {@link #topics} list instance).
+   */
+  private void dispatchTopicsDiff (final List<TdApi.ForumTopic> oldTopics) {
+    if (adapter == null) return;
+    final List<TdApi.ForumTopic> newTopics = new ArrayList<>(topics);
+    DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+      @Override
+      public int getOldListSize () {
+        return oldTopics.size();
+      }
+
+      @Override
+      public int getNewListSize () {
+        return newTopics.size();
+      }
+
+      @Override
+      public boolean areItemsTheSame (int oldItemPosition, int newItemPosition) {
+        return oldTopics.get(oldItemPosition).info.forumTopicId == newTopics.get(newItemPosition).info.forumTopicId;
+      }
+
+      @Override
+      public boolean areContentsTheSame (int oldItemPosition, int newItemPosition) {
+        return isSameTopicRow(oldTopics.get(oldItemPosition), newTopics.get(newItemPosition));
+      }
+    }, true);
+    diff.dispatchUpdatesTo(adapter);
+  }
+
+  /** Whether two topic snapshots would render the same {@link ForumTopicView} row. */
+  private static boolean isSameTopicRow (TdApi.ForumTopic a, TdApi.ForumTopic b) {
+    if (a == b) return true;
+    if (a.isPinned != b.isPinned || a.unreadCount != b.unreadCount ||
+        a.unreadMentionCount != b.unreadMentionCount || a.unreadReactionCount != b.unreadReactionCount ||
+        a.lastReadInboxMessageId != b.lastReadInboxMessageId || a.lastReadOutboxMessageId != b.lastReadOutboxMessageId) {
+      return false;
+    }
+    TdApi.ForumTopicInfo ai = a.info, bi = b.info;
+    if (ai.isClosed != bi.isClosed || ai.isHidden != bi.isHidden || !ai.name.equals(bi.name)) {
+      return false;
+    }
+    if ((ai.icon == null) != (bi.icon == null) ||
+        (ai.icon != null && (ai.icon.color != bi.icon.color || ai.icon.customEmojiId != bi.icon.customEmojiId))) {
+      return false;
+    }
+    if (!isSameMessagePreview(a.lastMessage, b.lastMessage)) {
+      return false;
+    }
+    TdApi.DraftMessage ad = a.draftMessage, bd = b.draftMessage;
+    if ((ad == null) != (bd == null) || (ad != null && (ad.date != bd.date || !Td.equalsTo(ad, bd)))) {
+      return false;
+    }
+    TdApi.ChatNotificationSettings an = a.notificationSettings, bn = b.notificationSettings;
+    if ((an == null) != (bn == null) ||
+        (an != null && (an.useDefaultMuteFor != bn.useDefaultMuteFor || an.muteFor != bn.muteFor))) {
+      return false;
+    }
+    return true;
+  }
+
+  private static boolean isSameMessagePreview (@Nullable TdApi.Message a, @Nullable TdApi.Message b) {
+    if (a == b) return true;
+    if (a == null || b == null) return false;
+    if (a.id != b.id || a.editDate != b.editDate || a.isOutgoing != b.isOutgoing ||
+        (a.sendingState == null) != (b.sendingState == null)) {
+      return false;
+    }
+    if ((a.content == null) != (b.content == null) ||
+        (a.content != null && a.content.getConstructor() != b.content.getConstructor())) {
+      return false;
+    }
+    if (a.content != null && a.content.getConstructor() == TdApi.MessageText.CONSTRUCTOR) {
+      return ((TdApi.MessageText) a.content).text.text.equals(((TdApi.MessageText) b.content).text.text);
+    }
+    return true;
   }
 
   private static int indexOfTopic (List<TdApi.ForumTopic> list, long forumTopicId) {
@@ -2083,7 +2171,9 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
         if (foundIndex == newIndex) {
           adapter.notifyItemChanged(newIndex);
         } else {
-          adapter.notifyDataSetChanged();
+          // Stable sort moved exactly this one row; animate it instead of resetting the list.
+          adapter.notifyItemMoved(foundIndex, newIndex);
+          adapter.notifyItemChanged(newIndex);
         }
       }
     });
@@ -2213,6 +2303,11 @@ public class ForumTopicsController extends TelegramViewController<ForumTopicsCon
       this.highlightQuery = highlightQuery;
       this.isMessageSearchMode = false;
       notifyDataSetChanged();
+    }
+
+    /** True when the adapter currently renders exactly this topics list instance (no search mode). */
+    boolean isShowingTopics (List<TdApi.ForumTopic> topics) {
+      return !isMessageSearchMode && this.topics == topics && highlightQuery == null;
     }
 
     void setMessageSearchResults (List<TopicMessageSearchResult> results, @Nullable String highlightQuery) {
