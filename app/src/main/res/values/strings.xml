@@ -98,6 +98,7 @@
   <string name="format_ivAuthorDateSeparator">" • "</string>
   <string name="format_ivRelatedInfo">%1$s • %2$s</string>
   <string name="format_notificationTitleShort">%1$s (%2$s)</string>
+  <string name="format_notificationTitleSecret">&#128274;&#65039; %1$s</string>
   <string name="format_channelAndSignature">%1$s (%2$s)</string>
   <string name="format_minutesAndSeconds">%1$s and %2$s</string>
   <string name="format_chatAndSignature">%1$s (%2$s)</string>
