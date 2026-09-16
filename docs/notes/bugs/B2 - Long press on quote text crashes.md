@@ -1,8 +1,8 @@
 ---
-mantis: 
+mantis: 951
 area: Interface / messages
 severity: P0
-status: not reproducible on 0.28.11.1785 (2026-09-06)
+status: fixed, commit c313d6886 (fix/crashes-2026-09-17), awaiting device test
 build: all-features-combined e33134ba
 device: user's phone
 ---
@@ -30,3 +30,10 @@ No change made. On the 2026-09-06 build (0.28.11.1785, branch `fix/giveaway-typi
 
 ## Verification
 —
+
+## Update 2026-09-17: root-caused from device crash logs
+Ten crash files on the phone (`files/logs/crash.*`, latest Sep 8 12:23 and 21:04 on 0.28.11) are `StackOverflowError` with the cycle `TGMessageMedia.performLongPress:894 → TextWrapper.performLongPress → Text.performLongPress:3336 → TGMessage$8.onLongPress:7807 → TGMessageMedia.performLongPress …`. It is a long-press on a **media caption**, not specifically a quote.
+
+**Cause:** the quotes commit (2812b4d96) made `Text.performLongPress` ask `ClickCallback.onLongPress` first, and `TGMessage`'s click callback answered by calling `TGMessage.performLongPress(view, 0, 0)`. Media captions, files and footers call the wrapper's `performLongPress` from the message's `performLongPress`, so the two call each other forever. `TGMessageText.processTextSelection` had a private `isCheckingWrapper` guard; nothing else did, and `processTextSelection` is not wired anyway.
+
+**Fix:** the callback returns `false` (upstream behaviour); Text then handles entity/quote long-press itself. `TGMessage.java`, commit `c313d6886` on `fix/crashes-2026-09-17`, Mantis #951. Built + installed 2026-09-17 01:36; device test pending.
