@@ -7846,9 +7846,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
       @Override
       public boolean onLongPress (View view, Text text) {
-        // Call performLongPress on the message for quote selection handling
-        android.util.Log.d("TGMessage", "onLongPress callback - delegating to performLongPress");
-        return TGMessage.this.performLongPress(view, 0, 0);
+        // Do not delegate back into TGMessage.performLongPress here: message types that own a Text
+        // (media captions, footers, files) call Text.performLongPress from their own performLongPress,
+        // and Text.performLongPress consults this callback first, so delegating recursed until
+        // StackOverflowError. Quote selection has its own entry point (processTextSelection).
+        return false;
       }
     };
   }
