@@ -427,12 +427,19 @@ public class WebAppController extends WebkitController<WebAppController.Args> im
 
   @Override
   public boolean performOnBackPressed (boolean fromTop, boolean commit) {
+    // commit == false is a query (e.g. from BaseActivity.handleOnBackPress while a popup is being
+    // shown): only report that we would handle it. Acting on it re-entered showCloseConfirmation
+    // from its own showOptions() and overflowed the stack.
     if (backButtonVisible) {
-      onWebAppBackButtonPressed();
+      if (commit) {
+        onWebAppBackButtonPressed();
+      }
       return true;
     }
     if (closingConfirmationEnabled) {
-      showCloseConfirmation();
+      if (commit) {
+        showCloseConfirmation();
+      }
       return true;
     }
     return super.performOnBackPressed(fromTop, commit);
