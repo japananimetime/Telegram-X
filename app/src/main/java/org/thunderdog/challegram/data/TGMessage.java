@@ -986,9 +986,21 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private static final int VIEW_COUNT_MAIN = 1;
   private static final int VIEW_COUNT_FORWARD = 2;
 
+  /**
+   * Set by {@link #buildForward()} when the forward line is too narrow to hold the author name
+   * next to the time and the view/share counters. The counters then fall back to the main time
+   * part, so a long channel title with six-digit view counts on a media bubble no longer squeezes
+   * the name out of the line entirely.
+   */
+  private boolean fCountersOverflow;
+
+  private boolean canDrawCountersInForward () {
+    return viewCounter != null && useForward() && !msg.isChannelPost && msg.forwardInfo != null && msg.forwardInfo.origin.getConstructor() == TdApi.MessageOriginChannel.CONSTRUCTOR;
+  }
+
   private int getViewCountMode () {
     if (viewCounter != null) {
-      if (useForward() && !msg.isChannelPost && msg.forwardInfo != null && msg.forwardInfo.origin.getConstructor() == TdApi.MessageOriginChannel.CONSTRUCTOR) {
+      if (!fCountersOverflow && canDrawCountersInForward()) {
         return VIEW_COUNT_FORWARD;
       }
       if (useBubbles() || BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED)) {
@@ -996,6 +1008,19 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
     }
     return VIEW_COUNT_HIDDEN;
+  }
+
+  private void setForwardCountersOverflow (boolean overflow) {
+    if (fCountersOverflow != overflow) {
+      fCountersOverflow = overflow;
+      // The counters just changed lines: the header / bubble time part has to make room for them.
+      if (useBubbles() || BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED)) {
+        layoutInfo();
+      }
+      if (BitwiseUtils.hasFlag(flags, FLAG_LAYOUT_BUILT)) {
+        postInvalidate();
+      }
+    }
   }
 
   private final BoolAnimator openingComments = new BoolAnimator(0, new FactorAnimator.Target() {
@@ -3590,14 +3615,33 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
 
     float max = totalMax - fTimeWidth - xTimePadding;
-    if (getViewCountMode() == VIEW_COUNT_FORWARD) {
-      max -= viewCounter.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN)) +
-        shareCounter.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN));
-    }
+    float countersWidth = canDrawCountersInForward() ?
+      viewCounter.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN)) +
+      shareCounter.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN)) :
+      0f;
 
     boolean isPsa = isPsa() && !forceForwardOrImportInfo();
     fAuthorNameAccentColor = forwardInfo.getAuthorAccentColor();
-    fAuthorNameT = makeName(forwardInfo.getAuthorName(), fAuthorNameAccentColor, !(forwardInfo instanceof TGSourceHidden), isPsa, false, msg.viaBotUserId, (int) (isPsa ? totalMax : max), true);
+    boolean countersOverflow = false;
+    if (isPsa) {
+      max -= countersWidth;
+      fAuthorNameT = makeName(forwardInfo.getAuthorName(), fAuthorNameAccentColor, !(forwardInfo instanceof TGSourceHidden), true, false, msg.viaBotUserId, (int) totalMax, true);
+    } else {
+      // The name comes first: lay it out against everything left after the time, then check
+      // whether the counters still fit beside it. If not, they move to the main time part
+      // (bubble time pill / header line) rather than shrinking the name to nothing.
+      fAuthorNameT = makeName(forwardInfo.getAuthorName(), fAuthorNameAccentColor, !(forwardInfo instanceof TGSourceHidden), false, false, msg.viaBotUserId, (int) max, true);
+      float nameWidth = fAuthorNameT != null ? fAuthorNameT.getWidth() : 0f;
+      if (countersWidth > 0f && nameWidth + countersWidth > max) {
+        if (useBubbles() || BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED)) {
+          countersOverflow = true;
+        } else {
+          // Nowhere else to draw the counters: keep the old squeeze behaviour.
+          fAuthorNameT = makeName(forwardInfo.getAuthorName(), fAuthorNameAccentColor, !(forwardInfo instanceof TGSourceHidden), false, false, msg.viaBotUserId, (int) (max - countersWidth), true);
+        }
+      }
+    }
+    setForwardCountersOverflow(countersOverflow);
     if (isPsa) {
       CharSequence text = Lang.getPsaNotificationType(controller(), msg.forwardInfo.publicServiceAnnouncementType);
       fPsaTextT = new Text.Builder(tdlib, text, openParameters(), (int) max, getNameStyleProvider(), getChatAuthorPsaColorSet(), null)
