@@ -2,7 +2,7 @@
 mantis: 953
 area: Interface / mini apps
 severity: P1
-status: fixed, commit 009c7ffef (fix/crashes-2026-09-17), awaiting device test
+status: fixed, commit 009c7ffef (fix/crashes-2026-09-17), device-tested OK 2026-09-17
 build: all-features-combined 6a9a2a4bb (0.28.11.1785); crashes seen on 0.28.9 4b48823aa
 device: user's phone
 ---
@@ -27,4 +27,4 @@ Open a `t.me/<bot>/<app>` style web-app link so `TdlibUi.openWebAppLink` pushes 
 Attach the WebView to the container first, then call the hook. `WebkitController.java`, commit `009c7ffef` on `fix/crashes-2026-09-17`, Mantis #953. `GameController` and `TelegramFaqController` only configure the WebView in that hook.
 
 ## Verification
-Pending on device: open a Mini App from a link and from a bot menu button.
+Device-tested OK 2026-09-17 01:52: `t.me/DurgerKingBot/menu` opens the Mini App through openWebAppLink. Original plan: open a Mini App from a link and from a bot menu button.

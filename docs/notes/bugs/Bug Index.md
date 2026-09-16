@@ -11,6 +11,7 @@
 | [[B7 - Replies chat opens empty from notification]] | — | Interface | mitigated (general empty-load fallback), not yet triggered on device; missing Replies messages are server-side |
 | [[B8 - Forwarded channel media shows no channel name]] | #950 | Interface | fixed 5ad39af9d (name gets priority, counters move to time pill), device-tested OK 2026-09-17 |
 | [[B9 - Crash when a muted-topic notification is edited]] | #952 | Topics | fixed c979604d6, awaiting device test |
-| [[B10 - Mini App from link crashes on open]] | #953 | Interface | fixed 009c7ffef, awaiting device test |
+| [[B10 - Mini App from link crashes on open]] | #953 | Interface | fixed 009c7ffef, device-tested OK 2026-09-17 (t.me/DurgerKingBot/menu) |
+| [[B11 - Mini App crashes on close with confirmation]] | #954 | Interface | fixed c84851515, device-tested OK 2026-09-17 |
 
 Reported by the user on 2026-09-06 as long-standing ("several months"). B1–B7 have no Mantis ids yet (create them on the Windows box); B8–B10 were filed 2026-09-17. Open items already known from the audits are in [[Known Issues & Open Items]]; promote one to a bug note when you start on it.
