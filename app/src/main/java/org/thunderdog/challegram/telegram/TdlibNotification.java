@@ -159,7 +159,9 @@ public class TdlibNotification implements Comparable<TdlibNotification> {
   public long findForumTopicId () {
     TdApi.Message message = findMessage();
     if (message != null && message.topicId != null) {
-      if (message.topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
+      // TDLib also fills a MessageTopicForum for messages in the "Replies" service chat (the
+      // original comment thread). Only forums have topics to open, group by or mute.
+      if (message.topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR && tdlib.isForum(message.chatId)) {
         return ((TdApi.MessageTopicForum) message.topicId).forumTopicId;
       }
     }
