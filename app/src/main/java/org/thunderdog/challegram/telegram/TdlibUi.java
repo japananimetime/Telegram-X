@@ -2149,7 +2149,13 @@ public class TdlibUi extends Handler {
     final boolean onlyScheduled = (options & CHAT_OPTION_SCHEDULED_MESSAGES) != 0;
     final TdApi.InternalLinkTypeVideoChat voiceChatInvitation = params != null ? params.videoChatOrLiveStreamInvitation : null;
     final ThreadInfo messageThread = params != null ? params.threadInfo : null;
-    final TdApi.MessageTopic messageTopicId = params != null ? params.messageTopicId : null;
+    final TdApi.MessageTopic requestedTopicId = params != null ? params.messageTopicId : null;
+    // A forum topic id is meaningless outside a forum. Notification intents carry one for the
+    // "Replies" service chat (TDLib fills message.topicId there); MessagesLoader would then ask
+    // for forum-topic history, get "The chat is not a forum" and open the chat empty.
+    final TdApi.MessageTopic messageTopicId =
+      requestedTopicId != null && requestedTopicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR && !tdlib.isForum(chat.id) ?
+        null : requestedTopicId;
     final TdApi.SearchMessagesFilter filter = params != null ? params.filter : null;
     final MessagesController.Referrer referrer = params != null && !StringUtils.isEmpty(params.inviteLink) ? new MessagesController.Referrer(params.inviteLink) : null;
     final TdApi.FormattedText forceDraft = params != null && !Td.isEmpty(params.fillDraft) ? params.fillDraft : null;
