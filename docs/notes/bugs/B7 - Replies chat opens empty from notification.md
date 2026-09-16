@@ -1,8 +1,8 @@
 ---
-mantis: 
+mantis: 955
 area: Interface / notifications
 severity: P1
-status: mitigated-untested
+status: fixed, commit e55d1d096 (fix/crashes-2026-09-17), device-tested OK 2026-09-17
 build: all-features-combined e33134ba
 device: user's phone
 ---
@@ -30,3 +30,14 @@ Not yet triggered on device (no Replies notification arrived during the 2026-09-
 
 ## Related observation (2026-09-06, not a client bug)
 A fresh non-member comment in t.me/yobangelion (post 19555, comment 150733) got a reply from a friend, and **no Replies message was created on the server**: neither this app nor nchat on the laptop (same account) shows anything in the Replies chat, and no notification arrived. Candidates on Telegram's side: the account had *left* the discussion group the day before (may differ from never joined), the reply may have targeted the post rather than the comment, or delayed delivery. Retest in a channel whose discussion group was never joined before filing anything.
+
+## Root cause found 2026-09-17
+Hypothesis 1 was right. The device log for a real tap (09/13 15:50:59, local chat 61) shows `handleIntent OPEN_CHAT` followed by **`Received error: #400: The chat is not a forum`** twice around the fallback line `Empty initial chunk around 2005549449216, retrying from the end`. TDLib fills `message.topicId` with a `MessageTopicForum` for Replies-chat messages (the original comment thread), `TdlibNotification.findForumTopicId()` passed it through, the intent carried `message_thread_id`, and the loader requested forum-topic history from a private chat. The 09-06 fallback retried **with the same topic**, so it failed too.
+
+Reproduced on demand with a crafted intent (`--el chat_id 1271266957 --el message_id 2005549449216 --el message_thread_id 12345` after a force-stop): empty chat, same two errors.
+
+## Fix (final)
+Commit `e55d1d096`: `TdlibUi.openChat` drops a `MessageTopicForum` when the target chat is not a forum (covers every caller), and `TdlibNotification.findForumTopicId()` only reports a topic for forum chats. Mantis #955.
+
+## Verification
+Device-tested OK 2026-09-17 02:10 on build 0.29.0.1785: the same crafted intent opens the Replies chat positioned at the Sept 13 message, no loader errors in the app log.
