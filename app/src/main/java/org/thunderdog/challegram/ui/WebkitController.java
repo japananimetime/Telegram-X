@@ -131,9 +131,10 @@ public class WebkitController<T> extends ViewController<T> {
         onPageProgress((float) newProgress / 100f);
       }
     });
-    onCreateWebView(headerCell, webView);
-
+    // Attach first: WebAppController.onCreateWebView reaches the container through webView.getParent().
     contentView.addView(webView);
+
+    onCreateWebView(headerCell, webView);
 
     return contentView;
   }
