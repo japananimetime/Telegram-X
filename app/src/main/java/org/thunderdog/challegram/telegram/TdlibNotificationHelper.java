@@ -309,9 +309,18 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
       TdlibNotification editedNotification = group.updateNotification(update.notification);
       if (editedNotification != null) {
         int i = indexOfNotification(update.notification.id);
-        if (i == -1)
-          throw new IllegalStateException("Notification not found in the global list");
-        notifications.set(i, editedNotification);
+        if (i == -1) {
+          // The group still holds the notification, but it never made it into the global list because
+          // it came from a muted forum topic (see the filters in processNotificationGroup). Keep it
+          // out while the topic stays muted; otherwise adopt it now instead of asserting.
+          if (editedNotification.isFromMutedForumTopic(tdlib)) {
+            return;
+          }
+          notifications.add(editedNotification);
+          Collections.sort(notifications);
+        } else {
+          notifications.set(i, editedNotification);
+        }
         onGroupChanged(group, false, 0, editedNotification);
       }
     }
