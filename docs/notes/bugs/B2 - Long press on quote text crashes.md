@@ -2,7 +2,7 @@
 mantis: 951
 area: Interface / messages
 severity: P0
-status: fixed, commit c313d6886 (fix/crashes-2026-09-17), awaiting device test
+status: fixed, commit c313d6886 (fix/crashes-2026-09-17), device-tested OK 2026-09-17
 build: all-features-combined e33134ba
 device: user's phone
 ---
@@ -36,4 +36,4 @@ Ten crash files on the phone (`files/logs/crash.*`, latest Sep 8 12:23 and 21:04
 
 **Cause:** the quotes commit (2812b4d96) made `Text.performLongPress` ask `ClickCallback.onLongPress` first, and `TGMessage`'s click callback answered by calling `TGMessage.performLongPress(view, 0, 0)`. Media captions, files and footers call the wrapper's `performLongPress` from the message's `performLongPress`, so the two call each other forever. `TGMessageText.processTextSelection` had a private `isCheckingWrapper` guard; nothing else did, and `processTextSelection` is not wired anyway.
 
-**Fix:** the callback returns `false` (upstream behaviour); Text then handles entity/quote long-press itself. `TGMessage.java`, commit `c313d6886` on `fix/crashes-2026-09-17`, Mantis #951. Built + installed 2026-09-17 01:36; device test pending.
+**Fix:** the callback returns `false` (upstream behaviour); Text then handles entity/quote long-press itself. `TGMessage.java`, commit `c313d6886` on `fix/crashes-2026-09-17`, Mantis #951. Device-tested OK 2026-09-17 01:42: long-press on a forwarded photo caption enters message selection, no crash.

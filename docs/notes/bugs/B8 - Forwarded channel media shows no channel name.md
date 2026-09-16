@@ -2,7 +2,7 @@
 mantis: 950
 area: Interface / messages
 severity: P2
-status: fixed, commit 5ad39af9d (fix/crashes-2026-09-17), awaiting device test
+status: fixed, commit 5ad39af9d (fix/crashes-2026-09-17), device-tested OK 2026-09-17
 build: all-features-combined 6a9a2a4bb (0.28.11.1785)
 device: user's phone
 ---
@@ -30,4 +30,4 @@ Inherited from upstream Telegram X (code identical at merge base 1e1a4dd39): the
 `feature/dpi-desync` (working branch), `TGMessage.java` only. The name is laid out first against everything left after the time; if the view/share counters no longer fit beside it, `fCountersOverflow` is set and `getViewCountMode()` returns `VIEW_COUNT_MAIN`, so the counters move to the message's own time part (bubble time pill / header line). `setForwardCountersOverflow()` re-runs `layoutInfo()` so that part makes room. Flat mode without header keeps the old squeeze (nowhere else to draw them). commit `5ad39af9d` on `fix/crashes-2026-09-17` `[#950]`
 
 ## Verification
-Pending: install the arm64 debug build, open the chat from the screenshot, expect "Соболев LIVE" on the forward line and views/shares in the time pill on the photo. Watch: PSA forwards (unchanged path), counters animating on live view-count updates (`onCounterAppearanceChanged` → `buildForward` → may flip the flag → `layoutInfo`).
+Device-tested OK 2026-09-17 01:43: the same message now shows "Алексей Ше…" + "yesterday 6:12 PM" on the forward line, counters no longer on that line. Original plan: install the arm64 debug build, open the chat from the screenshot, expect "Соболев LIVE" on the forward line and views/shares in the time pill on the photo. Watch: PSA forwards (unchanged path), counters animating on live view-count updates (`onCounterAppearanceChanged` → `buildForward` → may flip the flag → `layoutInfo`).
