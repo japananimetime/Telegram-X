@@ -16,6 +16,7 @@ package org.thunderdog.challegram.ui;
 
 import android.content.Context;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
@@ -29,6 +30,7 @@ import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.telegram.TdlibUi;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.util.StringList;
 import org.thunderdog.challegram.v.MediaRecyclerView;
 import org.thunderdog.challegram.widget.CheckBoxView;
@@ -381,6 +383,14 @@ public class SharedMembersController extends SharedBaseController<DoubleTextWrap
       }
     }
 
+    final long communityId = getCommunityIdForBan(member);
+    if (communityId != 0) {
+      ids.append(R.id.btn_communityBanMember);
+      colors.append(OptionColor.RED);
+      icons.append(R.drawable.baseline_workspaces_24);
+      strings.append(R.string.CommunityBanMember);
+    }
+
     if (!isChannel() || TD.isAdmin(member.status)) {
       ids.append(R.id.btn_messageViewList);
       if (tdlib.isSelfUserId(content.getUserId())) {
@@ -450,6 +460,8 @@ public class SharedMembersController extends SharedBaseController<DoubleTextWrap
           tdlib.ui().kickMember(getParentOrSelf(), chatId, content.getSenderId(), content.getMember().status);
         } else if (id == R.id.btn_unblockSender) {
           tdlib.ui().unblockMember(getParentOrSelf(), chatId, content.getSenderId(), content.getMember().status);
+        } else if (id == R.id.btn_communityBanMember) {
+          banFromCommunity(communityId, content.getSenderId());
         }
         return true;
       });
@@ -457,6 +469,53 @@ public class SharedMembersController extends SharedBaseController<DoubleTextWrap
     }
 
     return false;
+  }
+
+  // FORK-TDLIB: setCommunityMemberIsBanned comes from tdlib/source/patches/td-communities.patch;
+  // switch to the official method once TDLib exposes it.
+
+  /** Community of this chat if the current user may ban the member there, 0 otherwise. */
+  private long getCommunityIdForBan (TdApi.ChatMember member) {
+    if (!ChatId.isSupergroup(chatId) || tdlib.isSelfSender(member.memberId) || TD.isCreator(member.status)) {
+      return 0;
+    }
+    TdApi.SupergroupFullInfo supergroupFull = tdlib.cache().supergroupFull(ChatId.toSupergroupId(chatId), false);
+    if (supergroupFull == null || supergroupFull.communityId == 0) {
+      return 0;
+    }
+    TdApi.Community community = tdlib.cache().community(supergroupFull.communityId);
+    if (community == null || !community.haveAccess || community.status == null) {
+      return 0;
+    }
+    switch (community.status.getConstructor()) {
+      case TdApi.CommunityMemberStatusCreator.CONSTRUCTOR:
+        return supergroupFull.communityId;
+      case TdApi.CommunityMemberStatusAdministrator.CONSTRUCTOR:
+        return ((TdApi.CommunityMemberStatusAdministrator) community.status).rights.canBanMembers ? supergroupFull.communityId : 0;
+    }
+    return 0;
+  }
+
+  private void banFromCommunity (long communityId, TdApi.MessageSender memberId) {
+    TdApi.Community community = tdlib.cache().community(communityId);
+    String communityName = community != null ? community.name : Lang.getString(R.string.Community);
+    showOptions(Lang.getStringBold(R.string.CommunityBanMemberConfirm, tdlib.senderName(memberId), communityName),
+      new int[] {R.id.btn_communityBanMember, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.CommunityBanMember), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.RED, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_block_24, R.drawable.baseline_cancel_24},
+      (itemView, id) -> {
+        if (id == R.id.btn_communityBanMember) {
+          tdlib.send(new TdApi.SetCommunityMemberIsBanned(communityId, memberId, true), (ok, error) -> {
+            if (error != null) {
+              UI.showError(error);
+            } else {
+              UI.showToast(R.string.CommunityBanMemberDone, Toast.LENGTH_SHORT);
+            }
+          });
+        }
+        return true;
+      });
   }
 
   private boolean isChannel () {

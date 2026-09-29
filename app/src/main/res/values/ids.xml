@@ -227,6 +227,10 @@
   <item type="id" name="controller_editSavedMessagesTagLabel" />
   <item type="id" name="controller_createPoll" />
   <item type="id" name="controller_chatJoinRequests" />
+  <item type="id" name="controller_community" />
+  <item type="id" name="controller_communities" />
+  <item type="id" name="controller_communityAddChatRequests" />
+  <item type="id" name="controller_communityAddChat" />
   <item type="id" name="controller_messageSeen" />
   <item type="id" name="controller_joinDialog" />
   <item type="id" name="controller_giftDialog" />
@@ -1588,6 +1592,26 @@
   <item type="id" name="controller_giftAuction" />
   <item type="id" name="controller_giftCraft" />
   <item type="id" name="btn_gifts" />
+  <item type="id" name="btn_community" />
+  <item type="id" name="btn_communityChat" />
+  <item type="id" name="btn_communityRename" />
+  <item type="id" name="btn_communityAdmins" />
+  <item type="id" name="btn_communityBanned" />
+  <item type="id" name="btn_communityAddRequests" />
+  <item type="id" name="btn_communityVisibleAll" />
+  <item type="id" name="btn_communityVisibleAdmins" />
+  <item type="id" name="btn_communities" />
+  <item type="id" name="btn_communityRequest" />
+  <item type="id" name="btn_communityApproveAll" />
+  <item type="id" name="btn_communityDeclineAll" />
+  <item type="id" name="btn_communityChatHide" />
+  <item type="id" name="btn_communityChatShow" />
+  <item type="id" name="btn_communityChatRemove" />
+  <item type="id" name="btn_communityRequestApprove" />
+  <item type="id" name="btn_communityRequestDecline" />
+  <item type="id" name="btn_communityBanMember" />
+  <item type="id" name="btn_communityAddChat" />
+  <item type="id" name="btn_communityCandidate" />
   <item type="id" name="btn_giftToggleSaved" />
   <item type="id" name="btn_giftTogglePinned" />
   <item type="id" name="btn_giftSettings" />
@@ -1675,6 +1699,9 @@
   <item type="id" name="btn_businessSettings" />
   <item type="id" name="btn_savedMessagesSettings" />
   <item type="id" name="more_btn_boost" />
+  <item type="id" name="more_btn_createCommunity" />
+  <item type="id" name="more_btn_addToCommunity" />
+  <item type="id" name="more_btn_removeFromCommunity" />
   <item type="id" name="more_btn_monetization" />
   <item type="id" name="more_btn_startCall" />
   <item type="id" name="more_btn_startStream" />

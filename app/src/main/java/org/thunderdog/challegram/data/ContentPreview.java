@@ -820,9 +820,17 @@ public class ContentPreview {
       case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
       case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
-      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
-      case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
         break;
+
+      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR: {
+        TdApi.Community community = tdlib.cache().community(((TdApi.MessageChatAddedToCommunity) message.content).communityId);
+        if (community != null && !StringUtils.isEmpty(community.name)) {
+          return new ContentPreview(EMOJI_GROUP, 0, Lang.getString(R.string.ActionChatAddedToCommunity, community.name), true);
+        }
+        return new ContentPreview(EMOJI_GROUP, R.string.ActionChatAddedToCommunityUnknown);
+      }
+      case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ActionChatRemovedFromCommunity);
 
       // Bots only. Unused
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
@@ -1692,13 +1700,17 @@ public class ContentPreview {
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
       case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
-      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
-      case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
         // TODO support these previews
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessage);
         
       case TdApi.MessageUnsupported.CONSTRUCTOR:
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessageType);
+
+      // Type-only path (e.g. notifications): the community name isn't known here
+      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ActionChatAddedToCommunityUnknown);
+      case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ActionChatRemovedFromCommunity);
 
       // Fallback when the rich message contains no text-bearing block (see buildRichMessagePreview)
       case TdApi.MessageRichMessage.CONSTRUCTOR:

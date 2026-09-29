@@ -571,32 +571,24 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
 
   @TdlibThread
   void onUpdateCommunity (TdApi.UpdateCommunity update) {
-    boolean updated;
     synchronized (dataLock) {
       TdApi.Community community = update.community;
-      TdApi.Community oldCommunity = communities.get(update.community.id);
       communities.put(community.id, community);
-      updated = oldCommunity != null;
     }
-    if (updated) {
-      notifyListeners(communityGlobalListeners.iterator(), update.community);
-      notifyListeners(communityListeners.iterator(update.community.id), update.community);
-    }
+    // Always notify: a screen may already be waiting for the first community data.
+    notifyListeners(communityGlobalListeners.iterator(), update.community);
+    notifyListeners(communityListeners.iterator(update.community.id), update.community);
   }
 
   @TdlibThread
   void onUpdateCommunityFull (TdApi.UpdateCommunityFullInfo update) {
-    boolean updated;
     synchronized (dataLock) {
       TdApi.CommunityFullInfo community = update.communityFullInfo;
-      TdApi.CommunityFullInfo oldCommunity = communitiesFull.get(update.communityId);
       communitiesFull.put(update.communityId, community);
-      updated = oldCommunity != null;
     }
-    if (updated) {
-      notifyListeners(communityGlobalListeners.iterator(), update.communityId, update.communityFullInfo);
-      notifyListeners(communityListeners.iterator(update.communityId), update.communityId, update.communityFullInfo);
-    }
+    // Always notify: CommunityController waits for the first full info after loadCommunityFullInfo.
+    notifyListeners(communityGlobalListeners.iterator(), update.communityId, update.communityFullInfo);
+    notifyListeners(communityListeners.iterator(update.communityId), update.communityId, update.communityFullInfo);
   }
 
   // User Blacklist
@@ -874,6 +866,14 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
 
   public void unsubscribeFromSupergroupUpdates (long supergroupId, SupergroupDataChangeListener listener) {
     deleteSupergroupListener(supergroupId, listener);
+  }
+
+  public void subscribeToCommunityUpdates (long communityId, CommunityDataChangeListener listener) {
+    communityListeners.add(communityId, listener);
+  }
+
+  public void unsubscribeFromCommunityUpdates (long communityId, CommunityDataChangeListener listener) {
+    communityListeners.remove(communityId, listener);
   }
 
   public void subscribeToSecretChatUpdates (int secretChatId, SecretChatDataChangeListener listener) {

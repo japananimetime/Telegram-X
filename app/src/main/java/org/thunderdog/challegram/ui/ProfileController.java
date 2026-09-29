@@ -139,6 +139,7 @@ import org.thunderdog.challegram.widget.rtl.RtlViewPager;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -155,6 +156,7 @@ import me.vkryl.core.StringUtils;
 import me.vkryl.core.collection.IntList;
 import me.vkryl.core.lambda.CancellableRunnable;
 import me.vkryl.core.lambda.FutureBool;
+import me.vkryl.core.lambda.RunnableBool;
 import me.vkryl.core.lambda.RunnableData;
 import me.vkryl.core.lambda.RunnableLong;
 import tgx.td.ChatId;
@@ -176,6 +178,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   TdlibCache.SecretChatDataChangeListener,
   TdlibCache.BasicGroupDataChangeListener,
   TdlibCache.SupergroupDataChangeListener,
+  TdlibCache.CommunityDataChangeListener,
   ComplexHeaderView.Callback,
   InviteLinkController.Callback,
   SenderPickerDelegate,
@@ -626,6 +629,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         ids.append(R.id.more_btn_addToGroup);
         strings.append(R.string.BotInvite);
       }
+      if (canCreateCommunity()) {
+        ids.append(R.id.more_btn_createCommunity);
+        strings.append(R.string.CommunityCreate);
+      }
+      if (canAddToCommunity()) {
+        ids.append(R.id.more_btn_addToCommunity);
+        strings.append(R.string.CommunityAddTo);
+      }
+      if (canRemoveFromCommunity()) {
+        ids.append(R.id.more_btn_removeFromCommunity);
+        strings.append(R.string.CommunityRemoveFrom);
+      }
     }
 
     if (mode == Mode.USER && user.id != myUserId && !TD.isBot(user)) {
@@ -742,6 +757,19 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.MessagesFilter);
     }
 
+    if (canCreateCommunity()) {
+      ids.append(R.id.more_btn_createCommunity);
+      strings.append(R.string.CommunityCreate);
+    }
+    if (canAddToCommunity()) {
+      ids.append(R.id.more_btn_addToCommunity);
+      strings.append(R.string.CommunityAddTo);
+    }
+    if (canRemoveFromCommunity()) {
+      ids.append(R.id.more_btn_removeFromCommunity);
+      strings.append(R.string.CommunityRemoveFrom);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -811,6 +839,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
             tdlib.ui().deleteContact(this, user.id);
           } else if (id == R.id.more_btn_sendGift) {
             openGiftPicker(new TdApi.MessageSenderUser(user.id));
+          } else if (id == R.id.more_btn_createCommunity) {
+            createCommunity();
+          } else if (id == R.id.more_btn_addToCommunity) {
+            addToCommunity();
+          } else if (id == R.id.more_btn_removeFromCommunity) {
+            removeFromCommunity();
           }
         }
         break;
@@ -818,7 +852,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       case Mode.SUPERGROUP:
       case Mode.CHANNEL:
       case Mode.GROUP: {
-        if (id == R.id.more_btn_addMember) {
+        if (id == R.id.more_btn_createCommunity) {
+          createCommunity();
+        } else if (id == R.id.more_btn_addToCommunity) {
+          addToCommunity();
+        } else if (id == R.id.more_btn_removeFromCommunity) {
+          removeFromCommunity();
+        } else if (id == R.id.more_btn_addMember) {
           addMember(null);
         } else if (id == R.id.btn_recentActions) {
           openRecentActions();
@@ -1866,6 +1906,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           view.setName(R.string.ProfileNote);
         } else if (itemId == R.id.btn_gifts) {
           view.setData(Lang.plural(R.string.xGifts, getGiftCount()));
+        } else if (itemId == R.id.btn_community) {
+          TdApi.Community community = tdlib.cache().community(getCommunityId());
+          view.setData(community != null ? community.name : Lang.getString(R.string.LoadingInformation));
         } else if (itemId == R.id.btn_manageInviteLinks) {
           if (inviteLinksCount == -1) {
             view.setData(Lang.getString(R.string.LoadingInformation));
@@ -2753,6 +2796,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     checkDescription();
     checkProfileNote();
     checkGroupsInCommon();
+    checkCommunity();
 
     /*if (userFull.commonChatCount > 0) {
       int index = baseAdapter.indexOfViewById(R.id.btn_notifications);
@@ -3137,6 +3181,243 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     }
   }
 
+  // Communities
+
+  private ListItem newCommunityItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_community, R.drawable.baseline_workspaces_24, R.string.Community);
+  }
+
+  private long getCommunityId () {
+    if (TD.isBot(user) && (mode == Mode.USER || mode == Mode.SECRET) && userFull != null) {
+      return userFull.communityId;
+    }
+    if ((mode == Mode.CHANNEL || mode == Mode.SUPERGROUP) && supergroupFull != null) {
+      return supergroupFull.communityId;
+    }
+    return 0;
+  }
+
+  private long subscribedCommunityId;
+
+  private void setSubscribedCommunityId (long communityId) {
+    if (subscribedCommunityId != communityId) {
+      if (subscribedCommunityId != 0) {
+        tdlib.cache().unsubscribeFromCommunityUpdates(subscribedCommunityId, this);
+      }
+      subscribedCommunityId = communityId;
+      if (communityId != 0) {
+        tdlib.cache().subscribeToCommunityUpdates(communityId, this);
+      }
+    }
+  }
+
+  // Shows a "Community" row (after gifts) for supergroups, channels and bots that belong to one.
+  private void checkCommunity () {
+    if (isEditing())
+      return;
+    final long communityId = getCommunityId();
+    setSubscribedCommunityId(communityId);
+    int foundIndex = baseAdapter.indexOfViewById(R.id.btn_community);
+    boolean hadCommunity = foundIndex != -1;
+    boolean hasCommunity = communityId != 0;
+    if (hadCommunity != hasCommunity) {
+      if (hadCommunity) {
+        removeTopItem(foundIndex);
+      } else {
+        int index = 0;
+        for (int viewId : new int[] {R.id.btn_peer_id, R.id.btn_username, R.id.btn_birthdate, R.id.btn_description, R.id.btn_profileNote, R.id.btn_inviteLink, R.id.btn_gifts}) {
+          if (baseAdapter.indexOfViewById(viewId) != -1) {
+            index++;
+          }
+        }
+        addTopItem(newCommunityItem(), index);
+      }
+    } else if (hasCommunity) {
+      updateValuedItem(R.id.btn_community);
+    }
+  }
+
+  @Override
+  public void onCommunityUpdated (TdApi.Community community) {
+    runOnUiThreadOptional(() -> {
+      if (community.id == getCommunityId()) {
+        updateValuedItem(R.id.btn_community);
+      }
+    });
+  }
+
+  private void openCommunity () {
+    long communityId = getCommunityId();
+    if (communityId != 0) {
+      CommunityController c = new CommunityController(context, tdlib);
+      c.setArguments(new CommunityController.Args(communityId));
+      navigateTo(c);
+    }
+  }
+
+  private boolean canCreateCommunity () {
+    switch (mode) {
+      case Mode.USER:
+        return TD.canEditBot(user) && userFull != null && userFull.communityId == 0;
+      case Mode.GROUP:
+        return group != null && TD.isCreator(group.status);
+      case Mode.SUPERGROUP:
+      case Mode.CHANNEL:
+        return supergroup != null && TD.isCreator(supergroup.status) && supergroupFull != null && supergroupFull.communityId == 0;
+    }
+    return false;
+  }
+
+  // FORK-TDLIB: getJoinedCommunities / addCommunityChat / removeCommunityChat come from
+  // tdlib/source/patches/td-communities.patch; switch to the official methods once TDLib exposes them.
+
+  private boolean isOwnedCommunityCandidate () {
+    switch (mode) {
+      case Mode.USER:
+        return TD.canEditBot(user) && userFull != null;
+      case Mode.SUPERGROUP:
+      case Mode.CHANNEL:
+        return supergroup != null && TD.isCreator(supergroup.status) && supergroupFull != null;
+    }
+    return false;
+  }
+
+  private boolean canAddToCommunity () {
+    return isOwnedCommunityCandidate() && getCommunityId() == 0;
+  }
+
+  private boolean canRemoveFromCommunity () {
+    return isOwnedCommunityCandidate() && getCommunityId() != 0;
+  }
+
+  private void addToCommunity () {
+    final long chatId = getChatId();
+    tdlib.send(new TdApi.GetJoinedCommunities(), (communities, error) -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      IntList ids = new IntList(communities.communityIds.length);
+      StringList names = new StringList(communities.communityIds.length);
+      final long[] communityIds = new long[communities.communityIds.length];
+      int count = 0;
+      for (long communityId : communities.communityIds) {
+        TdApi.Community community = tdlib.cache().community(communityId);
+        if (community == null || !community.haveAccess) {
+          continue;
+        }
+        communityIds[count] = communityId;
+        ids.append(count);
+        names.append(community.name);
+        count++;
+      }
+      final int communityCount = count;
+      runOnUiThreadOptional(() -> {
+        if (communityCount == 0) {
+          UI.showToast(R.string.CommunityAddToNone, Toast.LENGTH_LONG);
+          return;
+        }
+        int[] icons = new int[communityCount];
+        Arrays.fill(icons, R.drawable.baseline_workspaces_24);
+        showOptions(Lang.getString(R.string.CommunityAddToChoose), ids.get(), names.get(), null, icons, (itemView, index) -> {
+          if (index >= 0 && index < communityCount) {
+            chooseCommunityChatVisibility(isChatHidden ->
+              tdlib.send(new TdApi.AddCommunityChat(communityIds[index], chatId, isChatHidden), (ok, addError) -> {
+                if (addError != null) {
+                  UI.showError(addError);
+                } else {
+                  UI.showToast(R.string.CommunityAddToDone, Toast.LENGTH_LONG);
+                }
+              })
+            );
+          }
+          return true;
+        });
+      });
+    });
+  }
+
+  private void chooseCommunityChatVisibility (RunnableBool after) {
+    showOptions(Lang.getString(R.string.CommunityCreateVisibility),
+      new int[] {R.id.btn_communityVisibleAll, R.id.btn_communityVisibleAdmins},
+      new String[] {Lang.getString(R.string.CommunityCreateVisible), Lang.getString(R.string.CommunityCreateHidden)},
+      null,
+      new int[] {R.drawable.baseline_group_24, R.drawable.baseline_stars_24},
+      (itemView, optionId) -> {
+        if (optionId == R.id.btn_communityVisibleAll || optionId == R.id.btn_communityVisibleAdmins) {
+          after.runWithBool(optionId == R.id.btn_communityVisibleAdmins);
+        }
+        return true;
+      });
+  }
+
+  private void removeFromCommunity () {
+    final long chatId = getChatId();
+    final long communityId = getCommunityId();
+    if (communityId == 0) {
+      return;
+    }
+    TdApi.Community community = tdlib.cache().community(communityId);
+    String name = community != null ? community.name : Lang.getString(R.string.Community);
+    showOptions(Lang.getStringBold(R.string.CommunityRemoveFromConfirm, name),
+      new int[] {R.id.more_btn_removeFromCommunity, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.CommunityRemoveFrom), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.RED, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24},
+      (itemView, id) -> {
+        if (id == R.id.more_btn_removeFromCommunity) {
+          tdlib.send(new TdApi.RemoveCommunityChat(communityId, chatId), (ok, error) -> {
+            if (error != null) {
+              UI.showError(error);
+            }
+          });
+        }
+        return true;
+      });
+  }
+
+  private void createCommunity () {
+    if (!canCreateCommunity()) {
+      return;
+    }
+    final long chatId = getChatId();
+    final boolean isBasicGroup = mode == Mode.GROUP;
+    openInputAlert(Lang.getString(R.string.CommunityCreate), Lang.getString(R.string.CommunityName), R.string.Create, R.string.Cancel, tdlib.chatTitle(chatId), (inputView, result) -> {
+      String name = result.trim();
+      if (StringUtils.isEmpty(name)) {
+        return false;
+      }
+      CharSequence info = Lang.getString(R.string.CommunityCreateVisibility);
+      if (isBasicGroup) {
+        info = Lang.getString(R.string.CommunityCreateVisibility) + "\n\n" + Lang.getString(R.string.CommunityCreateUpgradeWarning);
+      }
+      showOptions(info,
+        new int[] {R.id.btn_communityVisibleAll, R.id.btn_communityVisibleAdmins},
+        new String[] {Lang.getString(R.string.CommunityCreateVisible), Lang.getString(R.string.CommunityCreateHidden)},
+        null,
+        new int[] {R.drawable.baseline_group_24, R.drawable.baseline_stars_24},
+        (itemView, optionId) -> {
+          if (optionId == R.id.btn_communityVisibleAll || optionId == R.id.btn_communityVisibleAdmins) {
+            boolean isChatHidden = optionId == R.id.btn_communityVisibleAdmins;
+            tdlib.send(new TdApi.CreateCommunity(name, chatId, isChatHidden), (communityId, error) -> {
+              if (error != null) {
+                UI.showError(error);
+              } else {
+                runOnUiThreadOptional(() -> {
+                  UI.showToast(R.string.CommunityCreated, Toast.LENGTH_SHORT);
+                  CommunityController c = new CommunityController(context, tdlib);
+                  c.setArguments(new CommunityController.Args(communityId.id));
+                  navigateTo(c);
+                });
+              }
+            });
+          }
+          return true;
+        });
+      return true;
+    }, true);
+  }
+
   private ListItem newExplicitDiceItem () {
     return new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_useExplicitDice, 0, R.string.UseExplicitDice).setLongId(Settings.SETTING_FLAG_EXPLICIT_DICE);
   }
@@ -3437,6 +3718,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
     checkDescription();
     checkManage();
+    checkCommunity();
 
     if (TD.isCreator(supergroup.status)) {
       updateValuedItem(R.id.btn_inviteLink);
@@ -3552,6 +3834,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     this.supergroupFull = channelFull;
     checkDescription();
     checkManage();
+    checkCommunity();
     // checkChannelMembers();
 
     if (tdlib.canCreateInviteLink(chat)) {
@@ -5427,6 +5710,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
     } else if (viewId == R.id.btn_profileNote) {
       editProfileNote();
+    } else if (viewId == R.id.btn_community) {
+      openCommunity();
     } else if (viewId == R.id.btn_gifts) {
       openGifts();
     } else if (viewId == R.id.btn_giftSettings) {
@@ -6776,6 +7061,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void unsubscribeFromUpdates () {
+    setSubscribedCommunityId(0);
     if (!isEditing()) {
       tdlib.listeners().unsubscribeFromMessageUpdates(chat.id, this);
       tdlib.listeners().unsubscribeFromSettingsUpdates(this);
@@ -6845,6 +7131,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         checkDescription();
         checkProfileNote();
         checkGifts();
+        checkCommunity();
         if (mode == Mode.EDIT_BOT_USER) {
           updateValuedItem(R.id.btn_botDescription);
         }
@@ -7160,6 +7447,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           checkDescription();
           checkManage();
           checkGifts();
+          checkCommunity();
           if (mode == Mode.EDIT_CHANNEL) {
             checkChannelMembers();
           }

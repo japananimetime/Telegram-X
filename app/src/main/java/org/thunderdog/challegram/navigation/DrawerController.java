@@ -66,6 +66,7 @@ import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.CallListController;
+import org.thunderdog.challegram.ui.CommunitiesController;
 import org.thunderdog.challegram.ui.ChatsController;
 import org.thunderdog.challegram.ui.FeatureToggles;
 import org.thunderdog.challegram.ui.ListItem;
@@ -286,6 +287,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_calls, R.drawable.baseline_call_24, R.string.Calls));
     }
     items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
+    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_communities, R.drawable.baseline_workspaces_24, R.string.Communities));
     this.settingsClickBait = getSettingsClickBait();
     items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_settings, R.drawable.baseline_settings_24, R.string.Settings));
     items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_invite, R.drawable.baseline_person_add_24, R.string.InviteFriends));
@@ -880,6 +882,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       }
     } else if (viewId == R.id.btn_savedMessages) {
       openSavedMessages();
+    } else if (viewId == R.id.btn_communities) {
+      openController(new CommunitiesController(context, context.currentTdlib()));
     } else if (viewId == R.id.btn_addAccount) {
       context.currentTdlib().ui().addAccount(context, true, false);
       /*case R.id.btn_logout: {

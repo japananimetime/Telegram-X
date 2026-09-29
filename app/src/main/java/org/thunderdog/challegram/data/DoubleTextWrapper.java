@@ -85,6 +85,7 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
   private Text trimmedSubtitle;
 
   private AvatarPlaceholder avatarPlaceholder;
+  private TdApi.ChatPhotoInfo photo;
   private EmojiStatusHelper.EmojiStatusDrawable emojiStatusDrawable;
 
   private ImageFile avatarFile;
@@ -173,6 +174,11 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
     } else {
       setForcedSubtitle(subtitle);
     }
+  }
+
+  // Photo for entities that aren't chats or users (e.g. a community); the placeholder stays as fallback.
+  public void setPhoto (@Nullable TdApi.ChatPhotoInfo photo) {
+    this.photo = photo;
   }
 
   public TdApi.MessageSender getSenderId () {
@@ -532,6 +538,8 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
       receiver.requestChat(tdlib, getChatId(), AvatarReceiver.Options.NONE);
     } else if (sender != null) {
       receiver.requestMessageSender(tdlib, sender, AvatarReceiver.Options.NONE);
+    } else if (photo != null) {
+      receiver.requestSpecific(tdlib, photo, AvatarReceiver.Options.NONE);
     } else if (placeholder != null) {
       receiver.requestPlaceholder(tdlib, placeholder.metadata, AvatarReceiver.Options.NONE);
     } else {

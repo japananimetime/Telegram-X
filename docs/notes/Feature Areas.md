@@ -23,6 +23,7 @@ One row per fork feature. "Open" lists the items still flagged by the audits ([[
 | Quick replies / Downloads / Boosts / Sticker packs | parity | `QuickRepliesController`, `DownloadsController`, `ChatBoostController`, `StickerSetsController` | quick-reply create + "/" picker, boost chart, sticker emoji edit/reorder are follow-ups |
 | Push (FCM) | `parity-fixes` | `PushProcessor`, `ForegroundService`, `PushHandler`, `app/src/google/*` | Android 12+ FGS-from-background fix ported; real `google-services.json`; **device-test pending** |
 | Community / filters | `feature/community-features` | `SettingsCommunityController`, `SettingsMessagesFilter*` | |
+| Telegram Communities | `feature/communities` | see [[Communities]] | view/create/rename, joined list, add/hide/remove chats, add-chat requests, bans; relies on the temporary TDLib patch `td-communities.patch` |
 
 ## Stubbed update handlers (silently ignored)
 `updateSpeechRecognitionTrial`, `updateDefaultBackground`, `UpdateNewOauthRequest` (third-party Telegram login fails), `UpdateStakeDiceState`, `UpdateTextCompositionStyles`, `UpdateWebBrowserSettings`, `UpdatePendingMessage`, `UpdateLiveStoryTopDonors`, `UpdateChatJoinResult`, `UpdateUnconfirmedSession` (security warning never shown), `UpdateContactCloseBirthdays`.
