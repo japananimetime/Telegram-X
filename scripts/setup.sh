@@ -14,6 +14,11 @@ if [[ -f local.properties ]]; then
   echo -e "${STYLE_INFO}local.properties already exists.${STYLE_END}"
 fi
 
+# == Fork native patches ==
+# Re-apply the fork's tgcalls/webrtc submodule patches (screencast bitrate; webrtc ADM
+# graceful returns that fix the group-call join SIGABRT). See app/jni/tgvoip/patches.
+patch-native-impl.sh
+
 # == Copy local.properties ===
 
 if [[ ! -f local.properties ]]; then
