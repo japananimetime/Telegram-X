@@ -224,6 +224,13 @@ public abstract class SortedList<T extends TdApi.Object> implements Comparator<T
     loadAtLeast(filter, initialChunkSize, onLoadInitialChunk);
   }
 
+  // Explicitly detach a listener registered via initializeList. Listeners are held weakly, but
+  // relying on GC to drop a controller's listener is fragile (stale updates can keep firing until
+  // collection); callers should unsubscribe deterministically in destroy().
+  public void unsubscribeFromUpdates (@NonNull ListListener<T> listener) {
+    listeners.remove(listener);
+  }
+
   public void loadAtLeast (@Nullable Filter<T> filter, int minimumCount, @Nullable Runnable after) {
     loadAtLeast(filter, minimumCount, minimumCount, after);
   }

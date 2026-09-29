@@ -348,20 +348,11 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-    /* TODO: custom reactions
-    List<TGReaction> premiumReactions = tdlib.getOnlyPremiumReactions();
-    if (!premiumReactions.isEmpty()) {
-      if (!needPremiumRestriction()) {
-        items.add(new ListItem(ListItem.TYPE_HEADER, R.id.reactions_premium_locked, 0, R.string.PremiumReactions));
-      } else {
-        items.add(new ListItem(ListItem.TYPE_HEADER_WITH_ACTION, R.id.reactions_premium_locked, R.drawable.baseline_lock_16, R.string.PremiumReactions));
-      }
-      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      for (TGReaction reaction : premiumReactions) {
-        items.add(new ListItem(ListItem.TYPE_REACTION_CHECKBOX, R.id.btn_enabledReactionsCheckboxGroup, 0, reaction.reaction.reaction, false));
-      }
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    }*/
+    // Note: there is no separate "premium reactions" section in this TDLib version — EmojiReaction
+    // has no isPremium flag and there is no premium-reaction enumeration. Premium users' extra
+    // reactions are custom-emoji reactions (ReactionTypeCustomEmoji), already listed above from
+    // availableReactions. (Removed an obsolete commented block that referenced a non-existent
+    // tdlib.getOnlyPremiumReactions() from an older reaction model.)
 
     adapter.setItems(items, true);
   }
