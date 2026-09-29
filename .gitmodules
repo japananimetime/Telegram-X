@@ -43,9 +43,9 @@
 	shallow = true
 [submodule "tdlib"]
 	path = tdlib
-	url = https://github.com/TGX-Android/tdlib
+	url = https://github.com/japananimetime/tdlib
 	shallow = true
-	branch = main
+	branch = tgx/tdlib-42e6a52-flat
 [submodule "jni-utils"]
 	path = app/jni/third_party/jni-utils
 	url = https://github.com/TGX-Android/jni-utils
