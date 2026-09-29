@@ -56,6 +56,7 @@ import org.drinkless.tdlib.TdApi;
 import org.drinkmore.Tracer;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.BuildConfig;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -64,6 +65,7 @@ import org.thunderdog.challegram.component.chat.MessageView;
 import org.thunderdog.challegram.component.chat.MessageViewGroup;
 import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.component.chat.ReplyComponent;
+import org.thunderdog.challegram.component.chat.filter.MessageFilterProcessingState;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.config.Device;
@@ -210,6 +212,17 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private static final int FLAG_ERROR = 1 << 30;
   private static final int FLAG_BEING_ADDED = 1 << 31;
 
+  // Quote info for highlighting quoted text fragments
+  public static class TextQuoteInfo {
+    public final int utf16Position;
+    public final int utf16Length;
+
+    public TextQuoteInfo(int position, int length) {
+      this.utf16Position = position;
+      this.utf16Length = length;
+    }
+  }
+
   protected TdApi.Message msg;
   protected final TdApi.SponsoredMessage sponsoredMessage;
   private int flags;
@@ -321,6 +334,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   public static final int REACTIONS_DRAW_MODE_ONLY_ICON = 2;
 
   private final TranslationsManager mTranslationsManager;
+  private final @Nullable MessageFilterProcessingState mMessageFilterProcessingState;
 
   protected TGMessage (MessagesManager manager, TdApi.Message msg) {
     this(manager, msg, null, false);
@@ -586,6 +600,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         invalidate();
       }
     }, AnimatorUtils.DECELERATE_INTERPOLATOR, 320L);
+
+    final boolean needUseMessagesFilter = !tdlib.isUserChat(msg.chatId)
+      && tdlib.myUserId() != Td.getSenderId(msg.senderId)
+      && Settings.instance().getMessagesFilterSetting(Settings.MESSAGES_FILTER_ENABLED);
+
+    this.mMessageFilterProcessingState = needUseMessagesFilter ?
+      new MessageFilterProcessingState(this, msg) : null;
   }
 
   private static @NonNull <T> T nonNull (@Nullable T value) {
@@ -960,7 +981,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private final BoolAnimator isHiddenByFilter;
 
   public void setIsHiddenByMessagesFilter (boolean hidden, boolean animated) {
-    isHiddenByFilter.setValue(hidden && !isSponsoredMessage(), BitwiseUtils.hasFlag(flags, FLAG_LAYOUT_BUILT) && currentViews.hasAnyTargetToInvalidate() && UI.inUiThread() && controller() != null && controller().isFocused() && animated);
+    this.isHiddenByFilter.setValue(hidden && !isSponsoredMessage(), BitwiseUtils.hasFlag(flags, FLAG_LAYOUT_BUILT) && currentViews.hasAnyTargetToInvalidate() && UI.inUiThread() && controller() != null && controller().isFocused() && animated);
+  }
+
+  public void setTextHighlight(int utf16Position, int utf16Length) {
+    // Default implementation does nothing. Subclasses like TGMessageText will override it.
   }
 
   public boolean isHiddenByMessagesFilter () {
@@ -1557,6 +1582,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   private boolean useBubbleTime () {
+    // Community feature: hide sticker timestamp
+    if (CommunityConfig.hideStickerTimestamp && this instanceof TGMessageSticker) {
+      return false;
+    }
     return !headerDisabled() && (!useForward() || (isOutgoing() || (flags & FLAG_HEADER_ENABLED) != 0)) && !(this instanceof TGMessageCall);
   }
 
@@ -2851,6 +2880,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   @CallSuper
   public boolean performLongPress (View view, float x, float y) {
+    Log.d("TGMessage", "Invoked with %s", this.getClass().getSimpleName());
     boolean result = false;
     if (inlineKeyboard != null) {
       result = inlineKeyboard.performLongPress(view);
@@ -2962,6 +2992,15 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
             if (replyData != null && replyData.getError() != null) {
               buildContentHint(view, getReplyLocationProvider(), false).show(tdlib, replyData.toErrorText());
             } else {
+              // Extract quote info if present
+              TextQuoteInfo quoteInfo = null;
+              if (replyToMessage.quote != null && replyToMessage.quote.text != null) {
+                quoteInfo = new TextQuoteInfo(
+                  replyToMessage.quote.position,
+                  replyToMessage.quote.text.text.length()
+                );
+              }
+
               if (replyToMessage.chatId != msg.chatId) {
                 if (replyToMessage.chatId == 0 || replyToMessage.messageId == 0) {
                   buildContentHint(view, getReplyLocationProvider(), false).show(tdlib, Lang.getString(R.string.MessageReplyPrivate));
@@ -2971,7 +3010,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
               } else if (isScheduled()) {
                 tdlib.ui().openMessage(controller(), replyToMessage.chatId, new MessageId(replyToMessage), openParameters());
               } else {
-                highlightOtherMessage(new MessageId(replyToMessage));
+                highlightOtherMessage(new MessageId(replyToMessage), quoteInfo);
               }
             }
           }
@@ -2988,6 +3027,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   protected final void highlightOtherMessage (MessageId messageId) {
     manager.controller().highlightMessage(messageId, toMessageId());
+  }
+
+  protected final void highlightOtherMessage (MessageId messageId, @Nullable TextQuoteInfo quoteInfo) {
+    manager.controller().highlightMessage(messageId, toMessageId(), quoteInfo);
   }
 
   protected final void highlightOtherMessage (long otherMessageId) {
@@ -4332,6 +4375,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   // Getters
 
   public boolean onMessageClick (MessageView v, MessagesController c) {
+    // Paid media is rendered as a plain text bubble (see buildPaidMediaText). When it is
+    // still locked, a tap must open the Stars payment form rather than fall through to the
+    // default message options.
+    if (msg.content.getConstructor() == TdApi.MessagePaidMedia.CONSTRUCTOR &&
+      isPaidMediaLocked((TdApi.MessagePaidMedia) msg.content)) {
+      unlockPaidMedia();
+      return true;
+    }
     // TODO
     return /* isEventLog() */ false;
   }
@@ -5475,6 +5526,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (message == null) {
       return MESSAGE_NOT_CHANGED;
     }
+    if (mMessageFilterProcessingState != null) {
+      mMessageFilterProcessingState.updateMessageContent(messageId, newContent);
+    }
     if ((flags & FLAG_UNSUPPORTED) != 0) {
       if (message.content.getConstructor() == TdApi.MessageUnsupported.CONSTRUCTOR && newContent.getConstructor() != TdApi.MessageUnsupported.CONSTRUCTOR) {
         message.content = newContent;
@@ -6267,6 +6321,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private boolean isDestroyed;
 
   public final void onDestroy () {
+    if(currentActiveSelectionMessage == this){
+      finishTextSelection();
+      resetGlobalSelection(null);
+    }
     isDestroyed = true;
     if (topicObserverRegistered) {
       tdlib.topics().stopObserving(forumTopicKey, this);
@@ -6278,6 +6336,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (replyData != null)
       replyData.performDestroy();
     messageReactions.performDestroy();
+    if (mMessageFilterProcessingState != null) {
+      mMessageFilterProcessingState.performDestroy();
+    }
     setViewAttached(false);
     onMessageContainerDestroyed();
   }
@@ -7766,6 +7827,16 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         trackSponsoredMessageClicked();
         return false;
       }
+
+      @Override
+      public boolean onLongPress (View view, Text text) {
+        // Give the message a chance to start quote selection (TGMessageText overrides
+        // processTextSelection with a re-entrancy guard). Do NOT call performLongPress here:
+        // message types that forward long presses to their text wrapper (media captions,
+        // bot info, service text, gift cards) would come straight back to this callback and
+        // recurse until StackOverflowError.
+        return TGMessage.this.processTextSelection(view, 0, 0);
+      }
     };
   }
 
@@ -8451,39 +8522,67 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageGiveaway.CONSTRUCTOR: {
           return new TGMessageGiveaway(context, msg, (TdApi.MessageGiveaway) content);
         }
-        // unsupported
-        case TdApi.MessageRichMessage.CONSTRUCTOR:
-        case TdApi.MessageInvoice.CONSTRUCTOR:
+        case TdApi.MessageInvoice.CONSTRUCTOR: {
+          return new TGMessageInvoice(context, msg, (TdApi.MessageInvoice) content);
+        }
+        case TdApi.MessageStory.CONSTRUCTOR: {
+          return new TGMessageService(context, msg, (TdApi.MessageStory) content);
+        }
+        case TdApi.MessageGift.CONSTRUCTOR: {
+          return new TGMessageGiftRegular(context, msg, (TdApi.MessageGift) content);
+        }
+        case TdApi.MessageUpgradedGift.CONSTRUCTOR: {
+          return new TGMessageGiftUpgraded(context, msg, (TdApi.MessageUpgradedGift) content);
+        }
+        case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR: {
+          return new TGMessageGiftRefunded(context, msg, (TdApi.MessageRefundedUpgradedGift) content);
+        }
+        case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR: {
+          return new TGMessageGiftPurchaseOffer(context, msg, (TdApi.MessageUpgradedGiftPurchaseOffer) content);
+        }
+        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR: {
+          return new TGMessageGiftPurchaseOfferRejected(context, msg, (TdApi.MessageUpgradedGiftPurchaseOfferRejected) content);
+        }
+        case TdApi.MessageGiftedGrams.CONSTRUCTOR: {
+          return new TGMessageGiftedTon(context, msg, (TdApi.MessageGiftedGrams) content);
+        }
+        // Service messages (centered grey pill)
         case TdApi.MessagePassportDataSent.CONSTRUCTOR:
-        case TdApi.MessageStory.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePassportDataSent) content);
         case TdApi.MessageChatSetBackground.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageChatSetBackground) content);
         case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestProfilePhoto) content);
         case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageSuggestBirthdate) content);
+        case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGiveawayPrizeStars) content);
+        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessagePaymentSuccessfulBot) content);
+        case TdApi.MessageGroupCall.CONSTRUCTOR:
+          return new TGMessageService(context, msg, (TdApi.MessageGroupCall) content);
+        case TdApi.MessageChecklist.CONSTRUCTOR:
+          return new TGMessageText(context, msg, buildChecklistText(((TdApi.MessageChecklist) content).list));
+        case TdApi.MessagePaidMedia.CONSTRUCTOR:
+          return new TGMessageText(context, msg, buildPaidMediaText((TdApi.MessagePaidMedia) content));
+
+        // unsupported
         case TdApi.MessageUsersShared.CONSTRUCTOR:
         case TdApi.MessageChatShared.CONSTRUCTOR:
-        case TdApi.MessagePaidMedia.CONSTRUCTOR:
-        case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
-        case TdApi.MessageGift.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGift.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-        case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-        case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
         case TdApi.MessageStakeDice.CONSTRUCTOR:
-
-        case TdApi.MessageGroupCall.CONSTRUCTOR: // TODO TGMessageCall
-        case TdApi.MessageChecklist.CONSTRUCTOR: // TODO TGMessagePoll
         case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-        case TdApi.MessageGiftedGrams.CONSTRUCTOR:
-        case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
           unsupportedStringRes = R.string.UnsupportedMessageType;
           break;
+        case TdApi.MessageRichMessage.CONSTRUCTOR: {
+          return new TGMessageRich(context, msg, ((TdApi.MessageRichMessage) content).message);
+        }
         // bots only
         case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
         case TdApi.MessageWebAppDataReceived.CONSTRUCTOR: {
@@ -8507,6 +8606,164 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }));
     text.addMessageFlags(FLAG_UNSUPPORTED);
     return text;
+  }
+
+  private static TdApi.FormattedText buildChecklistText (TdApi.Checklist list) {
+    StringBuilder sb = new StringBuilder();
+    List<TdApi.TextEntity> entities = new ArrayList<>();
+    if (list != null && list.title != null && !Td.isEmpty(list.title)) {
+      int start = sb.length();
+      appendFormatted(sb, entities, list.title);
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    }
+    if (list != null && list.tasks != null) {
+      for (TdApi.ChecklistTask task : list.tasks) {
+        if (sb.length() > 0) {
+          sb.append("\n");
+        }
+        boolean done = task.completionDate != 0;
+        sb.append(done ? "☑ " : "☐ "); // ballot box (with/without check) + nbsp
+        if (task.text != null) {
+          int start = sb.length();
+          appendFormatted(sb, entities, task.text);
+          if (done) {
+            entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeStrikethrough()));
+          }
+        }
+      }
+    }
+    if (sb.length() == 0) {
+      sb.append(Lang.getString(R.string.Checklist));
+    }
+    return new TdApi.FormattedText(sb.toString(), entities.toArray(new TdApi.TextEntity[0]));
+  }
+
+  private static void appendFormatted (StringBuilder sb, List<TdApi.TextEntity> out, TdApi.FormattedText text) {
+    final int offset = sb.length();
+    sb.append(text.text);
+    if (text.entities != null) {
+      for (TdApi.TextEntity e : text.entities) {
+        out.add(new TdApi.TextEntity(e.offset + offset, e.length, e.type));
+      }
+    }
+  }
+
+  static boolean isPaidMediaLocked (TdApi.MessagePaidMedia paidMedia) {
+    if (paidMedia.media == null) {
+      return false;
+    }
+    for (TdApi.PaidMedia m : paidMedia.media) {
+      if (m.getConstructor() == TdApi.PaidMediaPreview.CONSTRUCTOR) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Renders paid media as a text block: a bold "🔒 Unlock for N Stars" line (when
+  // still locked) plus the caption. Tapping the bubble opens the Stars payment form
+  // (see onMessageClick). Showing the actual unlocked photo/video needs the media
+  // pipeline and is a follow-up.
+  private static TdApi.FormattedText buildPaidMediaText (TdApi.MessagePaidMedia paidMedia) {
+    StringBuilder sb = new StringBuilder();
+    List<TdApi.TextEntity> entities = new ArrayList<>();
+    if (isPaidMediaLocked(paidMedia)) {
+      int start = sb.length();
+      sb.append("🔒 "); // lock
+      sb.append(Lang.plural(R.string.PaidMediaUnlock, paidMedia.starCount));
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    } else {
+      int start = sb.length();
+      sb.append(Lang.getString(R.string.PaidMediaUnlocked));
+      entities.add(new TdApi.TextEntity(start, sb.length() - start, new TdApi.TextEntityTypeBold()));
+    }
+    if (paidMedia.caption != null && !Td.isEmpty(paidMedia.caption)) {
+      sb.append("\n");
+      appendFormatted(sb, entities, paidMedia.caption);
+    }
+    return new TdApi.FormattedText(sb.toString(), entities.toArray(new TdApi.TextEntity[0]));
+  }
+
+  private void unlockPaidMedia () {
+    final TdApi.InputInvoiceMessage inputInvoice = new TdApi.InputInvoiceMessage(msg.chatId, msg.id);
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (form, error) -> executeOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        tdlib.ui().openPaymentForm(controller(), form, inputInvoice);
+      }
+    }));
+  }
+
+  // Opens the payment form for this message's invoice (the reply_markup Buy button). Routes through
+  // the standard tdlib.ui().openPaymentForm(...), which handles every form type (card / Stars / …).
+  // For an already-paid invoice the same button is a "Receipt" — open the receipt instead.
+  public void openInvoice () {
+    if (msg.content instanceof TdApi.MessageInvoice) {
+      long receiptMessageId = ((TdApi.MessageInvoice) msg.content).receiptMessageId;
+      if (receiptMessageId != 0) {
+        org.thunderdog.challegram.ui.PaymentReceiptController c = new org.thunderdog.challegram.ui.PaymentReceiptController(controller().context(), tdlib);
+        c.setArguments(new org.thunderdog.challegram.ui.PaymentReceiptController.Args(msg.chatId, receiptMessageId));
+        controller().navigateTo(c);
+        return;
+      }
+    }
+    final TdApi.InputInvoiceMessage inputInvoice = new TdApi.InputInvoiceMessage(msg.chatId, msg.id);
+    UI.showToast(R.string.LoadingPaymentForm, Toast.LENGTH_SHORT);
+    tdlib.send(new TdApi.GetPaymentForm(inputInvoice, null), (form, error) -> executeOnUiThreadOptional(() -> {
+      if (error != null) {
+        UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+      } else {
+        tdlib.ui().openPaymentForm(controller(), form, inputInvoice);
+      }
+    }));
+  }
+
+  public final TdApi.FactCheck getFactCheck () {
+    return msg.factCheck;
+  }
+
+  public final void setFactCheck (@Nullable TdApi.FormattedText text) {
+    TdApi.FormattedText factText = text != null ? text : new TdApi.FormattedText("", new TdApi.TextEntity[0]);
+    tdlib.send(new TdApi.SetMessageFactCheck(msg.chatId, msg.id, factText), tdlib.typedOkHandler());
+  }
+
+  public final void recognizeSpeech () {
+    tdlib.send(new TdApi.RecognizeSpeech(msg.chatId, msg.id), (ok, error) -> {
+      if (error != null) {
+        runOnUiThreadOptional(() ->
+          UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT)
+        );
+      }
+    });
+  }
+
+  private TdApi.SpeechRecognitionResult getSpeechRecognitionResult () {
+    switch (msg.content.getConstructor()) {
+      case TdApi.MessageVoiceNote.CONSTRUCTOR:
+        return ((TdApi.MessageVoiceNote) msg.content).voiceNote.speechRecognitionResult;
+      case TdApi.MessageVideoNote.CONSTRUCTOR:
+        return ((TdApi.MessageVideoNote) msg.content).videoNote.speechRecognitionResult;
+      default:
+        return null;
+    }
+  }
+
+  public final boolean canRecognizeSpeech () {
+    TdApi.SpeechRecognitionResult result = getSpeechRecognitionResult();
+    // Offer transcription for voice/video notes that don't already have final text.
+    switch (msg.content.getConstructor()) {
+      case TdApi.MessageVoiceNote.CONSTRUCTOR:
+      case TdApi.MessageVideoNote.CONSTRUCTOR:
+        return result == null || result.getConstructor() == TdApi.SpeechRecognitionResultError.CONSTRUCTOR;
+      default:
+        return false;
+    }
+  }
+
+  public final boolean canSetFactCheck () {
+    return lastMessageProperties().canSetFactCheck;
   }
 
   public static TGMessage valueOfError (MessagesManager context, TdApi.Message msg, Throwable error) {
@@ -9701,6 +9958,84 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } else {
       after.run();
     }
+  }
+
+  public static TGMessage currentActiveSelectionMessage = null;
+
+  public static void resetGlobalSelection(TGMessage excludeMessage) {
+    if (currentActiveSelectionMessage != null && currentActiveSelectionMessage != excludeMessage) {
+      currentActiveSelectionMessage.finishTextSelection();
+    }
+  }
+
+  public static boolean hasActiveTextSelection() {
+    return currentActiveSelectionMessage != null && currentActiveSelectionMessage.isTextSelectionActive();
+  }
+
+  protected void registerAsActiveSelection() {
+    if (currentActiveSelectionMessage != null && currentActiveSelectionMessage != this) {
+      currentActiveSelectionMessage.finishTextSelection();
+    }
+    currentActiveSelectionMessage = this;
+  }
+
+  protected void unregisterAsActiveSelection() {
+    if (currentActiveSelectionMessage == this) {
+      currentActiveSelectionMessage = null;
+    }
+  }
+
+  // ========== TEXT SELECTION SYSTEM ==========
+  // This system allows users to select text in messages for quoting.
+  // To implement text selection in a message type:
+  // 1. Override canTextSelection() if you need custom logic (optional)
+  // 2. Override processTextSelection() to show the quote action mode
+  // 3. Override finishTextSelection() to clean up resources
+  // 4. Call registerAsActiveSelection() when starting selection
+  // 5. Call unregisterAsActiveSelection() when finishing selection
+  //
+  // The base getMessageText() method already extracts text from msg.content
+  // using Td.textOrCaption(), so no override is needed for most message types.
+  //
+  // Example implementation can be found in TGMessageText.java
+  // ============================================
+
+  protected boolean isTextSelectionActive = false;
+  public boolean isTextSelectionActive(){
+    return isTextSelectionActive;
+  }
+
+  public void finishTextSelection() {
+    unregisterAsActiveSelection();
+  }
+
+
+
+  public boolean isCurrentMessageSelected() {
+    if (manager == null || manager.controller() == null) {
+      Log.d("TGMessageText", "isCurrentMessageSelected: false (manager or controller null)");
+      return false;
+    }
+    boolean result = manager.controller().isMessageSelected(getChatId(), getId(), this);
+    Log.d("TGMessageText", "isCurrentMessageSelected: " + result + " (chatId=" + getChatId() + ", msgId=" + getId() + ")");
+    return result;
+  }
+
+  protected boolean inSelectionMode() {
+    boolean result = manager != null && manager.controller() != null && manager.controller().inSelectMode();
+    Log.d("TGMessageText", "inSelectionMode: " + result);
+    return result;
+  }
+
+  public boolean canTextSelection() {
+    TdApi.FormattedText text = getMessageText();
+    boolean result = text != null && text.text != null && !text.text.isEmpty();
+    Log.d("TGMessageText", "canBeQuoted: " + result);
+    return result;
+  }
+
+  public boolean processTextSelection(View view, float touchX, float touchY){
+    return false;
   }
 
   protected @Nullable TdApi.FormattedText getTextToTranslateImpl () {

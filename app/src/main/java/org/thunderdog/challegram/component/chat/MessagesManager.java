@@ -602,7 +602,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     loader.setSearchParameters(query, sender, filter);
     adapter.setChatType(chat.type);
     if (filter != null && Td.isPinnedFilter(filter)) {
-      initPinned(chat.id, 1, 1);
+      initPinned(chat.id, null, 1, 1);
     }
     if (highlightMessageId != null) {
       loadFromMessage(highlightMessageId, highlightMode, true);
@@ -624,6 +624,17 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   public boolean isSearchPreview () {
     return loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_SEARCH;
+  }
+
+  public boolean isSavedMessagesTagMode () {
+    return loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_SAVED_MESSAGES_TAG;
+  }
+
+  public void setSavedMessagesTagFilter (@Nullable TdApi.ReactionType tag) {
+    loader.setSavedMessagesTagFilter(tag);
+    if (tag != null) {
+      loadFromStart();
+    }
   }
 
   public void openEventLog (TdApi.Chat chat) {
@@ -693,8 +704,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
   }
 
-  private void initPinned (long chatId, int initialLoadCount, int loadCount) {
-    this.pinnedMessages = new MessageListManager(tdlib, initialLoadCount, loadCount, pinnedMessageListener, chatId, 0, null, null, null, new TdApi.SearchMessagesFilterPinned());
+  private void initPinned (long chatId, @Nullable TdApi.MessageTopic topicId, int initialLoadCount, int loadCount) {
+    this.pinnedMessages = new MessageListManager(tdlib, initialLoadCount, loadCount, pinnedMessageListener, chatId, 0, topicId, null, null, new TdApi.SearchMessagesFilterPinned());
     this.pinnedMessages.addMaxMessageIdListener(pinnedMessageAvailabilityChangeListener);
     this.pinnedMessages.addChangeListener(new MessageListManager.ChangeListener() {
       @Override
@@ -719,7 +730,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       // readOneShot = true;
     }
     if (chat.id != 0 && messageThread == null && !areScheduled && needPinnedMessages) {
-      initPinned(chat.id, 10, 50);
+      initPinned(chat.id, topicId, 10, 50);
     } else {
       this.pinnedMessages = null;
     }
@@ -782,6 +793,13 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
       @Override
       public boolean needForceRead (TdlibMessageViewer.Viewport viewport) {
+        // For forum topics opened at first unread position, don't force-read on initial load
+        // to avoid marking all visible messages as read on the server
+        TdApi.MessageTopic topicId = loader.getTopicId();
+        if (topicId != null && topicId.getConstructor() == TdApi.MessageTopicForum.CONSTRUCTOR) {
+          // Only force-read after user has scrolled
+          return canRead() && wasScrollByUser;
+        }
         return canRead();
       }
 
@@ -990,8 +1008,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   private boolean useReactionBubblesValue;
   private boolean checkReactionBubbles () {
+    // Check DMs (private chats) first
     if (tdlib.isUserChat(loader.getChatId())) {
-      return false;
+      return Settings.instance().getBigReactionsInDMs();
     }
 
     if (loader.isChannel() && Settings.instance().getBigReactionsInChannels()) {
@@ -1007,6 +1026,34 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   public boolean useReactionBubbles () {
     return useReactionBubblesValue;
+  }
+
+  /**
+   * Re-evaluates the "Big Reactions" setting ({@link Settings#getBigReactionsInDMs()} /
+   * {@link Settings#getBigReactionsInChats()} / {@link Settings#getBigReactionsInChannels()})
+   * for the currently displayed chat and, if it changed, rebuilds the layout of all visible
+   * messages so the new reaction style takes effect without re-opening the chat.
+   *
+   * Must be called on the UI thread.
+   *
+   * The Big Reactions toggle is stored as plain preference keys (it does NOT go through
+   * Settings#setNewSetting, so it fires no SettingsChangeListener.onSettingsChanged broadcast).
+   * Therefore this hook has to be invoked manually from the toggle site. Wire it in
+   * {@code SettingsStickersAndEmojiController} right after the
+   * setBigReactionsIn*(...) calls, e.g.:
+   * <pre>
+   *   MessagesController c = context.navigation().getCurrentStackItemOf(MessagesController.class);
+   *   if (c != null) c.getManager().refreshBigReactions();
+   * </pre>
+   * (mirrors how a chat-font-size change calls manager.onUpdateTextSize() + rebuildLayouts()
+   *  in MessagesController).
+   */
+  public void refreshBigReactions () {
+    boolean newValue = checkReactionBubbles();
+    if (this.useReactionBubblesValue != newValue) {
+      this.useReactionBubblesValue = newValue;
+      rebuildLayouts();
+    }
   }
 
   private int usedTranslateStyleMode;
@@ -1899,8 +1946,11 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       case MessagesLoader.SPECIAL_MODE_SEARCH:
         return;
     }
-    TdApi.MessageTopic topicId = loader.getMessageTopicId();
-    if (!Td.matchesTopic(message.getMessageTopicId(), topicId)) {
+    // Check both messageThread topic (for comment threads) and forum topicId (for forum tabs)
+    TdApi.MessageTopic messageThreadTopicId = loader.getMessageTopicId();
+    TdApi.MessageTopic forumTopicId = loader.getTopicId();
+    TdApi.MessageTopic effectiveTopicId = messageThreadTopicId != null ? messageThreadTopicId : forumTopicId;
+    if (!Td.matchesTopic(message.getMessageTopicId(), effectiveTopicId)) {
       return;
     }
     ThreadInfo messageThread = loader.getMessageThread();
@@ -2612,10 +2662,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         if (view != null && view.getParent() != null) {
           scrollOffsetInPixels = calculateOffsetInPixels(view, message.getExtraPadding());
         }
-        if (readFully && scrollOffsetInPixels == 0) {
-          scrollMessageId = scrollMessageChatId = 0;
-          scrollMessageOtherIds = null;
-        } else if (isBottomSponsored) {
+        // Don't clear scroll position when at bottom - keep it so we can restore to bottom on re-entry.
+        // The readFully flag is still saved in SavedMessageId to indicate user was at the end.
+        if (isBottomSponsored) {
           if (message.isSponsoredMessage()) {
             // the bottom VISIBLE message is sponsored - no need to save that data
             scrollMessageId = scrollMessageChatId = scrollOffsetInPixels = 0;
@@ -3139,6 +3188,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void highlightMessage (MessageId messageId, int highlightMode, long[] returnToMessageIds, boolean allowSmooth) {
+    highlightMessage(messageId, highlightMode, returnToMessageIds, allowSmooth, null);
+  }
+
+  public void highlightMessage (MessageId messageId, int highlightMode, long[] returnToMessageIds, boolean allowSmooth, @androidx.annotation.Nullable org.thunderdog.challegram.data.TGMessage.TextQuoteInfo quoteInfo) {
     if (isEventLog()) {
       return;
     }
@@ -3159,6 +3212,12 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       }
       TGMessage msg = adapter.getMessage(index);
       msg.highlight(true);
+
+      // Apply text quote highlighting if available
+      if (quoteInfo != null && msg instanceof org.thunderdog.challegram.data.TGMessageText) {
+        ((org.thunderdog.challegram.data.TGMessageText) msg).setTextHighlight(quoteInfo.utf16Position, quoteInfo.utf16Length);
+      }
+
       scrollToMessage(index, msg, highlightMode, allowSmooth, false);
     }
   }

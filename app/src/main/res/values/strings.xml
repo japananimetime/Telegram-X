@@ -2,7 +2,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
   <string name="language_continueInLanguage">Continue in English</string>
 
-  <string name="Page1Title">Telegram X</string>
+  <string name="Page1Title">Neurogram X</string>
   <string name="Page2Title">Fast</string>
   <string name="Page3Title">Free</string>
   <string name="Page4Title">Powerful</string>
@@ -30,7 +30,7 @@
   <string name="network_LookupFailed">No routes found, connecting directly…</string>
   <string name="network_LookupFailedProxy">No routes found, using the previous proxy…</string>
 
-  <string name="AppNameAndVersion">Telegram X %1$s</string>
+  <string name="AppNameAndVersion">Neurogram X %1$s</string>
   <string name="language_code">en</string>
   <string name="language_emoji">&#127482;&#127480;</string>
   <string name="language_name">English</string>
@@ -38,7 +38,7 @@
   <string name="language_dateFormatLocale">en-UK</string>
   <string name="language_rtl">0</string>
   <string name="language_disable_lowercase">0</string>
-  <string name="language_continueInLanguagePopupText">**Telegram X** is now available in **English**.\n\nWould you like to switch app language?\n\nYou can revert changes anytime later in Settings&#160;&gt;&#160;Language.</string>
+  <string name="language_continueInLanguagePopupText">**Neurogram X** is now available in **English**.\n\nWould you like to switch app language?\n\nYou can revert changes anytime later in Settings&#160;&gt;&#160;Language.</string>
   <string name="language_appliedLanguage">App language has been set to English.</string>
   <string name="MoreLanguages">More Languages</string>
   <string name="timestamp_now">just now</string>
@@ -111,7 +111,91 @@
   <string name="login_PhoneNumber">Phone number</string>
   <string name="login_PremiumRequiredTitle">Telegram Premium required</string>
   <string name="login_PremiumRequiredBtn">Visit telegram.org</string>
-  <string name="login_PremiumRequired">**Telegram Premium** is required to proceed.\n\nUnfortunately, it\'s currently not possible to make in-app purchases through **Telegram X**.\n\nPlease use one of other official apps and enter the same phone number to set up the subscription.</string>
+  <string name="login_PremiumRequired">**Telegram Premium** is required to proceed.\n\nUnfortunately, it\'s currently not possible to make in-app purchases through **Neurogram X**.\n\nPlease use one of other official apps and enter the same phone number to set up the subscription.</string>
+  <string name="TelegramPremium">Telegram Premium</string>
+  <string name="PremiumDescription">Subscribe to Telegram Premium for exclusive features, faster downloads, and more.</string>
+  <string name="PremiumSubscriptionOptions">Subscription Options</string>
+  <string name="PremiumMonths_one">%1$d Month</string>
+  <string name="PremiumMonths_other">%1$d Months</string>
+  <string name="Months_one">%1$d month</string>
+  <string name="Months_other">%1$d months</string>
+  <string name="PremiumCurrent">(Current)</string>
+  <string name="PremiumNoOptions">No subscription options available</string>
+  <string name="PremiumAlreadySubscribed">You are already subscribed to this plan</string>
+  <string name="PremiumPaymentUnavailable">Payment is not available</string>
+  <string name="LoadingPaymentForm">Loading payment form…</string>
+  <string name="format_premiumOption">%1$s for %2$s</string>
+  <string name="format_premiumOptionDiscount">%1$s for %2$s (-%3$d%%)</string>
+  <string name="PaymentForm">Payment</string>
+  <string name="PaymentCardNumber">Card Number</string>
+  <string name="PaymentCardExpiry">MM/YY</string>
+  <string name="PaymentCardCVC">CVC</string>
+  <string name="PaymentCardHolder">Cardholder Name</string>
+  <string name="PaymentSavedCards">Saved Cards</string>
+  <string name="PaymentNewCard">Add New Card</string>
+  <string name="PaymentPay">Pay %1$s</string>
+  <string name="PaymentProcessing">Processing payment…</string>
+  <string name="PaymentSuccess">Payment successful!</string>
+  <string name="PaymentFailed">Payment failed: %1$s</string>
+  <string name="PaymentInvalidCard">Please enter valid card details</string>
+  <string name="PaymentUnsupportedType">Unsupported payment type</string>
+  <string name="PaymentUnknownProvider">Unknown payment provider</string>
+  <string name="PaymentCardFailed">Failed to process card</string>
+  <string name="PaymentVerificationNeeded">Payment requires additional verification</string>
+  <string name="PaymentStarsNotSupported">Telegram Stars payment is not supported yet</string>
+  <string name="TelegramStars">Telegram Stars</string>
+  <string name="StarsBalance">Your balance</string>
+  <string name="StarsBalanceFormat">%1$s Stars</string>
+  <string name="BuyStars">Buy Stars</string>
+  <string name="StarsDescription">Telegram Stars can be used to pay for digital goods and services inside Telegram bots and apps.</string>
+  <string name="StarsPayConfirm">Pay %1$s Stars</string>
+  <string name="StarsPayConfirmTitle">Confirm Payment</string>
+  <string name="StarsPayConfirmMessage">Do you want to pay %1$s Stars for this item?</string>
+  <string name="StarsPaymentSuccess">Payment successful!</string>
+  <string name="StarsPaymentFailed">Payment failed: %1$s</string>
+  <string name="StarsInsufficientBalance">Insufficient Stars balance. You need %1$s more Stars.</string>
+  <string name="PaidReactionInsufficientStars">You don\'t have enough Stars for this reaction. Buy Stars in Settings.</string>
+  <string name="StarTransactions">Transaction History</string>
+  <string name="NoStarTransactions">No transactions yet</string>
+  <string name="xStars_one">%1$s Star</string>
+  <string name="xStars_other">%1$s Stars</string>
+  <string name="StarTxFragment">Fragment</string>
+  <string name="StarTxAppStore">App Store</string>
+  <string name="StarTxGooglePlay">Google Play</string>
+  <string name="StarTxPremiumBot">Premium Bot</string>
+  <string name="StarTxUserDeposit">Deposit from user</string>
+  <string name="StarTxGiveaway">Giveaway</string>
+  <string name="StarTxWithdrawal">Withdrawal</string>
+  <string name="StarTxAdsWithdrawal">Ads Revenue</string>
+  <string name="StarTxApiUsage">API Usage</string>
+  <string name="StarTxMediaPurchase">Paid Media</string>
+  <string name="StarTxMediaSale">Media Sale</string>
+  <string name="StarTxChannelMedia">Channel Media</string>
+  <string name="StarTxChannelMediaSale">Channel Media Sale</string>
+  <string name="StarTxBotInvoice">Bot Payment</string>
+  <string name="StarTxBotInvoiceSale">Bot Payment Received</string>
+  <string name="StarTxSubscription">Subscription</string>
+  <string name="StarTxSubscriptionSale">Subscription Payment</string>
+  <string name="StarTxChannelSubscription">Channel Subscription</string>
+  <string name="StarTxChannelSubscriptionSale">Channel Sub Revenue</string>
+  <string name="StarTxGiftPurchase">Gift Purchase</string>
+  <string name="StarTxGiftSale">Gift Sale</string>
+  <string name="StarTxGiftAuction">Gift Auction</string>
+  <string name="StarTxGiftTransfer">Gift Transfer</string>
+  <string name="StarTxGiftUpgrade">Gift Upgrade</string>
+  <string name="StarTxReactionSend">Reaction Sent</string>
+  <string name="StarTxReactionReceive">Reaction Received</string>
+  <string name="StarTxAffiliateCommission">Affiliate Commission</string>
+  <string name="StarTxPaidMessage">Paid Message</string>
+  <string name="StarTxPaidMessageReceive">Paid Message Received</string>
+  <string name="StarTxPremiumPurchase">Premium Purchase</string>
+  <string name="StarTxBotTransfer">Bot Transfer</string>
+  <string name="StarTxPublicSearch">Public Search</string>
+  <string name="StarTxUnknown">Transaction</string>
+  <string name="PaymentUnknownType">Unknown payment type</string>
+  <string name="ViewReceipt">View Receipt</string>
+  <string name="PaymentTestPrefix">TEST: %1$s</string>
+  <string name="PremiumStorePaymentNotAvailable">Store payment is not available in this build</string>
   <string name="login_error">Error: %1$s. __Contact us__, if you need help.</string>
   <string name="login_Code">Code</string>
   <string name="login_LastDigits_one">Last %1$s digit</string>
@@ -320,6 +404,7 @@
   <string name="DeletedMessage">Deleted message</string>
   <string name="UnsupportedMessage">Unsupported message</string>
   <string name="UnsupportedMessageType">Unsupported message</string>
+  <string name="RichMessageShowMore">Show more</string>
   <string name="YouHaveNewMessage">You have a new message</string>
   <string name="ChatContentVoice">Voice Message</string>
   <string name="ChatContentVoiceDuration">%1$s (%2$s)</string>
@@ -474,6 +559,56 @@
 
   <string name="Audio">Audio</string>
   <string name="Voice">Voice</string>
+
+  <!-- Voice transcription -->
+  <string name="Transcribe">Transcribe</string>
+  <string name="Transcribing">Transcribing…</string>
+  <string name="TranscriptionError">Transcription failed</string>
+  <string name="TranscriptionVoiceTooLong">Voice message is too long to transcribe</string>
+  <string name="TranscriptionTrialLimitReached">Free transcriptions exhausted. Try again %1$s or upgrade to Premium.</string>
+  <string name="TranscriptionTrialRemaining">%1$d free transcriptions remaining this week</string>
+  <string name="TranscriptionPremiumRequired">Telegram Premium required for transcription</string>
+
+  <!-- Voice transcription settings -->
+  <string name="VoiceTranscription">Voice Transcription</string>
+  <string name="VoiceTranscriptionInfo">Transcribe voice messages to text using various providers.</string>
+  <string name="TranscriptionProvider">Provider</string>
+  <string name="TranscriptionProviders">Providers</string>
+  <string name="TranscriptionProviderTelegram">Telegram (Built-in)</string>
+  <string name="TranscriptionProviderCustom">Custom Provider</string>
+  <string name="TranscriptionAddProvider">Add Provider</string>
+  <string name="TranscriptionConfigureProvider">Configure</string>
+  <string name="TranscriptionDeleteProvider">Delete</string>
+  <string name="TranscriptionProviderName">Provider Name</string>
+  <string name="TranscriptionApiEndpoint">API Endpoint</string>
+  <string name="TranscriptionApiKey">API Key</string>
+  <string name="TranscriptionTestConnection">Test Connection</string>
+  <string name="TranscriptionConnectionSuccess">Connection successful</string>
+  <string name="TranscriptionConnectionFailed">Connection failed: %1$s</string>
+  <string name="TranscriptionProviderActive">Active</string>
+  <string name="TranscriptionProviderInactive">Inactive</string>
+  <string name="TranscriptionSelectTemplate">Select Template</string>
+  <string name="TranscriptionOpenAIWhisper">OpenAI Whisper</string>
+  <string name="TranscriptionGroqWhisper">Groq Whisper</string>
+  <string name="TranscriptionOllamaLocal">Ollama (Local)</string>
+  <string name="TranscriptionCustomAPI">Custom API</string>
+  <string name="TranscriptionEnterApiKey">Enter your API key</string>
+  <string name="TranscriptionEnterEndpoint">Enter API endpoint URL</string>
+  <string name="TranscriptionProviderAdded">Provider added</string>
+  <string name="TranscriptionProviderRemoved">Provider removed</string>
+  <string name="TranscriptionProviderActivated">Provider activated</string>
+  <string name="TranscriptionTypeTelegram">Telegram</string>
+  <string name="TranscriptionTypeHttpApi">HTTP API</string>
+  <string name="TranscriptionTypeLocal">Local Model</string>
+  <string name="TranscriptionAddProviderInfo">Add custom providers like OpenAI Whisper, Groq, or self-hosted solutions.</string>
+  <string name="TranscriptionAutoTranscribe">Auto-transcribe</string>
+  <string name="TranscriptionAutoTranscribeInfo">Automatically transcribe all incoming voice messages.</string>
+  <string name="TranscriptionTrialInfo">Trial Status</string>
+  <string name="TranscriptionDeleteProviderConfirm">Are you sure you want to delete this provider?</string>
+  <string name="ErrorFieldEmpty">This field is required</string>
+  <string name="Options">Options</string>
+  <string name="Edit">Edit</string>
+
   <string name="Photo">Photo</string>
   <string name="Video">Video</string>
   <string name="Gif">GIF</string>
@@ -557,7 +692,7 @@
   <string name="fingerprint_fail">Unknown finger</string>
   <string name="biometrics_hint3">Please add biometrics in System Settings &gt; Security &gt; Biometrics.</string>
   <string name="biometrics_fail">Unknown biometrics</string>
-  <string name="cam_hint">Please allow Telegram X to use camera in System Settings &gt; Apps &gt; Telegram X &gt; Permissions</string>
+  <string name="cam_hint">Please allow Neurogram X to use camera in System Settings &gt; Apps &gt; Neurogram X &gt; Permissions</string>
   <string name="Settings">Settings</string>
   <string name="LogOut">Log out</string>
   <string name="DeleteAccount">Delete account</string>
@@ -969,6 +1104,7 @@
   <string name="PrivacySettings">Privacy and Security</string>
   <string name="AskAQuestion">Ask a Question</string>
   <string name="TelegramFAQ">Telegram FAQ</string>
+  <string name="NeurogramAbout">Neurogram X is an unofficial fork of Telegram X, named in honour of **Neuro-sama** — the AI VTuber created by Vedal.\n\n**Swarm will prevail!**</string>
   <string name="HideForYourself">Dismiss for yourself</string>
   <string name="DataSaver">Data Saver</string>
   <string name="DataSaverDesc">With Data Saver enabled, media will never download automatically. All pending downloads are paused.</string>
@@ -1818,6 +1954,7 @@
   <string name="VoipRinging">Ringing</string>
   <string name="VoipWaiting">Waiting</string>
   <string name="VoipFailed">Failed to connect</string>
+  <string name="VoipScreenShareFailed">Couldn\'t start screen sharing</string>
   <string name="VoipExchangingKeys">Exchanging encryption keys</string>
   <string name="VoipExchangingKeysShort">Exchanging keys</string>
   <string name="VoipEstablishing">Connecting…</string>
@@ -2111,9 +2248,16 @@
   <string name="BigReactionsInfo">Big reactions are interactive buttons under messages presenting each reaction</string>
   <string name="ReactionAvatarsInfo">When limited, avatars display only in scenarios when you are likely to recognise the user.</string>
   <string name="BigReactions">Big Reactions</string>
+  <string name="BigReactionsDMs">Direct Messages</string>
   <string name="BigReactionsChats">Chats</string>
   <string name="BigReactionsChannels">Channels</string>
   <string name="BigReactionsNone">None</string>
+  <string name="ShowCameraWhileTyping">Camera button</string>
+  <string name="ShowAttachWhileTyping">Attach button</string>
+  <string name="ShowVoiceWhileTyping">Voice button</string>
+  <string name="InputWhileTyping">Show while typing</string>
+  <string name="InputWhileTypingInfo">Select which buttons remain visible when you\'re typing a message. Sending media will use your text as caption.</string>
+  <string name="Input">Input</string>
   <string name="ChannelReactionsAnonymous">Reactions in channels are anonymous</string>
 
   <string name="UserRestrictions">User Permissions</string>
@@ -2447,6 +2591,41 @@
   <string name="EventLogForumTopicUnhidden">%1$s made topic %2$s visible</string>
   <string name="EventLogForumTopicUnhiddenYou">You made topic %1$s visible</string>
 
+  <!-- Forum Topics UI -->
+  <string name="Topics">Topics</string>
+  <string name="NoTopics">No topics yet</string>
+  <string name="LoadingTopics">Loading topics…</string>
+  <string name="PinTopic">Pin Topic</string>
+  <string name="UnpinTopic">Unpin Topic</string>
+  <string name="CloseTopic">Close Topic</string>
+  <string name="ReopenTopic">Reopen Topic</string>
+  <string name="EditTopic">Edit Topic</string>
+  <string name="DeleteTopic">Delete Topic</string>
+  <string name="DeleteTopicConfirm">Are you sure you want to delete topic **%1$s**? All messages in this topic will be deleted.</string>
+  <string name="NewTopic">New Topic</string>
+  <string name="TopicName">Topic name</string>
+  <string name="TopicNameHint">Enter topic name</string>
+  <string name="EnableTopics">Topics</string>
+  <string name="EnableTopicsDesc">Enable topics to organize discussions in this group. Only the group owner can toggle this setting.</string>
+  <string name="TopicsLayoutTabs">Show as Tabs</string>
+  <string name="TopicsLayoutTabsDesc">When enabled, topics will be displayed as horizontal tabs at the top of the chat instead of a list.</string>
+  <string name="TabInfo">Group Info</string>
+  <string name="TopicWasCreated">Topic created</string>
+  <string name="TopicWasRenamed">Topic renamed to %1$s</string>
+  <string name="TopicIconChanged">Topic icon changed</string>
+  <string name="TopicWasClosed">Topic closed</string>
+  <string name="TopicWasReopened">Topic reopened</string>
+  <string name="GeneralTopicWasHidden">General topic hidden</string>
+  <string name="GeneralTopicWasShown">General topic shown</string>
+  <string name="ViewAsChat">View as chat</string>
+  <string name="ViewAsTopics">View as topics</string>
+  <string name="ViewAsTabs">View as tabs</string>
+  <string name="FilterByTopic">Filter by topic</string>
+  <string name="SearchForMessages">Search for messages</string>
+  <string name="NoMessagesFound">No messages found</string>
+  <string name="ChangeTopicIcon">Change Topic Icon</string>
+  <string name="ResetTopicIcon">Reset Topic Icon</string>
+
   <string name="EventLogMutedNewParticipants">%1$s muted new video chat participants</string>
   <string name="EventLogUnmutedNewParticipants">%1$s allowed new video chat participants to speak</string>
   <string name="EventLogMutedNewParticipantsYou">You muted new video chat participants</string>
@@ -2706,6 +2885,92 @@
   <string name="RingtoneCustom">Custom</string>
   <string name="IncognitoKeyboard">Incognito Keyboard</string>
   <string name="IncognitoKeyboardInfo">Request keyboard to not update any personalized data such as typing history and personalized language model based on what you type in Secret Chats.\n\nBe aware that this setting is not a guarantee, and some IMEs may not respect it.</string>
+  <string name="HideStories">Hide stories</string>
+  <string name="HideStoriesInfo">Completely hide stories from the app. Stories shared in messages will still be displayed.</string>
+  <string name="StoryQuickReactions">Quick Reactions</string>
+  <string name="StoryQuickReactionsInfo">Show quick reaction row instead of full picker when reacting to stories.</string>
+  <string name="Story">Story</string>
+  <string name="SharedStory">%1$s shared a story</string>
+  <string name="SharedStoryExpired">Story expired</string>
+  <string name="CreateStory">Create Story</string>
+  <string name="StoryPosted">Story posted</string>
+  <string name="ErrorCannotPostStory">You can\'t post stories right now</string>
+  <string name="AddStory">Add Story</string>
+  <string name="YourStory">Your Story</string>
+  <string name="ReplyToStory">Reply to story…</string>
+  <string name="ReplySent">Reply sent</string>
+  <string name="StoryReplySent">Reply sent</string>
+  <string name="StoryReplySentTo">Reply sent to %1$s</string>
+  <string name="StoryViews">%1$d views</string>
+  <string name="StoryViewers">Story Viewers</string>
+  <string name="StoryNoViewers">No viewers yet</string>
+  <string name="xStoryViewers_one">%1$s viewer</string>
+  <string name="xStoryViewers_other">%1$s viewers</string>
+  <string name="StoryExpired">Story expired</string>
+  <string name="DeleteStory">Delete Story</string>
+  <string name="DeleteStoryConfirm">Are you sure you want to delete this story?</string>
+  <string name="StoryDeleted">Story deleted</string>
+  <string name="RemoveReaction">Remove Reaction</string>
+  <string name="ReportStory">Report Story</string>
+  <string name="StoryReported">Story reported</string>
+  <string name="ReportDetails">Report Details</string>
+  <string name="ReportDetailsHint">Please provide additional details (optional)</string>
+  <string name="StealthMode">Stealth Mode</string>
+  <string name="StealthModeActivated">Stealth mode activated for 25 minutes</string>
+  <string name="StealthModePremiumRequired">Stealth Mode is available for Telegram Premium subscribers</string>
+  <string name="StealthModeWait">Stealth mode can be used again in %1$d minutes</string>
+  <string name="StealthModeAlreadyActive">Stealth mode is already active</string>
+  <string name="EditStoryCaption">Edit Caption</string>
+  <string name="StoryCaptionUpdated">Story caption updated</string>
+  <string name="StoryPrivacy">Story Privacy</string>
+  <string name="StoryPrivacyEveryone">Everyone</string>
+  <string name="StoryPrivacyContacts">Contacts</string>
+  <string name="StoryPrivacyCloseFriends">Close Friends</string>
+  <string name="StoryPrivacySelectedUsers">Selected Users</string>
+  <string name="StorySelectPeopleHint">Select people who can see your story</string>
+  <string name="xPeopleSelected">%1$d people selected</string>
+  <string name="StoryPrivacyUpdated">Story privacy updated</string>
+  <string name="SaveToProfile">Save to Profile</string>
+  <string name="RemoveFromProfile">Remove from Profile</string>
+  <string name="StorySavedToProfile">Story will be saved to your profile</string>
+  <string name="StoryRemovedFromProfile">Story will not be saved to your profile</string>
+  <string name="StoryStatistics">Statistics</string>
+  <string name="StoryStatisticsTitle">Story Statistics</string>
+  <string name="StoryInteractions">Interactions</string>
+  <string name="StoryReactions">Reactions</string>
+  <string name="StoryNoStatistics">No statistics available for this story</string>
+  <string name="StoryStatisticsPremiumRequired">Story statistics are available for Telegram Premium subscribers</string>
+  <string name="AddToAlbum">Add to Album</string>
+  <string name="StoryAlbums">Albums</string>
+  <string name="CreateNewAlbum">Create New Album</string>
+  <string name="AlbumName">Album name</string>
+  <string name="StoryAddedToAlbum">Story added to album</string>
+  <string name="StoryRemovedFromAlbum">Story removed from album</string>
+  <string name="AlbumCreated">Album created</string>
+  <string name="StoryDuration">Story duration</string>
+  <string name="StoryDuration6h">6 hours</string>
+  <string name="StoryDuration12h">12 hours</string>
+  <string name="StoryDuration24h">24 hours</string>
+  <string name="StoryDuration48h">48 hours</string>
+  <string name="StoryPosting">Posting story…</string>
+  <string name="StoryPostError">Failed to post story</string>
+  <string name="StoryBoostNeeded">This channel needs more boosts to post stories</string>
+  <string name="StoryLimitExceeded">Story limit exceeded</string>
+  <string name="AddStoryCamera">Camera</string>
+  <string name="AddStoryGallery">Gallery</string>
+  <string name="StoryAddCaption">Add a caption…</string>
+  <string name="NoAlbumsYet">No albums yet</string>
+  <string name="StoryViewersTitle">Story Viewers (%1$d)</string>
+  <string name="NoViewersYet">No viewers yet</string>
+  <string name="StoryGraphDataAvailable">Data available: %1$d bytes</string>
+  <string name="StoryGraphLoading">Loading…</string>
+  <string name="StoryGraphError">Error: %1$s</string>
+  <string name="StoryError">Error: %1$s</string>
+  <string name="ViewersAndMore">… and %1$d more</string>
+  <string name="StorySelectUsersRequired">Please select at least one person</string>
+  <string name="StoryFileNotFound">File not found: %1$s</string>
+  <string name="StoryUnexpectedError">Unexpected error posting story</string>
+  <string name="Create">Create</string>
   <string name="FailureMessageText">This message could not be displayed because of an error. We are very sorry for that.\n\nPlease copy the scary error details below and submit them to @tgandroidtests so we can investigate the issue. Thank you!</string>
   <string name="PrivacyCallsP2PTitle2">Peer-to-Peer in Calls</string>
   <string name="PeerToPeerInfo">Disabling peer-to-peer will relay all calls through Telegram servers to avoid revealing your IP address, but may decrease audio quality.</string>
@@ -3219,21 +3484,21 @@
 
   <string name="json_ChatDemo">0</string>
 
-  <string name="ChangeLogText">**Telegram X** was updated to version %1$s\n\nBrief overview of new features:\n%2$s</string>
+  <string name="ChangeLogText">**Neurogram X** was updated to version %1$s\n\nBrief overview of new features:\n%2$s</string>
 
   <string name="LoginErrorOffline">You\'re currently offline. Please connect to the Internet in order to start messaging.</string>
   <string name="LoginErrorAirplane">You currently have airplane mode enabled. Please turn it off or connect to Wi-Fi in order to start messaging.</string>
-  <string name="LoginErrorLongConnecting">Telegram X is unable to quickly establish connection with the server.\n\nPlease check your network connection or wait until this pop-up disappears automatically.\n\nProxy servers may be helpful in accessing Telegram if there is no connection in your region.</string>
+  <string name="LoginErrorLongConnecting">Neurogram X is unable to quickly establish connection with the server.\n\nPlease check your network connection or wait until this pop-up disappears automatically.\n\nProxy servers may be helpful in accessing Telegram if there is no connection in your region.</string>
 
   <string name="HelpEmailError">Please send an email to %1$s and tell us about your problem</string>
 
   <string name="email_SmsHelp">sms@telegram.org</string>
   <string name="email_LoginHelp">recover@telegram.org</string>
 
-  <string name="email_LoginTooLong_subject">Telegram X connection issue</string>
-  <string name="email_LoginTooLong_text">My Internet service provider is: (please enter the name)\n\nI\'ve just installed the application and tried to start messaging, but Telegram X is unable to connect to the server. Please help.\n\nApp version: %1$s\nLanguage: %2$s\nAwait time: %3$s\nSystem Language: %4$s\nSystem Version: %5$s</string>
+  <string name="email_LoginTooLong_subject">Neurogram X connection issue</string>
+  <string name="email_LoginTooLong_text">My Internet service provider is: (please enter the name)\n\nI\'ve just installed the application and tried to start messaging, but Neurogram X is unable to connect to the server. Please help.\n\nApp version: %1$s\nLanguage: %2$s\nAwait time: %3$s\nSystem Language: %4$s\nSystem Version: %5$s</string>
 
-  <string name="email_LoginDeadEnd_subject">Telegram X SMS not sent: %1$s</string>
+  <string name="email_LoginDeadEnd_subject">Neurogram X SMS not sent: %1$s</string>
   <string name="email_LoginDeadEnd_text">My Internet service provider is: (please enter the name)\n\nI\'m trying to use my mobile phone number: %1$s\nBut Telegram could not send me SMS with the confirmation code. Please help.\n\nBelow are all details that might help understanding the issue.\nError: %3$s\n%2$s</string>
 
   <string name="email_InvalidNumber_subject">Invalid phone number: %1$s</string>
@@ -3242,7 +3507,7 @@
   <string name="email_BannedNumber_subject">Banned phone number: %1$s</string>
   <string name="email_BannedNumber_text">I\'m trying to use my mobile phone number: %1$s\nBut Telegram says it\'s banned. Please help.</string>
 
-  <string name="email_LoginError_subject">Telegram X error: %1$s</string>
+  <string name="email_LoginError_subject">Neurogram X error: %1$s</string>
   <string name="email_LoginError_text">I\'m trying to use my mobile phone number: %1$s\nBut Telegram shows an error. Please help.\nError: %2$s</string>
 
   <string name="email_metadata">App version: %1$s\nLanguage: %2$s\nSystem Language: %3$s\nSystem Version: %4$s</string>
@@ -3332,7 +3597,7 @@
   <string name="ColorHue">H</string>
   <string name="ColorSaturation">S</string>
   <string name="ColorLightness">L</string>
-  <string name="ColorAlphaPercentage">A%</string>
+  <string name="ColorAlphaPercentage">A%%</string>
 
   <string name="ThemeEditName">Edit Name</string>
   <string name="ThemeEditWallpaper">Edit Wallpaper</string>
@@ -3675,15 +3940,15 @@
   <string name="NotificationsGuideBlockedApp">Notifications from Telegram are blocked in system settings. Tap System Notification Settings to unblock them.</string>
   <string name="NotificationsGuideBlockedCategory">Notifications for the current account are disabled in system settings.\n\nTo enable notifications:\n• Tap System Notification Settings\n• Find the "%1$s" notification category\n• Turn the toggle on to unblock notifications.</string>
   <string name="NotificationsGuideBlockedAll">Notifications from Telegram are blocked in your device settings.\n\nTo enable notifications:\n• Tap System Notification Settings.\n• Turn on Show Notifications.</string>
-  <string name="NotificationsGuidePermission">Notifications from Telegram are blocked in your system settings.\n\nTo enable notifications:\n• Go to system settings – Applications – Telegram X.\n• Tap Notifications – Allow notifications.</string>
+  <string name="NotificationsGuidePermission">Notifications from Telegram are blocked in your system settings.\n\nTo enable notifications:\n• Go to system settings – Applications – Neurogram X.\n• Tap Notifications – Allow notifications.</string>
   <string name="NotificationsGuideSyncGlobalOff">You have data sync turned off in system settings. Notifications may not arrive when app is closed.\n\nData sync may be implicitly turned off by the battery optimization mode on your device.</string>
-  <string name="NotificationsGuideSyncAppOff">You have data sync turned off for Telegram X. Notifications may not arrive when app is closed.\n\nData sync may be implicitly turned off by the battery optimization mode on your device.</string>
+  <string name="NotificationsGuideSyncAppOff">You have data sync turned off for Neurogram X. Notifications may not arrive when app is closed.\n\nData sync may be implicitly turned off by the battery optimization mode on your device.</string>
   <string name="NotificationsGuideFirebaseUnavailable">Google Play Services are unavailable. Please check you have them installed and up-to-date.\n\nNotifications may arrive with big delays or not arrive at all without them.</string>
-  <string name="NotificationsGuideFirebaseError">**Firebase Services** have failed to function properly due to error: %1$s\n\nNotifications may arrive with big delays or not arrive at all without them.\n\nPlease make sure:\n• Google Play Services are installed and up-to-date: https://support.google.com/googleplay/answer/9037938?hl=en\n• Telegram X is up-to-date\n• Firebase services are enabled\n• They are not blocked by your Internet service or DNS provider\n• If you have firewall or ad blocking software, Firebase domains are whitelisted\n• You can see 404 message in a browser on this page: https://firebaseinstallations.googleapis.com/\n• System date and time is correct\n• Problem doesn\'t go away after restarting your device\n• All system updates are installed\n• You are using the **official** version of Telegram X: @tgx_log\n\nIf the steps above do not help, try again with VPN that you trust, as it might be caused by Internet censorship applied by authorities in your region.</string>
-  <string name="NotificationsGuideError">**Telegram X** was unable to display some notifications for this account due to an unknown system error.\n\nPlease make sure:\n• All system updates are installed\n• Telegram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to share the detailed error report to @tgandroidtests, or look up for troubleshooting tips for your device.</string>
-  <string name="NotificationsGuideErrorChat">**Telegram X** was unable to display some notifications from %1$s due to an unknown system error.\n\nPlease make sure:\n• All system updates are installed\n• Telegram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to share the detailed error report to @tgandroidtests, or look up for troubleshooting tips for your device.</string>
-  <string name="NotificationsGuideCategoryLimit">**Telegram X** was unable to display some notifications for this account due to notification categories system limit.\n\nPlease make sure:\n• All system updates are installed\n• Telegram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to ask @tgandroidtests for troubleshooting tips for your device, or re-install Telegram X, which should help resolving this error, but requires logging in to your account again.</string>
-  <string name="NotificationsGuideCategoryLimitErrorChat">**Telegram X** was unable to display some notifications from %1$s due to notification categories system limit.\n\nPlease make sure:\n• All system updates are installed\n• Telegram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to ask @tgandroidtests for troubleshooting tips for your device, or re-install Telegram X, which should help resolving this error, but requires logging in to your account again.</string>
+  <string name="NotificationsGuideFirebaseError">**Firebase Services** have failed to function properly due to error: %1$s\n\nNotifications may arrive with big delays or not arrive at all without them.\n\nPlease make sure:\n• Google Play Services are installed and up-to-date: https://support.google.com/googleplay/answer/9037938?hl=en\n• Neurogram X is up-to-date\n• Firebase services are enabled\n• They are not blocked by your Internet service or DNS provider\n• If you have firewall or ad blocking software, Firebase domains are whitelisted\n• You can see 404 message in a browser on this page: https://firebaseinstallations.googleapis.com/\n• System date and time is correct\n• Problem doesn\'t go away after restarting your device\n• All system updates are installed\n• You are using the **official** version of Neurogram X: @tgx_log\n\nIf the steps above do not help, try again with VPN that you trust, as it might be caused by Internet censorship applied by authorities in your region.</string>
+  <string name="NotificationsGuideError">**Neurogram X** was unable to display some notifications for this account due to an unknown system error.\n\nPlease make sure:\n• All system updates are installed\n• Neurogram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to share the detailed error report to @tgandroidtests, or look up for troubleshooting tips for your device.</string>
+  <string name="NotificationsGuideErrorChat">**Neurogram X** was unable to display some notifications from %1$s due to an unknown system error.\n\nPlease make sure:\n• All system updates are installed\n• Neurogram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to share the detailed error report to @tgandroidtests, or look up for troubleshooting tips for your device.</string>
+  <string name="NotificationsGuideCategoryLimit">**Neurogram X** was unable to display some notifications for this account due to notification categories system limit.\n\nPlease make sure:\n• All system updates are installed\n• Neurogram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to ask @tgandroidtests for troubleshooting tips for your device, or re-install Neurogram X, which should help resolving this error, but requires logging in to your account again.</string>
+  <string name="NotificationsGuideCategoryLimitErrorChat">**Neurogram X** was unable to display some notifications from %1$s due to notification categories system limit.\n\nPlease make sure:\n• All system updates are installed\n• Neurogram X is up-to-date\n• There are no notification restrictions in system settings.\n\nIf the steps above do not help, you might want to ask @tgandroidtests for troubleshooting tips for your device, or re-install Neurogram X, which should help resolving this error, but requires logging in to your account again.</string>
   <string name="TurnSyncOnApp">Turn on data sync</string>
   <string name="TurnSyncOnSystem">Turn on data sync</string>
   <string name="InstallGooglePlayServices">Get Google Play Services</string>
@@ -3793,19 +4058,19 @@
   <string name="LaunchAppUserSubtitle">offline</string>
 
   <string name="LaunchSubtitleDiskFull">Disk storage is full</string>
-  <string name="LaunchAppGuideDiskFull">Telegram X has previously failed to launch because the device storage was full.\n\nMake sure there\'s enough storage space available and press **Launch App** to try again.\n\nCurrently available: %1$s</string>
+  <string name="LaunchAppGuideDiskFull">Neurogram X has previously failed to launch because the device storage was full.\n\nMake sure there\'s enough storage space available and press **Launch App** to try again.\n\nCurrently available: %1$s</string>
 
   <string name="LaunchSubtitleDatabaseBroken">Corrupted database</string>
-  <string name="LaunchAppGuideDatabaseBroken">Telegram X has previously failed to launch because TDLib data has been corrupted. This could have happened because of device storage failure.\n\nPress **Launch App** to continue. If application keeps failing, follow these steps:\n\n• Check you have enough disk space available: **%1$s**.\n• Ensure there are no other storage issues, such as SD-card being ejected or unrecognized.\n• Restart your device.\n\nIf this does not help, you may want to look for similar issues on [TDLib\'s GitHub page](https://github.com/tdlib/td/issues) for possible resolutions, or create a new one, including error message and device details.</string>
+  <string name="LaunchAppGuideDatabaseBroken">Neurogram X has previously failed to launch because TDLib data has been corrupted. This could have happened because of device storage failure.\n\nPress **Launch App** to continue. If application keeps failing, follow these steps:\n\n• Check you have enough disk space available: **%1$s**.\n• Ensure there are no other storage issues, such as SD-card being ejected or unrecognized.\n• Restart your device.\n\nIf this does not help, you may want to look for similar issues on [TDLib\'s GitHub page](https://github.com/tdlib/td/issues) for possible resolutions, or create a new one, including error message and device details.</string>
 
   <string name="LaunchSubtitleExternalError">External error</string>
-  <string name="LaunchAppGuideExternalError">Telegram X has previously failed to launch because of device error.\n\nPress **Launch App** to try again. If application keeps failing, follow these steps:\n\n• Check you have enough disk space available: **%1$s**.\n• Ensure there are no other storage issues, such as SD-card being ejected or unrecognized.\n• Restart your device.\n\nIf this does not help, you may want to look for similar issues on [TDLib\'s GitHub page](https://github.com/tdlib/td/issues) for possible resolutions, or create a new one, including error message and device details.</string>
+  <string name="LaunchAppGuideExternalError">Neurogram X has previously failed to launch because of device error.\n\nPress **Launch App** to try again. If application keeps failing, follow these steps:\n\n• Check you have enough disk space available: **%1$s**.\n• Ensure there are no other storage issues, such as SD-card being ejected or unrecognized.\n• Restart your device.\n\nIf this does not help, you may want to look for similar issues on [TDLib\'s GitHub page](https://github.com/tdlib/td/issues) for possible resolutions, or create a new one, including error message and device details.</string>
 
   <string name="LaunchSubtitleTdlibIssue">TDLib fatal error. Version: %1$s</string>
-  <string name="LaunchAppGuideTdlibIssue">Telegram X has previously failed to launch because of TDLib fatal error.\n\nPress **Launch App** to try again. If application continues to fail, follow these steps:\n\n• [Verify](%2$s) you have the latest Telegram X version installed.\n• Restart your device.\n\n**If the steps above do not help**\n\n1. Share error details with TDLib developers using one of the following ways:\n— Privately via [@tdlib_bot](https://t.me/tdlib_bot) by using another device or [Telegram Web](https://web.telegram.org/).\n— Publicly via [GitHub page](https://github.com/tdlib/td/issues). **Do not** share **tdlib_log.txt** publicly.\n2. Kindly wait for the response.\n3. Change log settings below as requested by TDLib developers.\n4. Press **Launch App** to make app force stop again.\n5. Share **tdlib_log.txt** with TDLib developers and wait for the problem to be resolved.\n6. Once updated, you\'ll be able to launch app normally.\n\n**Alternative options**\n\n• Search for similar issues on [GitHub](https://github.com/tdlib/td/issues) to see if there are common solutions.\n• Reinstall the app. Secret chats will be lost. If you use same phone number you were logged in, all other chats and data will be restored from the Telegram cloud.</string>
+  <string name="LaunchAppGuideTdlibIssue">Neurogram X has previously failed to launch because of TDLib fatal error.\n\nPress **Launch App** to try again. If application continues to fail, follow these steps:\n\n• [Verify](%2$s) you have the latest Neurogram X version installed.\n• Restart your device.\n\n**If the steps above do not help**\n\n1. Share error details with TDLib developers using one of the following ways:\n— Privately via [@tdlib_bot](https://t.me/tdlib_bot) by using another device or [Telegram Web](https://web.telegram.org/).\n— Publicly via [GitHub page](https://github.com/tdlib/td/issues). **Do not** share **tdlib_log.txt** publicly.\n2. Kindly wait for the response.\n3. Change log settings below as requested by TDLib developers.\n4. Press **Launch App** to make app force stop again.\n5. Share **tdlib_log.txt** with TDLib developers and wait for the problem to be resolved.\n6. Once updated, you\'ll be able to launch app normally.\n\n**Alternative options**\n\n• Search for similar issues on [GitHub](https://github.com/tdlib/td/issues) to see if there are common solutions.\n• Reinstall the app. Secret chats will be lost. If you use same phone number you were logged in, all other chats and data will be restored from the Telegram cloud.</string>
 
   <string name="LaunchSubtitleFatalError">Unexpected error</string>
-  <string name="LaunchAppGuideFatalError">Telegram X has closed unexpectedly the last time you were using it.\n\nPress **Launch App** to try again.</string>
+  <string name="LaunchAppGuideFatalError">Neurogram X has closed unexpectedly the last time you were using it.\n\nPress **Launch App** to try again.</string>
 
   <string name="SelfDestructPhoto">Self-Destruct Photo</string>
   <string name="SelfDestructVideo">Self-Destruct Video</string>
@@ -3871,7 +4136,7 @@
   <string name="SettingsAndThemes">Settings and Themes</string>
 
   <string name="Paints">Drawings</string>
-  <string name="PaintsInfo">Telegram X remembers vector drawings you made via the in-app image editor for possible future use.\n\nWould you like to make Telegram X unsee them?</string>
+  <string name="PaintsInfo">Neurogram X remembers vector drawings you made via the in-app image editor for possible future use.\n\nWould you like to make Neurogram X unsee them?</string>
 
   <string name="JunkFiles">Unused Files</string>
   <string name="JunkFilesInfo">Service files that were created while using some features or older app versions.</string>
@@ -3881,7 +4146,7 @@
   <string name="ShowOtherChats">Show Other Chats</string>
 
   <string name="UseSystemFonts">Use System Fonts</string>
-  <string name="UseSystemFontsHint">**Warning!**\n\nTelegram X does not guarantee proper rendering of system fonts.</string>
+  <string name="UseSystemFontsHint">**Warning!**\n\nNeurogram X does not guarantee proper rendering of system fonts.</string>
 
   <string name="RestartEffect">Restart the app for this to take effect.</string>
 
@@ -3981,7 +4246,7 @@
   <string name="ChatBannedUntil">Admins have banned you in this group until %1$s</string>
 
   <string name="UpgradeChatPrompt">To perform this action, this chat will be converted to supergroup.\n\n**Note**: new members will not see messages sent before the conversion.</string>
-  <string name="AppUpdateReady">Telegram X is ready to be updated.</string>
+  <string name="AppUpdateReady">Neurogram X is ready to be updated.</string>
   <string name="AppUpdateRestart">Restart</string>
   <string name="AppUpdateInstall">Update</string>
 
@@ -4857,10 +5122,10 @@
   <string name="DownloadUpdateSize">Download update (%1$s)</string>
   <string name="DownloadUpdate">Download update</string>
   <string name="UpdateSourceChanges">View source code changes</string>
-  <string name="AppUpdateAvailablePrompt">A new **Telegram X** update is available. Would you like to download? (%1$s)</string>
-  <string name="AppUpdateAvailableVersionPrompt">A new **Telegram X** `%2$s` update is available. Would you like to download? (%1$s)</string>
+  <string name="AppUpdateAvailablePrompt">A new **Neurogram X** update is available. Would you like to download? (%1$s)</string>
+  <string name="AppUpdateAvailableVersionPrompt">A new **Neurogram X** `%2$s` update is available. Would you like to download? (%1$s)</string>
 
-  <string name="AppSignature">**Telegram X** `%1$s`</string>
+  <string name="AppSignature">**Neurogram X** `%1$s`</string>
 
   <string name="ScanQR">Scan QR</string>
   <string name="ScanQRLogInInfo">Use camera to sign in on the desktop app.</string>
@@ -4994,7 +5259,7 @@
   <string name="ChatBackgroundTypeMulticolor">multicolor gradient</string>
   <string name="ChatBackgroundBlur">Blurred</string>
 
-  <string name="NoCloudThemeSupport">This theme is not designed for **Telegram X**.\n\nHowever, you may check for user-made themes in @tgx_perfection.</string>
+  <string name="NoCloudThemeSupport">This theme is not designed for **Neurogram X**.\n\nHowever, you may check for user-made themes in @tgx_perfection.</string>
 
   <string name="TransferOwnershipSecurityAlert">Security Check</string>
   <string name="TransferOwnershipSecurityPasswordNeeded">Sorry, but you can only transfer ownership if you have set up **Two-Step Verification** on your Telegram account.</string>
@@ -5208,12 +5473,12 @@
   <string name="SessionTerminatesCustomAlertTitle">Number of Days</string>
   <string name="SessionTerminatesCustomAlertHint">Accepted from 1 to 366</string>
 
-  <string name="LocationAlertBot">To make a location-based search via %1$s, allow Telegram X access to your location.</string>
-  <string name="LocationAlertBotDisclaimer">Note that Telegram X does not have any control over how the location data is processed by %1$s.</string>
-  <string name="LocationAlertLiveLocation">To send a Live Location, allow Telegram X access to your location in the background. This feature will send a message with your location that will be updated in real time for the duration you choose even if you\'re not using the app. You can stop Live Location at any time.</string>
-  <string name="LocationAlertSunriseSunset">To calculate sunrise and sunset times, allow Telegram X access to your location.</string>
-  <string name="LocationAlertLocation">To send a nearby place or your location, allow Telegram X access to your location.</string>
-  <string name="LocationAlertLocationDisclaimer">Telegram X does not use location data for any hidden purposes, and accesses it only by your explicit request.</string>
+  <string name="LocationAlertBot">To make a location-based search via %1$s, allow Neurogram X access to your location.</string>
+  <string name="LocationAlertBotDisclaimer">Note that Neurogram X does not have any control over how the location data is processed by %1$s.</string>
+  <string name="LocationAlertLiveLocation">To send a Live Location, allow Neurogram X access to your location in the background. This feature will send a message with your location that will be updated in real time for the duration you choose even if you\'re not using the app. You can stop Live Location at any time.</string>
+  <string name="LocationAlertSunriseSunset">To calculate sunrise and sunset times, allow Neurogram X access to your location.</string>
+  <string name="LocationAlertLocation">To send a nearby place or your location, allow Neurogram X access to your location.</string>
+  <string name="LocationAlertLocationDisclaimer">Neurogram X does not use location data for any hidden purposes, and accesses it only by your explicit request.</string>
 
   <string name="RequestToJoinGroupInfo">This group accepts new members only after they are being accepted by admins.</string>
   <string name="RequestToJoinChannelInfo">This channel accepts new subscribers only after they are approved by its admins.</string>
@@ -5242,7 +5507,7 @@
   <string name="xPRs_other">%1$s PRs</string>
   <string name="PR">PR #%1$d</string>
 
-  <string name="OpenSourceGuide">**Telegram X** is open source. You can view the exact source code used to make the version you have installed.</string>
+  <string name="OpenSourceGuide">**Neurogram X** is open source. You can view the exact source code used to make the version you have installed.</string>
 
   <string name="ResetPasswordWait">You recently requested a password reset that was canceled. Please wait %1$s before making a new request.</string>
   <string name="RestorePasswordNoEmailText2">Since you didn’t provide a recovery email when setting up your password, your remaining options are either to remember your password or wait 7 days until your password is reset.</string>
@@ -5255,7 +5520,7 @@
   <string name="CancelPasswordResetYes">YES</string>
 
   <string name="ExperimentalBuildTitle">Caution: experimental build</string>
-  <string name="ExperimentalBuildInfo">This version of **Telegram X** is not designed for long-term use.\n\nIt may completely stop working over a time and you cannot turn notifications on.\n\nIf you are looking for the proper Telegram X APK file, see https://t.me/tgx_log</string>
+  <string name="ExperimentalBuildInfo">This version of **Neurogram X** is not designed for long-term use.\n\nIt may completely stop working over a time and you cannot turn notifications on.\n\nIf you are looking for the proper Neurogram X APK file, see https://t.me/tgx_log</string>
 
   <string name="PremiumRequiredSticker">Sending this sticker requires a **Telegram Premium** subscription.</string>
   <string name="PremiumRequiredVoiceVideo">This setting requires a **Telegram Premium** subscription.</string>
@@ -5608,7 +5873,7 @@
   <string name="SwipeToSwapLinkPreview">Swipe to choose specific link preview</string>
 
   <string name="MessageRestrictedByTelegram">This is a service message from Telegram</string>
-  <string name="MessageUnsupportedHint">This message is unsupported in the installed version of Telegram X.</string>
+  <string name="MessageUnsupportedHint">This message is unsupported in the installed version of Neurogram X.</string>
 
   <string name="ConfirmPasswordAlertHint">Please enter your 2-Step verification password to confirm the action.</string>
   <string name="DeleteAccountReason">Reason</string>
@@ -5747,8 +6012,8 @@
   <string name="GiveawayInfoClose">Close</string>
   <string name="GiveawayViewMyPrize">View my prize</string>
 
-  <string name="EmulatorWarning">You are running **Telegram X** on an **emulated device**.\n\n**Note**: if you don\'t have an **existing** Telegram account, you may need a **real device** to create it.\n\nIn case you see this warning on a real device (such as phone, tablet, etc), press **report issue**.</string>
-  <string name="EmulatorWarningStrict">You are running **Telegram X** on an **emulated device**.\n\n**Note**: if you don\'t have an **existing** Telegram account, you may need a **real device** to create it.\n\nIf you have your phone connected to a PC, disconnect it and restart Telegram X.</string>
+  <string name="EmulatorWarning">You are running **Neurogram X** on an **emulated device**.\n\n**Note**: if you don\'t have an **existing** Telegram account, you may need a **real device** to create it.\n\nIn case you see this warning on a real device (such as phone, tablet, etc), press **report issue**.</string>
+  <string name="EmulatorWarningStrict">You are running **Neurogram X** on an **emulated device**.\n\n**Note**: if you don\'t have an **existing** Telegram account, you may need a **real device** to create it.\n\nIf you have your phone connected to a PC, disconnect it and restart Neurogram X.</string>
   <string name="EmulatorWarningTitle">Emulator detected</string>
   <string name="EmulatorWarningBtnReport">Report issue</string>
   <string name="EmulatorWarningBtnOk">Got it</string>
@@ -5909,4 +6174,620 @@
   <string name="RestrictedContent">Restricted Content</string>
   <string name="SensitiveContent">Sensitive Content</string>
 
+  <string name="ProfileNote">Note</string>
+
+  <string name="SavedMessagesTagLabel">Tag Label</string>
+  <string name="SavedMessagesTagLabelHint">Enter a label for this tag (up to 12 characters)</string>
+  <string name="SavedMessagesTagLabelPremiumRequired">Tag labels require a **Telegram Premium** subscription.</string>
+
+  <!-- RESOLUTION STRING SECTION -->
+
+  <string name="ResolutionOption">Photo Resolution Selector</string>
+  <string name="ResolutionDesc">Resolution Selector (Experimental): Possible instability or app crashes.</string>
+  <string name="ResolutionLow">Low (800px)</string>
+  <string name="ResolutionMedium">Medium (1280px)</string>
+  <string name="ResolutionHigh">High (2560px)</string>
+
+  <!-- CLEAR CALLS STRING SECTION -->
+
+  <string name="AreYouSureClearCalls">Do you want to delete all recent calls?</string>
+  <string name="ClearRecentCalls">Clear recent calls</string>
+
+  <!-- MESSAGES FILTER STRING SECTION -->
+
+  <string name="MessagesFilter">Messages Filter</string>
+  <string name="MessagesFilterDesc">When enabled, content of messages that match at least one of the criteria below, will be hidden and minimized.</string>
+
+  <string name="MessagesFilterGroupsAndChats">Groups and Chats</string>
+  <string name="MessagesFilterHideBlockedSenders">Blocked senders in groups</string>
+  <string name="MessagesFilterHideBlockedSendersDesc">Hide message content in group chats, if it comes from a blocked sender.</string>
+  <string name="MessagesFilterHideBlockedSendersMentions">Mentions of blocked chats</string>
+  <string name="MessagesFilterHideBlockedSendersMentionsDesc">Hide message content, if it includes a reply, mention or direct link to the blocked chat.</string>
+
+  <string name="MessagesFilterChannels">Channels</string>
+  <string name="MessagesFilterChannelsManage">Manage Filtered Channels</string>
+  <string name="MessagesFilterFilteredChannels">Filtered Channels</string>
+  <string name="MessagesFilterBlockedSendersManage">Manage Blocked Senders</string>
+
+  <string name="MessagesFilterShowMessage">Show Message</string>
+
+  <string name="ChatMessagesFilterInfo">Hides all messages with links to other chats, channels or external sites.</string>
+  <string name="ChatMessagesFilterInternal">Telegram links</string>
+  <string name="ChatMessagesFilterExternal">External links</string>
+  <string name="ChatMessagesFilterNone">None</string>
+
+  <string name="MessagesFilterUnknownChat">Unknown Chat</string>
+
+  <!-- COMMUNITY FEATURES STRING SECTION -->
+
+  <string name="CommunityFeatures">Community Features</string>
+  <string name="CommunityFeaturesDesc">Optional features adapted from community forks. All features are disabled by default.</string>
+
+  <string name="CommunityAppearance">Appearance</string>
+  <string name="HidePhoneNumber">Hide phone number</string>
+  <string name="SquareAvatars">Square avatars</string>
+  <string name="BlurDrawer">Blur drawer background</string>
+  <string name="RoundedStickers">Rounded stickers</string>
+
+  <string name="CommunityChatFeatures">Chat</string>
+  <string name="DisableReactions">Disable reactions</string>
+  <string name="HideStickerTimestamp">Hide sticker timestamp</string>
+  <string name="RememberSendOptions">Remember send options</string>
+  <string name="RememberSendOptionsDesc">Remember silent/scheduled message settings between sessions.</string>
+
+  <string name="CommunityInputButtons">Input Buttons</string>
+  <string name="DisableCameraButton">Hide camera button</string>
+  <string name="DisableRecordButton">Hide voice record button</string>
+
+  <string name="CommunityProfile">Profile</string>
+  <string name="ShowIdInProfile">Show ID in profile</string>
+  <string name="ShowIdInProfileDesc">Display user and chat IDs in profile pages.</string>
+
+  <string name="ReplyInOtherChat">Reply in other chat</string>
+  <string name="QuoteInOtherChat">Quote in other chat</string>
+
+  <string name="GiftStarsTooLow">You don\'t have enough Stars to complete this. Buy more Stars?</string>
+  <!-- TON (Toncoin) transaction history (Slice 9) -->
+  <string name="TonTransactions">TON Transactions</string>
+  <string name="NoTonTransactions">No TON transactions yet</string>
+  <string name="TonBalance">Your TON balance</string>
+  <string name="TonTxFragmentDeposit">Fragment deposit</string>
+  <string name="TonTxFragmentWithdrawal">Fragment withdrawal</string>
+  <string name="TonTxSuggestedPost">Suggested post</string>
+  <string name="TonTxGiftOffer">Gift purchase offer</string>
+  <string name="TonTxGiftPurchase">Gift purchase</string>
+  <string name="TonTxGiftSale">Gift sale</string>
+  <string name="TonTxStakeDice">Dice stake</string>
+  <string name="TonTxStakeDicePayout">Dice payout</string>
+  <string name="TonTxUnknown">Transaction</string>
+  <string name="ShowAddStoryBorderInfo">Display gradient ring around the \"Add Story\" button.</string>
+  <string name="GiftReceived">Gift Received</string>
+  <string name="GiftSent">Gift Sent</string>
+  <string name="GiftConverted">Gift Converted</string>
+  <string name="GiftUpgraded">Gift Upgraded</string>
+  <string name="GiftRefunded">Gift Refunded</string>
+  <string name="ViewGift">View Gift</string>
+  <string name="xGiftValue_one">Worth %1$s Telegram Star</string>
+  <string name="xGiftValue_other">Worth %1$s Telegram Stars</string>
+  <string name="xGiftCanBeSold_one">Can be converted to %1$s Star</string>
+  <string name="xGiftCanBeSold_other">Can be converted to %1$s Stars</string>
+  <!-- Received gifts surface (profile) -->
+  <string name="Gifts">Gifts</string>
+  <string name="xGifts_one">%1$s Gift</string>
+  <string name="xGifts_other">%1$s Gifts</string>
+  <string name="GiftsNone">No gifts yet</string>
+  <string name="GiftDetails">Gift</string>
+  <string name="GiftPrivate">Hidden sender</string>
+  <string name="GiftSave">Display on my page</string>
+  <string name="GiftUnsave">Hide from my page</string>
+  <string name="GiftPin">Pin to top</string>
+  <string name="GiftUnpin">Unpin</string>
+  <string name="GiftDisplayedOnPage">Displayed on your page</string>
+  <string name="GiftHiddenFromPage">Hidden from your page</string>
+  <string name="GiftPinnedToTop">Pinned to the top of your page</string>
+  <string name="GiftUnpinned">Unpinned</string>
+  <string name="GiftPinFailed">Unable to pin this gift</string>
+  <!-- Sending gifts (Slice 3) -->
+  <string name="SendGift">Send a Gift</string>
+  <string name="GiftSoldOut">This gift is sold out</string>
+  <string name="GiftCannotSend">This gift can\'t be sent right now</string>
+  <string name="GiftMessageHint">Add a message (optional)</string>
+  <string name="SendGiftConfirm_one">Send this gift for %1$d Star?</string>
+  <string name="SendGiftConfirm_other">Send this gift for %1$d Stars?</string>
+  <!-- Convert (sell) a received gift -->
+  <string name="ConvertGiftToStars">Convert to Stars</string>
+  <string name="ConvertGiftConfirm_one">Convert this gift to %1$d Star? The gift will be removed.</string>
+  <string name="ConvertGiftConfirm_other">Convert this gift to %1$d Stars? The gift will be removed.</string>
+  <string name="GiftConvertedToStars">Gift converted to Stars</string>
+  <!-- Gift-receiving settings -->
+  <string name="GiftSettings">Gift Settings</string>
+  <string name="GiftShowButton">Show gift button</string>
+  <string name="GiftShowButtonDesc">Always show a button to send a gift in the input field.</string>
+  <string name="GiftAcceptedTypes">Accepted gift types</string>
+  <string name="GiftAcceptedTypesDesc">Choose which kinds of gifts you accept from others.</string>
+  <string name="GiftAcceptUnlimited">Unlimited gifts</string>
+  <string name="GiftAcceptLimited">Limited gifts</string>
+  <string name="GiftAcceptUpgraded">Upgraded gifts</string>
+  <string name="GiftAcceptChannels">Gifts from channels</string>
+  <string name="GiftAcceptPremium">Premium subscription</string>
+  <!-- Upgraded (collectible) gifts -->
+  <string name="UpgradedGiftNumber">Gift #%1$d of %2$d</string>
+  <string name="UpgradedGiftRarity">Rarity: %1$s</string>
+  <string name="UpgradedGiftRarityUncommon">Uncommon</string>
+  <string name="UpgradedGiftRarityRare">Rare</string>
+  <string name="UpgradedGiftRarityEpic">Epic</string>
+  <string name="UpgradedGiftRarityLegendary">Legendary</string>
+  <string name="UpgradedGiftPurchaseOffer">Purchase Offer</string>
+  <string name="UpgradedGiftOfferPrice">Price: %1$s</string>
+  <string name="UpgradedGiftOfferPending">Offer pending</string>
+  <string name="UpgradedGiftOfferAccepted">Offer accepted</string>
+  <string name="UpgradedGiftOfferRejected">Offer rejected</string>
+  <string name="UpgradedGiftOfferExpired">Offer expired</string>
+  <!-- Upgraded gift detail screen (Slice 4) -->
+  <string name="UpgradedGift">Collectible Gift</string>
+  <string name="UpgradedGiftCollectible">Collectible #%1$d of %2$d</string>
+  <string name="UpgradedGiftModel">Model</string>
+  <string name="UpgradedGiftSymbol">Symbol</string>
+  <string name="UpgradedGiftBackdrop">Backdrop</string>
+  <string name="UpgradedGiftAttribute">%1$s · %2$s</string>
+  <string name="UpgradedGiftOwner">Owner</string>
+  <string name="UpgradedGiftOriginalDetails">Original Details</string>
+  <string name="UpgradedGiftOriginalFromTo">%1$s → %2$s</string>
+  <string name="UpgradedGiftValue">Estimated Value</string>
+  <string name="UpgradedGiftValueAmount">%1$s %2$s</string>
+  <string name="UpgradedGiftActions">Actions</string>
+  <string name="UpgradedGiftTransfer">Transfer Gift</string>
+  <string name="UpgradedGiftWear">Wear Gift</string>
+  <string name="UpgradedGiftExport">Export to TON</string>
+  <string name="UpgradedGiftDropDetails">Drop Original Details</string>
+  <string name="UpgradedGiftWearDone">Color scheme applied.</string>
+  <string name="UpgradedGiftDropDetailsConfirm">Permanently remove the original sender, receiver and message from this gift?</string>
+  <string name="UpgradedGiftDropDetailsDone">Original details dropped.</string>
+  <string name="UpgradedGiftTransferTitle">Transfer Gift</string>
+  <string name="UpgradedGiftTransferHint">Enter the @username of the recipient.</string>
+  <string name="UpgradedGiftTransferConfirm">Transfer this gift to %1$s?</string>
+  <string name="UpgradedGiftTransferConfirmStars">Transfer this gift to %1$s for %2$s?</string>
+  <string name="UpgradedGiftTransferred">Gift transferred.</string>
+  <string name="UpgradedGiftTransferNoUser">User not found.</string>
+  <string name="UpgradedGiftExportUnavailable">NFT export requires 2-step verification and isn\'t available here yet.</string>
+  <string name="UpgradedGiftExportNeeds2FA">Exporting this gift to TON requires 2-step verification. Enable it in Settings → Privacy and Security first.</string>
+  <string name="GiftResale">Resale Market</string>
+  <string name="GiftResaleEmpty">No gifts are listed for resale right now.</string>
+  <string name="GiftResaleBrowse">Buy from Resale Market</string>
+  <string name="GiftResaleBuy">Buy Gift</string>
+  <string name="GiftResaleBuyConfirm">Buy %1$s for %2$s?</string>
+  <string name="GiftResaleSortFilter">Sort &amp; Filter</string>
+  <string name="GiftResaleSortPrice">Sort by price</string>
+  <string name="GiftResaleSortNumber">Sort by number</string>
+  <string name="GiftResaleSortDate">Sort by listing date</string>
+  <string name="GiftResaleFilterModel">Filter by model</string>
+  <string name="GiftResaleFilterSymbol">Filter by symbol</string>
+  <string name="GiftResaleFilterBackdrop">Filter by backdrop</string>
+  <string name="GiftResaleClearFilter">Clear filters</string>
+  <string name="GiftOfferDurationTitle">Offer valid for</string>
+  <string name="GiftOfferDuration1Day">1 day</string>
+  <string name="GiftOfferDuration3Days">3 days</string>
+  <string name="GiftOfferDuration1Week">1 week</string>
+  <string name="GiftOfferDuration1Month">1 month</string>
+  <string name="GiftResaleBought">Gift purchased.</string>
+  <string name="UpgradedGiftSell">Sell Gift</string>
+  <string name="UpgradedGiftListed">Listed for resale</string>
+  <string name="UpgradedGiftListedPrice">Listed for %1$s</string>
+  <string name="UpgradedGiftChangePrice">Change Price</string>
+  <string name="UpgradedGiftUnlist">Remove from Sale</string>
+  <string name="UpgradedGiftListed_done">Gift listed for resale.</string>
+  <string name="UpgradedGiftUnlisted">Gift removed from sale.</string>
+  <string name="UpgradedGiftMakeOffer">Make an Offer</string>
+  <string name="UpgradedGiftOfferSent">Offer sent.</string>
+  <string name="GiftResalePriceTitle">Set Resale Price</string>
+  <string name="GiftResalePriceHintStars">Enter a price in Stars.</string>
+  <string name="GiftResalePriceHintTon">Enter a price in TON (e.g. 1.50).</string>
+  <string name="GiftResalePriceInvalid">Enter a valid price.</string>
+  <string name="GiftPriceStars">Pay in Stars</string>
+  <string name="GiftPriceTon">Pay in TON</string>
+  <string name="GiftOfferRespond">Respond to Offer</string>
+  <string name="GiftOfferAccept">Accept Offer</string>
+  <string name="GiftOfferReject">Reject Offer</string>
+  <string name="GiftOfferAccepted_done">Offer accepted.</string>
+  <string name="GiftOfferRejected_done">Offer rejected.</string>
+  <!-- Upgrade a regular gift into a collectible (Slice 4) -->
+  <string name="UpgradeGift">Upgrade Gift</string>
+  <string name="UpgradeGiftFree">Upgrade this gift into a unique collectible with a model, symbol and backdrop?</string>
+  <string name="UpgradeGiftConfirm">Upgrade this gift into a unique collectible for %1$s?</string>
+  <string name="UpgradeGiftKeepDetails">Keep original sender and message</string>
+  <string name="UpgradeGiftDone">Gift upgraded.</string>
+  <string name="RefundedGift">Refunded Gift</string>
+  <string name="RefundedGiftDesc">This gift was refunded.</string>
+  <string name="GiftedTonAmount">%1$s TON</string>
+  <!-- Gift auctions (Slice 6) -->
+  <string name="GiftAuctions">Gift Auctions</string>
+  <string name="GiftAuction">Auction</string>
+  <string name="GiftAuctionsEmpty">You are not taking part in any gift auctions right now.</string>
+  <string name="GiftAuctionMinBid">Minimum bid</string>
+  <string name="GiftAuctionYourBid">Your bid</string>
+  <string name="GiftAuctionNextBid">Next bid from</string>
+  <string name="GiftAuctionRound">Round</string>
+  <string name="GiftAuctionRoundOf">Round %1$d of %2$d</string>
+  <string name="GiftAuctionRoundEnds">Round ends in</string>
+  <string name="GiftAuctionEnds">Auction ends in</string>
+  <string name="GiftAuctionStarts">Auction starts in</string>
+  <string name="GiftAuctionItemsLeft">Items left</string>
+  <string name="GiftAuctionItemsAcquired">Items you acquired</string>
+  <string name="GiftAuctionItemsDistributed">Items distributed</string>
+  <string name="GiftAuctionPlaceBid">Place Bid</string>
+  <string name="GiftAuctionRaiseBid">Raise Bid</string>
+  <string name="GiftAuctionBidHint">Enter your bid in Stars (at least %1$s).</string>
+  <string name="GiftAuctionRaiseHint">Enter your new bid in Stars (more than %1$s).</string>
+  <string name="GiftAuctionBidTooLow">Your bid is below the minimum.</string>
+  <string name="GiftAuctionRaiseTooLow">Your new bid must be higher than your current bid.</string>
+  <string name="GiftAuctionBidInvalid">Enter a valid amount of Stars.</string>
+  <string name="GiftAuctionBidPlaced">Bid placed.</string>
+  <string name="GiftAuctionBidRaised">Bid raised.</string>
+  <string name="GiftAuctionBidReturned">Your bid was outbid and returned.</string>
+  <string name="GiftAuctionFinished">Auction finished</string>
+  <string name="GiftAuctionAveragePrice">Average price</string>
+  <string name="GiftAuctionFragment">View on Fragment</string>
+  <string name="GiftAuctionNotFound">Auction not found.</string>
+  <string name="GiftCollections">Collections</string>
+  <string name="GiftCollectionAll">All</string>
+  <string name="GiftCollectionNew">New Collection</string>
+  <string name="GiftCollectionManage">Manage Collections</string>
+  <string name="GiftCollectionCreate">Create collection</string>
+  <string name="GiftCollectionRename">Rename collection</string>
+  <string name="GiftCollectionMoveLeft">Move left</string>
+  <string name="GiftCollectionMoveRight">Move right</string>
+  <string name="GiftCollectionDelete">Delete collection</string>
+  <string name="GiftCollectionNameHint">Collection name</string>
+  <string name="GiftCollectionNameInvalid">Enter a name of 1-12 characters.</string>
+  <string name="GiftCollectionCreated">Collection created.</string>
+  <string name="GiftCollectionRenamed">Collection renamed.</string>
+  <string name="GiftCollectionDeleted">Collection deleted.</string>
+  <string name="GiftCollectionDeleteConfirm">Delete the collection \"%1$s\"? The gifts themselves are not removed.</string>
+  <string name="GiftCollectionAddTo">Add to collection…</string>
+  <string name="GiftCollectionRemoveFrom">Remove from collection</string>
+  <string name="GiftCollectionGiftAdded">Added to collection.</string>
+  <string name="GiftCollectionGiftRemoved">Removed from collection.</string>
+  <string name="GiftCollectionPickTitle">Choose a collection</string>
+  <string name="GiftCollectionNotFound">Collection not found.</string>
+  <!-- Gift crafting (Slice 8) -->
+  <string name="GiftCraft">Craft Gift</string>
+  <string name="GiftCraftTitle">Craft a Gift</string>
+  <string name="GiftCraftEmpty">You don\'t have enough gifts of this kind to craft a new one.</string>
+  <string name="GiftCraftSelectHint">Select at least 2 gifts to combine into a new one.</string>
+  <string name="GiftCraftSelected_one">%1$d selected</string>
+  <string name="GiftCraftSelected_other">%1$d selected</string>
+  <string name="GiftCraftButton">Craft</string>
+  <string name="GiftCraftPrimaryHint">The crafted gift keeps the number of the primary gift (marked ★). Long-press a selected gift to set it as primary.</string>
+  <string name="GiftCraftSetPrimary">Set as primary (keep its number)</string>
+  <string name="GiftCraftPrimarySet">Primary gift set.</string>
+  <string name="GiftCraftOddsHint">Keeping a backdrop or symbol from your gifts becomes more likely the more matching gifts you combine.</string>
+  <string name="GiftCraftConfirm">Combine %1$d gifts into a new one? The other gifts will be permanently lost. This cannot be undone.</string>
+  <string name="GiftCraftConfirmButton">Craft Gift</string>
+  <string name="GiftCraftDone">Gift crafted.</string>
+  <string name="GiftCraftTooEarly">One of these gifts can\'t be crafted yet. Try again in %1$s.</string>
+  <string name="GiftCraftInvalidGift">One of the selected gifts can\'t be used for crafting.</string>
+  <string name="GiftCraftFailed">Crafting failed. Please try again.</string>
+  <string name="BoostsToNextLevel_one">%1$d boost to the next level</string>
+  <string name="BoostsToNextLevel_other">%1$d boosts to the next level</string>
+  <string name="ServiceProtectedContentOn">%1$s enabled content protection</string>
+  <string name="ChatListGiftedTon">TON gift</string>
+  <string name="ShowMore">Show more</string>
+  <string name="MakePrivate">Hide my name and message</string>
+  <string name="PayForUpgradeStars_one">Pay %1$d Star to allow upgrade</string>
+  <string name="PayForUpgradeStars_other">Pay %1$d Stars to allow upgrade</string>
+
+  <!-- MINI APPS STRING SECTION -->
+
+  <string name="Reload">Reload</string>
+  <string name="WebApp">Web App</string>
+  <string name="WebAppCloseConfirmation">Are you sure you want to close this app?</string>
+  <string name="WebAppDownloadFile">Download %1$s?</string>
+  <string name="WebAppEmojiStatusAccess">Allow this bot to set your emoji status?</string>
+  <string name="WebAppLocationAccess">Allow this bot to access your location?</string>
+  <string name="Close">Close</string>
+  <string name="Download">Download</string>
+  <string name="ShareYourPhoneNumberBot">Share your phone number with this bot?</string>
+
+  <!-- GROUP CALLS STRING SECTION -->
+
+  <string name="VoiceChat">Voice Chat</string>
+  <string name="VideoChat">Video chat</string>
+  <string name="GroupCallType">Type</string>
+  <string name="GroupCallStatus">Status</string>
+  <string name="GroupCallParticipants">Participants</string>
+  <string name="GroupCallSpeaking">Recently active</string>
+  <string name="GroupCallSpeakingNow">Speaking</string>
+  <string name="GroupCallActive">Live now</string>
+  <string name="GroupCallEnded">Ended</string>
+  <string name="GroupCallScheduledFor">Scheduled for %1$s</string>
+  <string name="GroupCallRtmp">Live stream (RTMP)</string>
+  <string name="GroupCallLiveStream">Live stream</string>
+  <string name="VoipOngoingGroupCall">Tap to return to the call</string>
+  <string name="GroupCallJoin">Join</string>
+  <string name="GroupCallLeave">Leave</string>
+  <string name="GroupCallMute">Mute</string>
+  <string name="GroupCallUnmute">Unmute</string>
+  <string name="GroupCallStartVideo">Start video</string>
+  <string name="GroupCallStopVideo">Stop video</string>
+  <string name="GroupCallStartScreen">Share screen</string>
+  <string name="GroupCallStopScreen">Stop screen sharing</string>
+  <string name="GroupCallSwitchCamera">Switch camera</string>
+  <string name="GroupCallConnecting">Connecting…</string>
+  <string name="GroupCallManage">Manage</string>
+  <string name="GroupCallStartNow">Start now</string>
+  <string name="GroupCallCopyInvite">Copy invite link</string>
+  <string name="GroupCallRename">Edit title</string>
+  <string name="GroupCallEnd">End call</string>
+  <string name="GroupCallEndConfirm">End this call for everyone?</string>
+  <string name="RtmpStream">Live stream</string>
+  <string name="RtmpServerUrl">Server URL</string>
+  <string name="RtmpStreamKey">Stream key</string>
+  <string name="RtmpStreamHint">Use these in your streaming app (e.g. OBS) to broadcast into the chat. Keep the stream key secret.</string>
+  <string name="RtmpRevoke">Revoke stream key</string>
+  <string name="RtmpRevokeConfirm">Revoke the current stream key and generate a new one? The old key will stop working.</string>
+  <string name="xParticipants_one">%1$s participant</string>
+  <string name="xParticipants_other">%1$s participants</string>
+
+  <!-- PARITY / BUSINESS / PAYMENTS / STORIES STRING SECTION -->
+
+  <string name="AddColor">Add color</string>
+  <string name="Appearance">Appearance</string>
+  <string name="AuthorHidden">Hidden Author</string>
+  <string name="Behavior">Behavior</string>
+  <string name="Boost">Boost</string>
+  <string name="BoostAlreadyBoosted">You\'re already boosting this chat</string>
+  <string name="BoostApplied">Boost applied!</string>
+  <string name="BoostHint">Boosts from your premium subscription help unlock new features for the chat.</string>
+  <string name="BoostLevel">Boost level</string>
+  <string name="BoostLevelStatus">Level %1$d · %2$d boosts</string>
+  <string name="BoostMaxLevel">This chat has reached the maximum boost level.</string>
+  <string name="BoostNoSlots">You have no boosts available.</string>
+  <string name="BoostPremiumMembers">%1$d premium subscribers (%2$d%%)</string>
+  <string name="BoostShareLink">Share boost link</string>
+  <string name="BoostThisChat">Boost this chat</string>
+  <string name="BusinessAwayMessage">Away Message</string>
+  <string name="BusinessChatLinkCreate">Create a link</string>
+  <string name="BusinessChatLinkDelete">Delete link</string>
+  <string name="BusinessChatLinkEdit">Edit link</string>
+  <string name="MediaDownloadFailed">Failed to download media</string>
+  <string name="HideGeneralTopic">Hide General Topic</string>
+  <string name="UnhideGeneralTopic">Unhide General Topic</string>
+  <string name="BusinessChatLinkText">Message text</string>
+  <string name="BusinessChatLinkTitle">Link title (optional)</string>
+  <string name="BusinessChatLinkViews_one">%1$d view</string>
+  <string name="BusinessChatLinkViews_other">%1$d views</string>
+  <string name="BusinessChatLinks">Chat Links</string>
+  <string name="BusinessChatLinksEmpty">You have no chat links yet.</string>
+  <string name="BusinessChatLinksHint">Create links that start a chat with you, complete with a ready-to-send message.</string>
+  <string name="BusinessEditUnavailable">Editing this from Neurogram X is coming soon. You can turn it off here.</string>
+  <string name="BusinessGreetingMessage">Greeting Message</string>
+  <string name="BusinessHint">Telegram Business lets you set up a business presence: opening hours, location, a custom start page, and automatic greeting and away messages.</string>
+  <string name="BusinessLocation">Location</string>
+  <string name="BusinessLocationAddress">Address</string>
+  <string name="BusinessLocationAddressRequired">Please enter an address first.</string>
+  <string name="BusinessLocationHint">Display the location of your business on your account.</string>
+  <string name="BusinessLocationMap">Set on map</string>
+  <string name="BusinessLocationMapSet">Point selected</string>
+  <string name="BusinessLocationMapEmpty">Not selected</string>
+  <string name="BusinessOpeningHours">Opening Hours</string>
+  <string name="BusinessEdit">Edit</string>
+  <string name="BusinessQuickReplyShortcut">Quick reply</string>
+  <string name="BusinessShortcutNone">Not selected</string>
+  <string name="BusinessShortcutEmpty">Create a quick reply first in Settings to use it here.</string>
+  <string name="BusinessTimeZone">Time zone</string>
+  <string name="BusinessTimeZoneDefault">Not set</string>
+  <string name="BusinessTimeZoneRequired">Please select a time zone.</string>
+  <string name="BusinessScheduleFutureDate">%1$s at %2$s</string>
+  <string name="BusinessHoursDays">Business hours</string>
+  <string name="BusinessHoursHint">Set the days and hours when your business is open.</string>
+  <string name="BusinessHoursClosed">Closed</string>
+  <string name="BusinessHoursMarkOpen">Open all day</string>
+  <string name="BusinessHoursMarkClosed">Closed</string>
+  <string name="BusinessHoursSetTime">Set hours</string>
+  <string name="BusinessHoursOpenTime">Opening time</string>
+  <string name="BusinessHoursCloseTime">Closing time</string>
+  <string name="BusinessHoursTimeFormat">HH:MM (24-hour)</string>
+  <string name="BusinessHoursInvalidTime">Please enter a valid time (e.g. 09:00).</string>
+  <string name="BusinessRecipients">Recipients</string>
+  <string name="BusinessRecipientsNone">No one</string>
+  <string name="BusinessRecipientsCategories">Who it applies to</string>
+  <string name="BusinessRecipientsExistingChats">All existing chats</string>
+  <string name="BusinessRecipientsNewChats">All new chats</string>
+  <string name="BusinessRecipientsContacts">Contacts</string>
+  <string name="BusinessRecipientsNonContacts">Non-contacts</string>
+  <string name="BusinessRecipientsExclude">Exclude selected</string>
+  <string name="BusinessRecipientsExcludeHint">When enabled, automatic messages are sent to everyone except the selected categories.</string>
+  <string name="BusinessRecipientsExcept">Everyone except %1$s</string>
+  <string name="BusinessGreetingShortcutHint">Sent automatically when someone messages you after a period of inactivity.</string>
+  <string name="BusinessGreetingInactivity">Send after</string>
+  <string name="BusinessGreetingInactivityHint">How long a chat must be inactive before the greeting is sent.</string>
+  <string name="BusinessGreetingInactivityValue_one">%1$d day</string>
+  <string name="BusinessGreetingInactivityValue_other">%1$d days</string>
+  <string name="BusinessAwayShortcutHint">Sent automatically when you\'re away.</string>
+  <string name="BusinessAwaySchedule">Schedule</string>
+  <string name="BusinessAwayScheduleAlways">Always</string>
+  <string name="BusinessAwayScheduleOutside">Outside of business hours</string>
+  <string name="BusinessAwayScheduleCustom">Custom schedule</string>
+  <string name="BusinessAwayScheduleCustomRange">%1$s – %2$s</string>
+  <string name="BusinessAwayScheduleStart">Start date</string>
+  <string name="BusinessAwayScheduleEnd">End date</string>
+  <string name="BusinessAwayScheduleInvalid">The end date must be after the start date.</string>
+  <string name="BusinessAwayOfflineOnly">Only if offline</string>
+  <string name="BusinessAwayOfflineOnlyHint">Don\'t send away messages if you were online in the last 10 minutes.</string>
+  <string name="BusinessChatbots">Chatbots</string>
+  <string name="BusinessChatbotsBot">Bot</string>
+  <string name="BusinessChatbotsBotHint">Enter the username of the bot you want to connect.</string>
+  <string name="BusinessChatbotsNone">No bot connected</string>
+  <string name="BusinessChatbotsHint">Add a bot to your account to help you automatically process and respond to the messages you receive.</string>
+  <string name="BusinessChatbotsNotABot">This username doesn\'t belong to a bot.</string>
+  <string name="BusinessChatbotsRights">What can this bot do?</string>
+  <string name="BusinessChatbotsRemove">Remove Bot</string>
+  <string name="BusinessChatbotsRemoveConfirm">Are you sure you want to disconnect this bot?</string>
+  <string name="BusinessChatbotsRightReply">Reply to messages</string>
+  <string name="BusinessChatbotsRightReadMessages">Mark messages as read</string>
+  <string name="BusinessChatbotsRightDeleteSent">Delete sent messages</string>
+  <string name="BusinessChatbotsRightDeleteAll">Delete any message</string>
+  <string name="BusinessChatbotsRightEditName">Edit account name</string>
+  <string name="BusinessChatbotsRightEditBio">Edit account bio</string>
+  <string name="BusinessChatbotsRightEditProfilePhoto">Edit profile photo</string>
+  <string name="BusinessChatbotsRightEditUsername">Edit account username</string>
+  <string name="BusinessChatbotsRightViewGifts">View gifts and Stars</string>
+  <string name="BusinessChatbotsRightSellGifts">Sell gifts</string>
+  <string name="BusinessChatbotsRightChangeGiftSettings">Change gift settings</string>
+  <string name="BusinessChatbotsRightTransferGifts">Transfer and upgrade gifts</string>
+  <string name="BusinessChatbotsRightTransferStars">Transfer Stars</string>
+  <string name="BusinessChatbotsRightManageStories">Manage stories</string>
+  <string name="JoinRequestChannelAdminNotice">**%1$s** is an administrator of the channel **%2$s** to which you sent a join request.</string>
+  <string name="JoinRequestGroupAdminNotice">**%1$s** is an administrator of the group **%2$s** to which you sent a join request.</string>
+  <string name="BusinessStartPage">Start Page</string>
+  <string name="BusinessStartPageHint">Customize the message people see before they start a chat with you.</string>
+  <string name="BusinessStartPageMessage">Message</string>
+  <string name="BusinessStartPageTitle">Title</string>
+  <string name="BusinessTurnOff">Turn off</string>
+  <string name="BusinessValueOff">Off</string>
+  <string name="BusinessValueOn">On</string>
+  <string name="DeleteSavedMessagesTopicConfirm">Delete this topic and all of its messages from Saved Messages?</string>
+  <string name="DownloadComplete">Completed</string>
+  <string name="DownloadPause">Pause</string>
+  <string name="DownloadPaused">Paused</string>
+  <string name="DownloadRemove">Remove from downloads</string>
+  <string name="DownloadResume">Resume</string>
+  <string name="DownloadsClearAll">Clear all downloads</string>
+  <string name="DownloadsEmpty">You have no downloads.</string>
+  <string name="Monetization">Monetization</string>
+  <string name="MonetizationAvailable">Available to withdraw</string>
+  <string name="MonetizationBalance">Star balance</string>
+  <string name="MonetizationCurrent">Current balance</string>
+  <string name="MonetizationHint">Stars earned from this chat can be withdrawn once available. The revenue chart is coming soon.</string>
+  <string name="MonetizationTotal">Total earned</string>
+  <string name="MonetizationWithdraw">Withdraw Stars</string>
+  <string name="MonetizationWithdraw2FARequired">Set up two-step verification before withdrawing Stars.</string>
+  <string name="MonetizationWithdrawUnavailable">Withdrawal isn\'t available yet.</string>
+  <string name="MyNotes">My Notes</string>
+  <string name="PaymentEmail">Email</string>
+  <string name="PaymentName">Name</string>
+  <string name="PaymentPhone">Phone number</string>
+  <string name="PaymentReceipt">Receipt</string>
+  <string name="PaymentReceiptDate">Date</string>
+  <string name="PaymentReceiptDescription">Description</string>
+  <string name="PaymentReceiptMethod">Payment method</string>
+  <string name="PaymentReceiptMethodSection">Payment method</string>
+  <string name="PaymentReceiptPrice">Price</string>
+  <string name="PaymentReceiptProduct">Product</string>
+  <string name="PaymentReceiptSeller">Seller</string>
+  <string name="PaymentReceiptTip">Tip</string>
+  <string name="PaymentReceiptTitle">Item</string>
+  <string name="PaymentReceiptTotal">Total</string>
+  <string name="PaymentReceiptTransaction">Transaction ID</string>
+  <string name="QuickReplies">Quick Replies</string>
+  <string name="QuickRepliesEmpty">You have no quick replies yet.</string>
+  <string name="QuickRepliesHint">Set up shortcuts to quickly send messages you use often.</string>
+  <string name="QuickReplyCreate">New shortcut</string>
+  <string name="QuickReplyDelete">Delete shortcut</string>
+  <string name="QuickReplyMessageHint">Enter the first message…</string>
+  <string name="QuickReplyName">Shortcut name</string>
+  <string name="QuickReplyRename">Rename shortcut</string>
+  <string name="ResetToDefault">Reset to default</string>
+  <string name="SavedMessagesTopics">Saved Messages</string>
+  <string name="SavedMessagesTopicsEmpty">You have no Saved Messages topics yet.</string>
+  <string name="ShowAddStoryBorder">Show \"Add Story\" border</string>
+  <string name="SolidColor">Solid color</string>
+  <string name="StickerAdded">Sticker added.</string>
+  <string name="StickerEmojiHint">Emoji for this sticker</string>
+  <string name="StickerEmojiPrompt">Sticker emoji</string>
+  <string name="StickerPackAddSticker">Add a sticker</string>
+  <string name="StickerPackCreate">Create a new set</string>
+  <string name="StickerPackCreated">Sticker set created.</string>
+  <string name="StickerPackRename">Rename set</string>
+  <string name="StickerPackTitleHint">Set name</string>
+  <string name="StickerPacksEmpty">You haven\'t created any sticker sets yet.</string>
+  <string name="StickerPacksHint">Create and manage your own sticker sets.</string>
+  <string name="StickerPacksMine">My sticker sets</string>
+  <string name="StoriesSettings">Stories</string>
+  <string name="StoryRingColors">Story ring colors</string>
+  <string name="StoryRingColorsDesc">Customize the gradient colors for story rings</string>
+  <string name="StoryRingPreview">Preview</string>
+  <string name="TelegramBusiness">Telegram Business</string>
+  <string name="Visibility">Visibility</string>
+  <string name="xColorN">Color %1$d</string>
+  <string name="StartVoiceChat">Start Voice Chat</string>
+  <string name="StartLiveStream">Start Live Stream</string>
+  <string name="StartRtmpStream">Stream with…</string>
+  <string name="Checklist">Checklist</string>
+  <string name="PaidMediaUnlock_one">Unlock for %1$d Star</string>
+  <string name="PaidMediaUnlock_other">Unlock for %1$d Stars</string>
+  <string name="PaidMediaUnlocked">Paid content unlocked</string>
+
+  <!-- SERVICE MESSAGE STRING SECTION -->
+
+  <string name="ServiceChatOwnerChanged">%1$s is now the owner of this group</string>
+  <string name="ServiceChecklistTasksAdded_one">%2$s added %1$s task to a checklist</string>
+  <string name="ServiceChecklistTasksAdded_other">%2$s added %1$s tasks to a checklist</string>
+  <string name="ServiceChecklistTasksDone_one">%2$s marked %1$s task as done</string>
+  <string name="ServiceChecklistTasksDone_other">%2$s marked %1$s tasks as done</string>
+  <string name="ServiceGiveawayPrizeStars_one">This chat won %1$s Star in a giveaway</string>
+  <string name="ServiceGiveawayPrizeStars_other">This chat won %1$s Stars in a giveaway</string>
+  <string name="ServiceManagedBotCreated">A bot was added to manage this chat</string>
+  <string name="ServicePaidMessagePriceChangedFree">Paid messages were turned off in this chat</string>
+  <string name="ServicePaidMessagePriceChanged_one">Paid messages now cost %1$s Star each</string>
+  <string name="ServicePaidMessagePriceChanged_other">Paid messages now cost %1$s Stars each</string>
+  <string name="ServicePaidMessagesRefunded_one">%2$s Stars refunded for %1$s paid message</string>
+  <string name="ServicePaidMessagesRefunded_other">%2$s Stars refunded for %1$s paid messages</string>
+  <string name="ServicePassportDataSent">You sent the bot your Telegram Passport data</string>
+  <string name="ServicePaymentSentBot">You completed a payment</string>
+  <string name="ServicePollOptionAdded">%1$s added an option to a poll</string>
+  <string name="ServicePollOptionDeleted">%1$s removed an option from a poll</string>
+  <string name="ServiceProtectedContentDisableRequested">A request to disable content protection was sent</string>
+  <string name="ServiceProtectedContentOff">%1$s disabled content protection</string>
+  <string name="ServiceVideoCallEnded">Video call ended</string>
+  <string name="ServiceVideoCallEndedDuration">Video call ended · %1$s</string>
+  <string name="ServiceVideoCallMissed">Missed video call</string>
+  <string name="ServiceVideoCallStarted">%1$s started a video call</string>
+  <string name="ServiceVideoCallStarted_outgoing">You started a video call</string>
+  <string name="ServiceVoiceCallEnded">Call ended</string>
+  <string name="ServiceVoiceCallEndedDuration">Call ended · %1$s</string>
+  <string name="ServiceVoiceCallMissed">Missed call</string>
+  <string name="ServiceVoiceCallStarted">%1$s started a call</string>
+  <string name="ServiceVoiceCallStarted_outgoing">You started a call</string>
+  <string name="XChangedWallpaper">%1$s changed the wallpaper</string>
+  <string name="XChangedWallpaperForBoth">%1$s set a new wallpaper for both of you</string>
+  <string name="XSuggestedBirthdate">%1$s suggested a date of birth for you</string>
+  <string name="XSuggestedPhoto">%1$s suggested a profile photo for you</string>
+  <string name="YouChangedWallpaper">You changed the wallpaper</string>
+  <string name="YouChangedWallpaperForThisChat">You set a new wallpaper for this chat</string>
+  <string name="YouSharedChat">You shared **%1$s**</string>
+  <string name="YouSharedUser">You shared **%1$s**</string>
+  <string name="YouSharedUsers_one">You shared **%1$s user**</string>
+  <string name="YouSharedUsers_other">You shared **%1$s users**</string>
+  <string name="YouSuggestedBirthdate">You suggested a date of birth</string>
+  <string name="YouSuggestedPhoto">You suggested a profile photo</string>
+
+  <!-- CHAT-LIST PREVIEW STRING SECTION -->
+
+  <string name="ChatListChecklistUpdated">Checklist updated</string>
+  <string name="ChatListGiveawayStars">Stars prize</string>
+  <string name="ChatListManagedBot">Bot added to manage chat</string>
+  <string name="ChatListOwnerChanged">Group ownership transferred</string>
+  <string name="ChatListPaidPriceChanged">Paid message price changed</string>
+  <string name="ChatListPaidRefund">Stars refunded</string>
+  <string name="ChatListPassportSent">Passport data sent</string>
+  <string name="ChatListPollUpdated">Poll updated</string>
+  <string name="ChatListProtectedContent">Content protection changed</string>
+  <string name="ChatListSuggestedBirthdate">Suggested a date of birth</string>
+  <string name="ChatListSuggestedPhoto">Suggested a profile photo</string>
+
+  <!-- MESSAGE ACTIONS STRING SECTION -->
+
+  <string name="FactCheckAdd">Add fact check</string>
+  <string name="FactCheckEdit">Edit fact check</string>
+  <string name="FactCheckHint">Fact check (leave empty to remove)</string>
+  <string name="MessageEffectAdd">Add animated effect</string>
+  <string name="MessageEffectAdded">Effect added — it plays when you send</string>
+  <string name="MessageEffectChange">Change effect</string>
+  <string name="MessageEffectChoose">Choose an effect</string>
+  <string name="MessageEffectNone">No effect</string>
+  <string name="MessageEffectPremium">Premium</string>
+  <string name="SummarizeProgress">Generating summary…</string>
+  <string name="ViewForum">View forum</string>
+  <string name="Summarize">Summarize</string>
 </resources>

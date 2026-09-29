@@ -281,9 +281,12 @@ public class ContentPreview {
         break;
       }
       case TdApi.MessageRichMessage.CONSTRUCTOR: {
-        TdApi.MessageRichMessage richMessage = (TdApi.MessageRichMessage) message.content;
-        // TODO rich message text representation
-        break;
+        TdApi.RichMessage richMessage = ((TdApi.MessageRichMessage) message.content).message;
+        String previewText = buildRichMessagePreview(richMessage);
+        if (!StringUtils.isEmpty(previewText)) {
+          return new ContentPreview(EMOJI_INFO, 0, previewText);
+        }
+        break; // Fallback to the placeholder provided by getSimpleContentPreview
       }
       case TdApi.MessageAnimatedEmoji.CONSTRUCTOR: {
         TdApi.MessageAnimatedEmoji animatedEmoji = (TdApi.MessageAnimatedEmoji) message.content;
@@ -616,6 +619,27 @@ public class ContentPreview {
         TdApi.FormattedText formatted = TD.toFormattedText(text, false);
         return new ContentPreview(EMOJI_STARS, 0, formatted, true);
       }
+      case TdApi.MessageUpgradedGift.CONSTRUCTOR: {
+        TdApi.MessageUpgradedGift upgradedGift = (TdApi.MessageUpgradedGift) message.content;
+        String title = upgradedGift.gift != null ? upgradedGift.gift.title : null;
+        String text = StringUtils.isEmpty(title) ? Lang.getString(R.string.GiftUpgraded) : title;
+        return new ContentPreview(EMOJI_GIFT, 0, text, true);
+      }
+      case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.RefundedGift), true);
+      }
+      case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.UpgradedGiftPurchaseOffer), true);
+      }
+      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR: {
+        TdApi.MessageUpgradedGiftPurchaseOfferRejected rejected = (TdApi.MessageUpgradedGiftPurchaseOfferRejected) message.content;
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(rejected.wasExpired ? R.string.UpgradedGiftOfferExpired : R.string.UpgradedGiftOfferRejected), true);
+      }
+      case TdApi.MessageGiftedGrams.CONSTRUCTOR: {
+        TdApi.MessageGiftedGrams giftedTon = (TdApi.MessageGiftedGrams) message.content;
+        String amount = GiftRarityUtil.formatTon(giftedTon.gramAmount, 9);
+        return new ContentPreview(EMOJI_GIFT, 0, Lang.getString(R.string.GiftedTonAmount, amount), true);
+      }
       case TdApi.MessageGiveaway.CONSTRUCTOR: {
         TdApi.MessageGiveaway giveaway = (TdApi.MessageGiveaway) message.content;
         String text;
@@ -745,14 +769,32 @@ public class ContentPreview {
       case TdApi.MessageChatDeletePhoto.CONSTRUCTOR:
       case TdApi.MessageGiveawayCreated.CONSTRUCTOR:
       case TdApi.MessageGift.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGift.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageVideoChatStarted.CONSTRUCTOR:
       case TdApi.MessageGroupCall.CONSTRUCTOR:
       case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
       case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
+        break;
+
+      // Forum topic service messages
+      case TdApi.MessageForumTopicCreated.CONSTRUCTOR: {
+        return new ContentPreview(EMOJI_GROUP, R.string.TopicWasCreated);
+      }
+      case TdApi.MessageForumTopicEdited.CONSTRUCTOR: {
+        TdApi.MessageForumTopicEdited edited = (TdApi.MessageForumTopicEdited) message.content;
+        if (edited.name != null && !edited.name.isEmpty()) {
+          return new ContentPreview(EMOJI_GROUP, 0, Lang.getString(R.string.TopicWasRenamed, edited.name), true);
+        }
+        // Icon was changed (name is empty/null means only icon changed)
+        return new ContentPreview(EMOJI_GROUP, R.string.TopicIconChanged);
+      }
+      case TdApi.MessageForumTopicIsClosedToggled.CONSTRUCTOR: {
+        TdApi.MessageForumTopicIsClosedToggled toggled = (TdApi.MessageForumTopicIsClosedToggled) message.content;
+        return new ContentPreview(EMOJI_GROUP, toggled.isClosed ? R.string.TopicWasClosed : R.string.TopicWasReopened);
+      }
+      case TdApi.MessageForumTopicIsHiddenToggled.CONSTRUCTOR: {
+        TdApi.MessageForumTopicIsHiddenToggled toggled = (TdApi.MessageForumTopicIsHiddenToggled) message.content;
+        return new ContentPreview(EMOJI_GROUP, toggled.isHidden ? R.string.GeneralTopicWasHidden : R.string.GeneralTopicWasShown);
+      }
 
       // Handled by getSimpleContentPreview, but unsupported
       case TdApi.MessageUnsupported.CONSTRUCTOR:
@@ -760,10 +802,6 @@ public class ContentPreview {
       case TdApi.MessageChatShared.CONSTRUCTOR:
       case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
       case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
-      case TdApi.MessageForumTopicCreated.CONSTRUCTOR:
-      case TdApi.MessageForumTopicEdited.CONSTRUCTOR:
-      case TdApi.MessageForumTopicIsClosedToggled.CONSTRUCTOR:
-      case TdApi.MessageForumTopicIsHiddenToggled.CONSTRUCTOR:
       case TdApi.MessagePassportDataSent.CONSTRUCTOR:
       case TdApi.MessageChatSetBackground.CONSTRUCTOR:
       case TdApi.MessageChecklist.CONSTRUCTOR:
@@ -774,7 +812,6 @@ public class ContentPreview {
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-      case TdApi.MessageGiftedGrams.CONSTRUCTOR:
       case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
       case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
       case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
@@ -1592,46 +1629,69 @@ public class ContentPreview {
       case TdApi.MessagePaymentRefunded.CONSTRUCTOR:
         throw new IllegalArgumentException(Integer.toString(type));
         
+      // Forum topic service messages
+      case TdApi.MessageForumTopicCreated.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.TopicWasCreated);
+      case TdApi.MessageForumTopicEdited.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.TopicIconChanged);
+      case TdApi.MessageForumTopicIsClosedToggled.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, arg1 == ARG_TRUE ? R.string.TopicWasClosed : R.string.TopicWasReopened);
+      case TdApi.MessageForumTopicIsHiddenToggled.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, arg1 == ARG_TRUE ? R.string.GeneralTopicWasHidden : R.string.GeneralTopicWasShown);
+
       case TdApi.MessageStory.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_PHOTO, R.string.Story);
+      case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_PHOTO, R.string.ChatListSuggestedPhoto);
+      case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_INFO, R.string.ChatListSuggestedBirthdate);
+      case TdApi.MessagePassportDataSent.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_LOCK, R.string.ChatListPassportSent);
+      case TdApi.MessageChatSetBackground.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_THEME, R.string.Wallpaper);
+      case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_STARS, R.string.ChatListGiveawayStars);
+      case TdApi.MessageGiftedGrams.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GIFT, R.string.ChatListGiftedTon);
+      case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_STARS, R.string.ChatListPaidRefund);
+      case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_STARS, R.string.ChatListPaidPriceChanged);
+      case TdApi.MessageChecklist.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.Checklist);
+      case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
+      case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.ChatListChecklistUpdated);
+      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
+      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_POLL, R.string.ChatListPollUpdated);
+      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ChatListOwnerChanged);
+      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.ChatListManagedBot);
+      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
+      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_LOCK, R.string.ChatListProtectedContent);
+      case TdApi.MessageGroupCall.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_CALL, R.string.VideoChat);
+      case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_INVOICE, R.string.ServicePaymentSentBot);
+
       case TdApi.MessageUsersShared.CONSTRUCTOR:
       case TdApi.MessageChatShared.CONSTRUCTOR:
-      case TdApi.MessageSuggestProfilePhoto.CONSTRUCTOR:
-      case TdApi.MessageSuggestBirthdate.CONSTRUCTOR:
-      case TdApi.MessageForumTopicCreated.CONSTRUCTOR:
-      case TdApi.MessageForumTopicEdited.CONSTRUCTOR:
-      case TdApi.MessageForumTopicIsClosedToggled.CONSTRUCTOR:
-      case TdApi.MessageForumTopicIsHiddenToggled.CONSTRUCTOR:
-      case TdApi.MessagePassportDataSent.CONSTRUCTOR:
-      case TdApi.MessageChatSetBackground.CONSTRUCTOR:
       case TdApi.MessagePremiumGiftCode.CONSTRUCTOR:
-      case TdApi.MessageGiveawayPrizeStars.CONSTRUCTOR:
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
       case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageStakeDice.CONSTRUCTOR:
-      case TdApi.MessageChecklist.CONSTRUCTOR:
-      case TdApi.MessageChecklistTasksDone.CONSTRUCTOR:
-      case TdApi.MessageChecklistTasksAdded.CONSTRUCTOR:
-      case TdApi.MessageGroupCall.CONSTRUCTOR:
-      case TdApi.MessagePaidMessagesRefunded.CONSTRUCTOR:
-      case TdApi.MessagePaidMessagePriceChanged.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostApprovalFailed.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostApproved.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
       case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
-      case TdApi.MessageGiftedGrams.CONSTRUCTOR:
-      case TdApi.MessagePaymentSuccessfulBot.CONSTRUCTOR:
-      case TdApi.MessageChatHasProtectedContentDisableRequested.CONSTRUCTOR:
-      case TdApi.MessageChatHasProtectedContentToggled.CONSTRUCTOR:
-      case TdApi.MessageChatOwnerChanged.CONSTRUCTOR:
       case TdApi.MessageChatOwnerLeft.CONSTRUCTOR:
-      case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
-      case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
-      case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
-      case TdApi.MessageRichMessage.CONSTRUCTOR:
       case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
       case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
         // TODO support these previews
@@ -1640,6 +1700,10 @@ public class ContentPreview {
       case TdApi.MessageUnsupported.CONSTRUCTOR:
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessageType);
 
+      // Fallback when the rich message contains no text-bearing block (see buildRichMessagePreview)
+      case TdApi.MessageRichMessage.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_INFO, R.string.Message);
+
       // Bots only. Unused
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
@@ -1647,6 +1711,80 @@ public class ContentPreview {
         Td.assertMessageContent_af730a78();
         throw new UnsupportedOperationException(Integer.toString(type));
     }
+  }
+
+  /**
+   * Flattens the first text-bearing page block of a rich message into plain preview text.
+   */
+  @Nullable
+  private static String buildRichMessagePreview (@Nullable TdApi.RichMessage richMessage) {
+    if (richMessage == null || richMessage.blocks == null) {
+      return null;
+    }
+    return findFirstPageBlockText(richMessage.blocks);
+  }
+
+  @Nullable
+  private static String findFirstPageBlockText (TdApi.PageBlock[] blocks) {
+    for (TdApi.PageBlock block : blocks) {
+      String text = findPageBlockText(block);
+      if (!StringUtils.isEmpty(text)) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  @Nullable
+  private static String findPageBlockText (TdApi.PageBlock block) {
+    switch (block.getConstructor()) {
+      case TdApi.PageBlockParagraph.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockParagraph) block).text);
+      case TdApi.PageBlockSectionHeading.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockSectionHeading) block).text);
+      case TdApi.PageBlockTitle.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockTitle) block).title);
+      case TdApi.PageBlockSubtitle.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockSubtitle) block).subtitle);
+      case TdApi.PageBlockHeader.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockHeader) block).header);
+      case TdApi.PageBlockSubheader.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockSubheader) block).subheader);
+      case TdApi.PageBlockKicker.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockKicker) block).kicker);
+      case TdApi.PageBlockPreformatted.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockPreformatted) block).text);
+      case TdApi.PageBlockFooter.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockFooter) block).footer);
+      case TdApi.PageBlockPullQuote.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockPullQuote) block).text);
+      case TdApi.PageBlockBlockQuote.CONSTRUCTOR: {
+        TdApi.PageBlockBlockQuote quote = (TdApi.PageBlockBlockQuote) block;
+        String text = findFirstPageBlockText(quote.blocks);
+        return !StringUtils.isEmpty(text) ? text : trimmedRichText(quote.credit);
+      }
+      case TdApi.PageBlockList.CONSTRUCTOR: {
+        for (TdApi.PageBlockListItem item : ((TdApi.PageBlockList) block).items) {
+          String text = findFirstPageBlockText(item.blocks);
+          if (!StringUtils.isEmpty(text)) {
+            return text;
+          }
+        }
+        return null;
+      }
+      case TdApi.PageBlockDetails.CONSTRUCTOR:
+        return trimmedRichText(((TdApi.PageBlockDetails) block).header);
+    }
+    return null;
+  }
+
+  @Nullable
+  private static String trimmedRichText (@Nullable TdApi.RichText richText) {
+    if (richText == null) {
+      return null;
+    }
+    String text = TD.getText(richText);
+    return text != null ? text.trim() : null;
   }
 
   static int getDartRes (int value) {

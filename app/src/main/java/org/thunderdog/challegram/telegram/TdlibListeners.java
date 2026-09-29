@@ -61,6 +61,9 @@ public class TdlibListeners {
   final ReferenceList<DownloadsListUpdateListener> downloadsListListener;
 
   final ReferenceList<AnimatedEmojiListener> animatedEmojiListeners;
+  final ReferenceList<SavedMessagesTagsListener> savedMessagesTagsListeners;
+  final ReferenceList<QuickReplyListener> quickReplyListeners;
+  final ReferenceList<SavedMessagesListener> savedMessagesListeners;
 
   final ReferenceLongMap<MessageListener> messageChatListeners;
   final ReferenceLongMap<MessageEditListener> messageEditChatListeners;
@@ -102,6 +105,9 @@ public class TdlibListeners {
     this.downloadsListListener = new ReferenceList<>(true);
 
     this.animatedEmojiListeners = new ReferenceList<>(true);
+    this.savedMessagesTagsListeners = new ReferenceList<>(true);
+    this.quickReplyListeners = new ReferenceList<>(true);
+    this.savedMessagesListeners = new ReferenceList<>(true);
 
     this.reactionLoadListeners = new ReferenceMap<>(true);
 
@@ -166,6 +172,9 @@ public class TdlibListeners {
       if (globalListener instanceof AnimatedEmojiListener) {
         animatedEmojiListeners.add((AnimatedEmojiListener) globalListener);
       }
+      if (globalListener instanceof SavedMessagesTagsListener) {
+        savedMessagesTagsListeners.add((SavedMessagesTagsListener) globalListener);
+      }
       if (globalListener instanceof PrivacySettingsListener) {
         privacySettingsListeners.add((PrivacySettingsListener) globalListener);
       }
@@ -213,6 +222,9 @@ public class TdlibListeners {
       }
       if (globalListener instanceof AnimatedEmojiListener) {
         animatedEmojiListeners.remove((AnimatedEmojiListener) globalListener);
+      }
+      if (globalListener instanceof SavedMessagesTagsListener) {
+        savedMessagesTagsListeners.remove((SavedMessagesTagsListener) globalListener);
       }
       if (globalListener instanceof PrivacySettingsListener) {
         privacySettingsListeners.remove((PrivacySettingsListener) globalListener);
@@ -316,6 +328,54 @@ public class TdlibListeners {
     specificPrivateCallListeners.remove(callId, listener);
   }
 
+  @AnyThread
+  public void addGroupCallListener (GroupCallListener listener) {
+    groupCallListeners.add(listener);
+  }
+
+  @AnyThread
+  public void removeGroupCallListener (GroupCallListener listener) {
+    groupCallListeners.remove(listener);
+  }
+
+  @AnyThread
+  public void subscribeToGroupCallUpdates (int groupCallId, GroupCallListener listener) {
+    specificGroupCallListeners.add(groupCallId, listener);
+  }
+
+  @AnyThread
+  public void unsubscribeFromGroupCallUpdates (int groupCallId, GroupCallListener listener) {
+    specificGroupCallListeners.remove(groupCallId, listener);
+  }
+
+  public void subscribeToQuickReplyUpdates (QuickReplyListener listener) {
+    quickReplyListeners.add(listener);
+  }
+
+  public void unsubscribeFromQuickReplyUpdates (QuickReplyListener listener) {
+    quickReplyListeners.remove(listener);
+  }
+
+  void updateQuickReplyShortcuts () {
+    for (QuickReplyListener listener : quickReplyListeners) {
+      listener.onQuickReplyShortcutsChanged();
+    }
+  }
+
+  public void subscribeToSavedMessagesUpdates (SavedMessagesListener listener) {
+    savedMessagesListeners.add(listener);
+  }
+
+  public void unsubscribeFromSavedMessagesUpdates (SavedMessagesListener listener) {
+    savedMessagesListeners.remove(listener);
+  }
+
+  void updateSavedMessagesTopics () {
+    for (SavedMessagesListener listener : savedMessagesListeners) {
+      listener.onSavedMessagesTopicsChanged();
+    }
+  }
+
   public void performStartup (boolean isAfterRestart) {
     for (CleanupStartupDelegate delegate : componentDelegates) {
       delegate.onPerformStartup(isAfterRestart);
@@ -365,6 +425,16 @@ public class TdlibListeners {
   }
 
   @AnyThread
+  public void subscribeToSavedMessagesTagsUpdates (SavedMessagesTagsListener listener) {
+    savedMessagesTagsListeners.add(listener);
+  }
+
+  @AnyThread
+  public void unsubscribeFromSavedMessagesTagsUpdates (SavedMessagesTagsListener listener) {
+    savedMessagesTagsListeners.remove(listener);
+  }
+
+  @AnyThread
   public void addOptionsListener (TdlibOptionListener listener) {
     optionListeners.add(listener);
   }
@@ -392,6 +462,16 @@ public class TdlibListeners {
   @AnyThread
   public void unsubscribeFromChatUpdates (long chatId, ChatListener listener) {
     specificChatListeners.remove(chatId, listener);
+  }
+
+  @AnyThread
+  public void subscribeToStoryUpdates (long posterChatId, int storyId, StoryListener listener) {
+    specificStoryListeners.add(uniqueStoryKey(posterChatId, storyId), listener);
+  }
+
+  @AnyThread
+  public void unsubscribeFromStoryUpdates (long posterChatId, int storyId, StoryListener listener) {
+    specificStoryListeners.remove(uniqueStoryKey(posterChatId, storyId), listener);
   }
 
   @AnyThread
@@ -806,6 +886,14 @@ public class TdlibListeners {
   public void notifyAnimatedEmojiListeners (int type) {
     runUpdate(animatedEmojiListeners, listener ->
       listener.onAnimatedEmojiChanged(type)
+    );
+  }
+
+  // updateSavedMessagesTags
+
+  void updateSavedMessagesTags (TdApi.UpdateSavedMessagesTags update) {
+    runUpdate(savedMessagesTagsListeners, listener ->
+      listener.onSavedMessagesTagsUpdated(update.savedMessagesTopicId, update.tags)
     );
   }
 
@@ -1333,8 +1421,16 @@ public class TdlibListeners {
 
   void updateForumTopic (TdApi.UpdateForumTopic update) {
     runForumUpdate(update.chatId, update.forumTopicId, listener ->
-      listener.onForumTopicUpdated(update.chatId, update.forumTopicId, update.isPinned, update.lastReadInboxMessageId, update.lastReadOutboxMessageId, update.notificationSettings)
+      listener.onForumTopicUpdated(update.chatId, update.forumTopicId, update.isPinned, update.lastReadInboxMessageId, update.lastReadOutboxMessageId, update.unreadMentionCount, update.unreadReactionCount, update.notificationSettings, update.draftMessage)
     );
+  }
+
+  // updateForumUnreadTopicCount (custom, not from TDLib)
+
+  void updateForumUnreadTopicCount (long chatId, int unreadTopicCount) {
+    runChatUpdate(chatId, listener -> {
+      listener.onForumUnreadTopicCountChanged(chatId, unreadTopicCount);
+    });
   }
 
   // updateChatViewAsTopics
@@ -1736,6 +1832,12 @@ public class TdlibListeners {
   void updateGramRevenueStatus (TdApi.UpdateGramRevenueStatus update) {
     runUpdate(optionListeners, listener ->
       listener.onGramRevenueStatusUpdated(update.status)
+    );
+  }
+
+  void updateOwnedGramCount (TdApi.UpdateOwnedGramCount update) {
+    runUpdate(optionListeners, listener ->
+      listener.onOwnedGramCountChanged(update.gramAmount)
     );
   }
 

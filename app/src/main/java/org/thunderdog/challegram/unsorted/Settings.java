@@ -31,6 +31,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 
+import com.google.common.primitives.Longs;
+
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.drinkmore.Tracer;
@@ -38,6 +40,7 @@ import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.config.Device;
 import org.thunderdog.challegram.core.Background;
@@ -98,6 +101,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -243,12 +247,14 @@ public class Settings {
   private static final String KEY_CHAT_TRANSLATE_RECENTS = "language_recents";
   private static final String KEY_DEFAULT_LANGUAGE_FOR_TRANSLATE_DRAFT = "language_draft_translate";
   private static final String KEY_INSTANT_VIEW = "settings_iv_mode";
+  private static final String KEY_RESOLUTION_OPTION = "settings_resolution_options";
   private static final String KEY_RESTRICT_CONTENT = "settings_restrict_content";
   private static final String KEY_CAMERA_ASPECT_RATIO = "settings_camera_ratio";
   private static final String KEY_CAMERA_TYPE = "settings_camera_type";
   private static final String KEY_CAMERA_VOLUME_CONTROL = "settings_camera_control";
   private static final String KEY_CHAT_FOLDER_STYLE = "settings_folders_style";
   private static final String KEY_CHAT_FOLDER_OPTIONS = "settings_folders_options";
+  private static final String KEY_MESSAGES_FILTER_FLAGS = "settings_messages_filter";
 
   private static final String KEY_TDLIB_VERBOSITY = "settings_tdlib_verbosity";
   private static final String KEY_TDLIB_DEBUG_PREFIX = "settings_tdlib_allow_debug";
@@ -360,6 +366,10 @@ public class Settings {
   private static final String KEY_QUICK_REACTIONS = "quick_reactions";
   private static final String KEY_BIG_REACTIONS_IN_CHANNELS = "big_reactions_in_channels";
   private static final String KEY_BIG_REACTIONS_IN_CHATS = "big_reactions_in_chats";
+  private static final String KEY_BIG_REACTIONS_IN_DMS = "big_reactions_in_dms";
+  private static final String KEY_SHOW_CAMERA_WHILE_TYPING = "show_camera_while_typing";
+  private static final String KEY_SHOW_ATTACH_WHILE_TYPING = "show_attach_while_typing";
+  private static final String KEY_SHOW_VOICE_WHILE_TYPING = "show_voice_while_typing";
 
   private static final String KEY_WALLPAPER_PREFIX = "wallpaper";
   private static final String KEY_WALLPAPER_CUSTOM = "_custom";
@@ -429,6 +439,9 @@ public class Settings {
   public static final long SETTING_FLAG_DYNAMIC_ORDER_EMOJI_PACKS = 1 << 18;
   public static final long SETTING_FLAG_FORCE_DEFAULT_ANIMATION_FOR_RIGHT_SWIPE_EDGE = 1 << 19;
   public static final long SETTING_FLAG_FORCE_DISABLE_HLS_VIDEO = 1 << 20;
+  public static final long SETTING_FLAG_HIDE_STORIES = 1L << 21;
+  public static final long SETTING_FLAG_STORY_QUICK_REACTIONS = 1L << 22;
+  public static final long SETTING_FLAG_SHOW_ADD_STORY_BORDER = 1L << 23;
 
   public static final long EXPERIMENT_FLAG_ALLOW_EXPERIMENTS = 1;
   public static final long EXPERIMENT_FLAG_SHOW_PEER_IDS = 1 << 2;
@@ -455,7 +468,7 @@ public class Settings {
   @Nullable
   private Integer _settings;
   @Nullable
-  private Long _newSettings, _experiments;
+  private Long _newSettings, _experiments, _messagesFilter;
 
   public static final int NIGHT_MODE_NONE = 0;
   public static final int NIGHT_MODE_AUTO = 1;
@@ -796,6 +809,11 @@ public class Settings {
   public static final int INSTANT_VIEW_MODE_NONE = 0;
   public static final int INSTANT_VIEW_MODE_INTERNAL = 1;
   public static final int INSTANT_VIEW_MODE_ALL = 2;
+
+  public static final int RESOLUTION_OPTION_DEFAULT = 1;
+  public static final int RESOLUTION_OPTION_LOW = 0;
+  public static final int RESOLUTION_OPTION_MEDIUM = 1;
+  public static final int RESOLUTION_OPTION_HIGH = 2;
 
   @Nullable
   private Float _chatFontSize;
@@ -1360,6 +1378,28 @@ public class Settings {
     return _chatFolderStyle;
   }
 
+  public static final long MESSAGES_FILTER_ENABLED = 1;
+  public static final long MESSAGES_FILTER_HIDE_BLOCKED_SENDERS = 1 << 1;
+  public static final long MESSAGES_FILTER_HIDE_BLOCKED_SENDERS_MENTIONS = 1 << 2;
+
+  private long getMessagesFilterSettings () {
+    if (_messagesFilter == null)
+      _messagesFilter = pmc.getLong(KEY_MESSAGES_FILTER_FLAGS, 0);
+    return _messagesFilter;
+  }
+
+  public boolean getMessagesFilterSetting (long flag) {
+    final boolean filterEnabled = flag != MESSAGES_FILTER_ENABLED ?
+      getMessagesFilterSetting(MESSAGES_FILTER_ENABLED) : true;
+    return filterEnabled && BitwiseUtils.hasFlag(getMessagesFilterSettings(), flag);
+  }
+
+  public void setMessagesFilterSetting (long flag, boolean enabled) {
+    _messagesFilter = BitwiseUtils.setFlag(getMessagesFilterSettings(), flag, enabled);
+    pmc.putLong(KEY_MESSAGES_FILTER_FLAGS, _messagesFilter);
+  }
+
+
   private long makeDefaultNewSettings () {
     long settings = 0;
 
@@ -1374,6 +1414,40 @@ public class Settings {
 
   public boolean getNewSetting (long key) {
     return BitwiseUtils.hasFlag(getNewSettings(), key);
+  }
+
+  public boolean hideStories () {
+    return getNewSetting(SETTING_FLAG_HIDE_STORIES);
+  }
+
+  public boolean useStoryQuickReactions () {
+    return getNewSetting(SETTING_FLAG_STORY_QUICK_REACTIONS);
+  }
+
+  public boolean showAddStoryBorder () {
+    return getNewSetting(SETTING_FLAG_SHOW_ADD_STORY_BORDER);
+  }
+
+  // Default story ring gradient colors
+  public static final int[] DEFAULT_STORY_RING_COLORS = {
+    0xFF7B68EE,  // Medium slate blue
+    0xFF00CED1,  // Dark turquoise
+    0xFF00FA9A   // Medium spring green
+  };
+
+  private static final String KEY_STORY_RING_COLORS = "settings_story_ring_colors";
+
+  public int[] getStoryRingColors () {
+    int[] colors = pmc.getIntArray(KEY_STORY_RING_COLORS);
+    return colors != null && colors.length > 0 ? colors : DEFAULT_STORY_RING_COLORS;
+  }
+
+  public void setStoryRingColors (int[] colors) {
+    if (colors == null || colors.length == 0) {
+      pmc.remove(KEY_STORY_RING_COLORS);
+    } else {
+      pmc.putIntArray(KEY_STORY_RING_COLORS, colors);
+    }
   }
 
   private boolean setNewSettings (long newSettings) {
@@ -2859,6 +2933,18 @@ public class Settings {
       remove(KEY_INSTANT_VIEW);
     } else {
       putInt(KEY_INSTANT_VIEW, mode);
+    }
+  }
+
+  public int getResolutionOption () {
+    return getInt(KEY_RESOLUTION_OPTION, RESOLUTION_OPTION_DEFAULT);
+  }
+
+  public void setResolutionOption (int option) {
+    if (option == RESOLUTION_OPTION_DEFAULT) {
+      remove(KEY_RESOLUTION_OPTION);
+    } else {
+      putInt(KEY_RESOLUTION_OPTION, option);
     }
   }
 
@@ -6894,6 +6980,38 @@ public class Settings {
     return getBoolean(KEY_BIG_REACTIONS_IN_CHATS, true);
   }
 
+  public void setBigReactionsInDMs (boolean inDMs) {
+    pmc.putBoolean(KEY_BIG_REACTIONS_IN_DMS, inDMs);
+  }
+
+  public boolean getBigReactionsInDMs () {
+    return getBoolean(KEY_BIG_REACTIONS_IN_DMS, false);
+  }
+
+  public void setShowAttachWhileTyping (boolean show) {
+    pmc.putBoolean(KEY_SHOW_ATTACH_WHILE_TYPING, show);
+  }
+
+  public boolean getShowAttachWhileTyping () {
+    return getBoolean(KEY_SHOW_ATTACH_WHILE_TYPING, false);
+  }
+
+  public void setShowCameraWhileTyping (boolean show) {
+    pmc.putBoolean(KEY_SHOW_CAMERA_WHILE_TYPING, show);
+  }
+
+  public boolean getShowCameraWhileTyping () {
+    return getBoolean(KEY_SHOW_CAMERA_WHILE_TYPING, false);
+  }
+
+  public void setShowVoiceWhileTyping (boolean show) {
+    pmc.putBoolean(KEY_SHOW_VOICE_WHILE_TYPING, show);
+  }
+
+  public boolean getShowVoiceWhileTyping () {
+    return getBoolean(KEY_SHOW_VOICE_WHILE_TYPING, false);
+  }
+
   public void markEmojiPackInstalled (EmojiPack emojiPack) {
     pmc.putInt(KEY_EMOJI_INSTALLED_PREFIX + emojiPack.identifier, emojiPack.date);
   }
@@ -7284,7 +7402,8 @@ public class Settings {
   }
 
   public boolean showPeerIds () {
-    return isExperimentEnabled(EXPERIMENT_FLAG_SHOW_PEER_IDS);
+    // Community feature: show ID in profile
+    return isExperimentEnabled(EXPERIMENT_FLAG_SHOW_PEER_IDS) || CommunityConfig.showIdInProfile;
   }
 
   @Nullable
@@ -7301,5 +7420,83 @@ public class Settings {
       _playbackSpeed = PlaybackSpeedLayout.normalizeSpeed(pmc.getInt(KEY_PLAYBACK_SPEED, 100));
     }
     return _playbackSpeed;
+  }
+
+  /* Messages Filter */
+
+  private static final String KEY_FILTERED_CHATS = "filtered_chat_ids";
+  private static final String KEY_CHAT_FILTER_FLAGS = "chat_filter_flags_";
+
+  public static final int FILTER_TYPE_LINKS_INTERNAL = 1;
+  public static final int FILTER_TYPE_LINKS_EXTERNAL = 1 << 1;
+
+  private final HashMap<Long, Long> filterFlagsCache = new HashMap<>();
+  private final HashSet<Long> filteredChatIds = new HashSet<>();
+  private boolean messagesFilterInited;
+
+  private void initMessagesFilterSettings () {
+    if (messagesFilterInited) {
+      return;
+    }
+
+    final long[] chatIds = pmc.getLongArray(KEY_FILTERED_CHATS);
+    if (chatIds != null) {
+      for (long chatId : chatIds) {
+        filteredChatIds.add(chatId);
+      }
+    }
+    messagesFilterInited = true;
+  }
+
+  private long getChatEnabledFilters (long chatId) {
+    initMessagesFilterSettings();
+
+    Long cached = filterFlagsCache.get(chatId);
+    if (cached != null) {
+      return cached;
+    } else {
+      long flags = pmc.getLong(KEY_CHAT_FILTER_FLAGS + chatId, 0);
+      filterFlagsCache.put(chatId, flags);
+      return flags;
+    }
+  }
+
+  private void setChatEnabledFilters (long chatId, long enabledFilters) {
+    initMessagesFilterSettings();
+
+    final boolean contains = filteredChatIds.contains(chatId);
+    final String key = KEY_CHAT_FILTER_FLAGS + chatId;
+
+    filterFlagsCache.put(chatId, enabledFilters);
+
+    LevelDB editor = pmc.edit();
+    if (enabledFilters != 0) {
+      pmc.putLong(key, enabledFilters);
+      if (!contains) {
+        filteredChatIds.add(chatId);
+        editor.putLongArray(KEY_FILTERED_CHATS, Longs.toArray(filteredChatIds));
+      }
+    } else {
+      pmc.remove(key);
+      if (contains) {
+        filteredChatIds.remove(chatId);
+        editor.putLongArray(KEY_FILTERED_CHATS, Longs.toArray(filteredChatIds));
+      }
+    }
+
+    editor.apply();
+  }
+
+  public long[] getFilteredChatIds () {
+    initMessagesFilterSettings();
+    return Longs.toArray(filteredChatIds);
+  }
+
+  public boolean isChatFilterEnabled (long chatId, int flag) {
+    return BitwiseUtils.hasFlag(getChatEnabledFilters(chatId), flag);
+  }
+
+  public void setChatLinksFilterEnabled (long chatId, int flag, boolean enabled) {
+    setChatEnabledFilters(chatId, BitwiseUtils.setFlag(getChatEnabledFilters(chatId), flag, enabled));
   }
 }

@@ -28,6 +28,7 @@ import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.data.InlineResult;
 import org.thunderdog.challegram.data.TD;
+import org.thunderdog.challegram.data.TGMessage;
 import org.thunderdog.challegram.telegram.GlobalMessageListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibManager;
@@ -174,12 +175,18 @@ public class TGPlayerController implements GlobalMessageListener, ProximityManag
   public void onUpdateFile (Tdlib tdlib, TdApi.UpdateFile updateFile) {
     synchronized (this) {
       if (this.tdlib != null && this.tdlib.id() == tdlib.id()) {
+        // filesMap is keyed by file.id (see addFileImpl), so every file in this
+        // bucket already has the same id as updateFile.file.id — the previous
+        // per-file id re-check was redundant and has been removed.
+        // NOTE: addFileImpl only tracks files with id >= 0, so id < 0 (fake/inline
+        // message) files are intentionally NOT live-updated here — they aren't keyed
+        // in filesMap and thus never receive UpdateFile copies. Supporting live
+        // updates for inline/fake tracks would require keying by remote id instead;
+        // that is out of scope for this cleanup.
         List<TdApi.File> files = filesMap.get(updateFile.file.id);
         if (files != null) {
           for (TdApi.File existingFile : files) {
-            if (existingFile.id == updateFile.file.id) {
-              Td.copyTo(updateFile.file, existingFile);
-            }
+            Td.copyTo(updateFile.file, existingFile);
           }
         }
       }
@@ -605,7 +612,7 @@ public class TGPlayerController implements GlobalMessageListener, ProximityManag
 
   public final void removeTrackChangeListener (@NonNull TrackChangeListener listener) {
     synchronized (this) {
-      globalListeners.add(listener);
+      globalListeners.remove(listener);
     }
   }
 
@@ -1039,7 +1046,7 @@ public class TGPlayerController implements GlobalMessageListener, ProximityManag
       int flags = 0;
       if (byUserRequest)
         flags |= __PLAY_FLAG_BY_USER_REQUEST;
-      if (byUserRequest)
+      if (isNext)
         flags |= __PLAY_FLAG_NEXT;
       handler.sendMessage(Message.obtain(handler, ACTION_PLAY_PAUSE, flags, 0, new Object[] {message, tdlib, builder}));
       return;

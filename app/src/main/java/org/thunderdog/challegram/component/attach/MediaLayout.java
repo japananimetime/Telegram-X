@@ -109,6 +109,17 @@ public class MediaLayout extends FrameLayoutFix implements
     void onSendPhoto (ImageGalleryFile file, boolean isFirst);
   }
 
+  /**
+   * Receives a map point committed by the user in {@link #MODE_LOCATION}.
+   * Lets a non-{@link MessagesController} owner (e.g. a business-location editor)
+   * reuse the same map picker UI. When unset, the picked location is delivered
+   * to the {@link MessagesController} target via {@link MessagesController#sendPickedLocation},
+   * preserving the existing chat attach-location behavior exactly.
+   */
+  public interface LocationPickerCallback {
+    void onLocationPicked (TdApi.Location location, int heading, TdApi.MessageSendOptions sendOptions);
+  }
+
   public static final long REVEAL_DURATION = 220l;
   public static final long REVEAL_HIDE_DURATION = 285l;
 
@@ -126,6 +137,7 @@ public class MediaLayout extends FrameLayoutFix implements
   // Data
   private boolean noMediaAccess;
   private @Nullable MessagesController target;
+  private @Nullable LocationPickerCallback locationPickerCallback;
 
   // Children
   private MediaBottomBaseController<?>[] controllers;
@@ -210,6 +222,18 @@ public class MediaLayout extends FrameLayoutFix implements
     int getDefaultItemIndex ();
     MediaBottomBaseController<?> createControllerForIndex(int index);
     boolean needBottomBar ();
+  }
+
+  /**
+   * Opens the map picker in {@link #MODE_LOCATION} for an owner that is not a
+   * {@link MessagesController} (e.g. the business-location editor). The committed
+   * point is delivered to {@code callback} instead of a chat. No chat target is
+   * set, so all chat-specific branches (live location, slow mode, scheduling)
+   * stay disabled exactly as they already are in {@link #inSpecificMode()}.
+   */
+  public void initLocationPicker (@NonNull LocationPickerCallback callback) {
+    this.locationPickerCallback = callback;
+    init(MODE_LOCATION, null);
   }
 
   public void init (int mode, MessagesController target) {
@@ -781,7 +805,12 @@ public class MediaLayout extends FrameLayoutFix implements
 
   public MediaViewController.Args prepareMediaViewArguments (MediaViewController.Args args) {
     if (mediaViewControllerArgumentsEditor != null) {
-      return mediaViewControllerArgumentsEditor.edit(args);
+      args = mediaViewControllerArgumentsEditor.edit(args);
+    }
+
+    // Inject caption from input field if attach-while-typing is enabled
+    if (target != null && Settings.instance().getShowAttachWhileTyping() && target.hasInputText()) {
+      args.setInitialCaption(target.getInputCaption());
     }
 
     return args;
@@ -1357,8 +1386,11 @@ public class MediaLayout extends FrameLayoutFix implements
 
   public void sendLocation (double latitude, double longitude, double accuracy, int heading, int livePeriod) {
     pickDateOrProceed((sendOptions, disableMarkdown) -> {
-      if (target != null) {
-        TdApi.Location location = new TdApi.Location(latitude, longitude, accuracy);
+      TdApi.Location location = new TdApi.Location(latitude, longitude, accuracy);
+      if (locationPickerCallback != null) {
+        // Non-chat owner (e.g. business-location editor) picked a point on the map.
+        locationPickerCallback.onLocationPicked(location, heading, sendOptions);
+      } else if (target != null) {
         if (inSpecificMode()) {
           target.sendPickedLocation(location, sendOptions);
         } else if (livePeriod != 0) {
@@ -1599,14 +1631,18 @@ public class MediaLayout extends FrameLayoutFix implements
       closeButton.setAlpha(0f);
       counterHintView.setAlpha(0f);
       groupMediaView.setAlpha(0f);
-      hotMediaView.setAlpha(0f);
+      if (hotMediaView != null) {
+        hotMediaView.setAlpha(0f);
+      }
 
       setCounterEnabled(false);
     }
     // No need to reset, right?
     // setNeedSpoiler(false);
     setAllowSpoiler(getCurrentController().allowSpoiler());
-    hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+    if (hotMediaView != null) {
+      hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+    }
     if (counterView != null) {
       counterView.setTranslationY(0f);
       checkSuffix(false);
@@ -1768,7 +1804,9 @@ public class MediaLayout extends FrameLayoutFix implements
       if (translateFactor > 0f && (counterFactor == 0f || !getCurrentController().supportsMediaGrouping())) {
         translateFactor = 0f;
       }
-      hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+      if (hotMediaView != null) {
+        hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+      }
       float alpha = counterFactor * translateFactor;
       groupMediaView.setAlpha(alpha);
       counterHintView.setAlpha(alpha);
@@ -1796,7 +1834,9 @@ public class MediaLayout extends FrameLayoutFix implements
   private void __setCounterFactor (float factor) {
     if (this.counterFactor != factor) {
       this.counterFactor = factor;
-      hotMediaView.setAlpha(factor * (allowSpoiler ? 1f : 0f));
+      if (hotMediaView != null) {
+        hotMediaView.setAlpha(factor * (allowSpoiler ? 1f : 0f));
+      }
       setAddExtraSpacing(factor == 1f);
     }
   }

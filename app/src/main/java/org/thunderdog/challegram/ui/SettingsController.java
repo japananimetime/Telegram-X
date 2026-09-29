@@ -14,6 +14,7 @@
  */
 package org.thunderdog.challegram.ui;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
@@ -35,6 +36,8 @@ import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.N;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.billing.BillingConfig;
+import org.thunderdog.challegram.billing.BillingManager;
 import org.thunderdog.challegram.component.attach.AvatarPickerManager;
 import org.thunderdog.challegram.component.attach.MediaLayout;
 import org.thunderdog.challegram.component.base.SettingView;
@@ -149,6 +152,16 @@ public class SettingsController extends ViewController<Void> implements
       supportOpen.cancel();
       supportOpen = null;
     }
+  }
+
+  private void launchPremiumPurchase () {
+    // Navigate to Premium settings screen
+    navigateTo(new SettingsPremiumController(context, tdlib));
+  }
+
+  private void launchStarsScreen () {
+    // Navigate to Telegram Stars settings screen
+    navigateTo(new SettingsStarsController(context, tdlib));
   }
 
   @Override
@@ -630,6 +643,10 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_devices, R.drawable.baseline_devices_other_24, R.string.Devices));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_premium, R.drawable.baseline_premium_star_24, R.string.TelegramPremium));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_stars, R.drawable.baseline_star_24, R.string.TelegramStars));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
 
     checkErrors(false);
 
@@ -639,17 +656,31 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_privacySettings, R.drawable.baseline_lock_24, R.string.PrivacySettings));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_storiesSettings, R.drawable.baseline_camera_alt_24, R.string.StoriesSettings));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_stickerSettingsAndEmoji, R.drawable.deproko_baseline_stickers_filled_24, R.string.StickersAndEmoji));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_themeSettings, R.drawable.baseline_palette_24, R.string.ThemeSettings));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_tweakSettings, R.drawable.baseline_extension_24, R.string.TweakSettings));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_communityFeatures, R.drawable.baseline_group_24, R.string.CommunityFeatures));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     if (Settings.instance().chatFoldersEnabled()) {
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatFolders, R.drawable.baseline_folder_copy_24, R.string.ChatFolders));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     }
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_quickRepliesSettings, R.drawable.baseline_flash_on_24, R.string.QuickReplies));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_downloadsSettings, R.drawable.baseline_file_download_24, R.string.Downloads));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_businessSettings, R.drawable.baseline_work_24, R.string.TelegramBusiness));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_savedMessagesSettings, R.drawable.baseline_bookmark_24, R.string.SavedMessagesTopics));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_languageSettings, R.drawable.baseline_language_24, R.string.Language));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_voiceTranscription, R.drawable.baseline_mic_24, R.string.VoiceTranscription));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
@@ -659,6 +690,7 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_privacyPolicy, R.drawable.baseline_policy_24, R.string.PrivacyPolicy));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.NeurogramAbout));
 
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     AppInstallationUtil.DownloadUrl downloadUrl = AppUpdater.getDownloadUrl(null);
@@ -1154,12 +1186,28 @@ public class SettingsController extends ViewController<Void> implements
         }
         return true;
       });
+    } else if (viewId == R.id.btn_storiesSettings) {
+      navigateTo(new SettingsStoriesController(context, tdlib));
+    } else if (viewId == R.id.btn_quickRepliesSettings) {
+      navigateTo(new QuickRepliesController(context, tdlib));
+    } else if (viewId == R.id.btn_downloadsSettings) {
+      navigateTo(new DownloadsController(context, tdlib));
+    } else if (viewId == R.id.btn_businessSettings) {
+      navigateTo(new SettingsBusinessController(context, tdlib));
+    } else if (viewId == R.id.btn_savedMessagesSettings) {
+      navigateTo(new SavedMessagesTopicsController(context, tdlib));
     } else if (viewId == R.id.btn_languageSettings) {
       navigateTo(new SettingsLanguageController(context, tdlib));
+    } else if (viewId == R.id.btn_voiceTranscription) {
+      navigateTo(new SettingsVoiceTranscriptionController(context, tdlib));
     } else if (viewId == R.id.btn_notificationSettings) {
       navigateTo(new SettingsNotificationController(context, tdlib));
     } else if (viewId == R.id.btn_devices) {
       navigateTo(new SettingsSessionsController(context, tdlib));
+    } else if (viewId == R.id.btn_premium) {
+      launchPremiumPurchase();
+    } else if (viewId == R.id.btn_stars) {
+      launchStarsScreen();
     } else if (viewId == R.id.btn_checkUpdates) {
       openInstallerPage(((AppInstallationUtil.DownloadUrl) ((ListItem) v.getTag()).getData()));
     } else if (viewId == R.id.btn_subscribeToBeta) {
@@ -1227,6 +1275,8 @@ public class SettingsController extends ViewController<Void> implements
       SettingsThemeController c = new SettingsThemeController(context, tdlib);
       c.setArguments(new SettingsThemeController.Args(SettingsThemeController.MODE_INTERFACE_OPTIONS));
       navigateTo(c);
+    } else if (viewId == R.id.btn_communityFeatures) {
+      navigateTo(new SettingsCommunityController(context, tdlib));
     } else if (viewId == R.id.btn_chatSettings) {
       navigateTo(new SettingsDataController(context, tdlib));
     } else if (viewId == R.id.btn_privacySettings) {

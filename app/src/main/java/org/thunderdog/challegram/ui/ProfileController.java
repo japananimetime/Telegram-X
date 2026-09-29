@@ -58,6 +58,14 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.MediaCollectorDelegate;
 import org.thunderdog.challegram.component.attach.AvatarPickerManager;
+import org.thunderdog.challegram.loader.ImageFile;
+import org.thunderdog.challegram.loader.ImageGalleryFile;
+import org.thunderdog.challegram.mediaview.MediaSelectDelegate;
+import org.thunderdog.challegram.mediaview.MediaSpoilerSendDelegate;
+import org.thunderdog.challegram.mediaview.MediaViewDelegate;
+import org.thunderdog.challegram.mediaview.MediaViewThumbLocation;
+import org.thunderdog.challegram.mediaview.data.MediaItem;
+import org.thunderdog.challegram.ui.camera.CameraController;
 import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.core.Lang;
@@ -427,8 +435,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       int buttonColorId = getHeaderIconColorId();
 
       if (mode == Mode.SECRET || mode == Mode.USER) {
+        float callAlpha = userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f;
+        HeaderButton videoCallButton = header.addButton(realMenu, R.id.menu_btn_callVideo, R.drawable.baseline_videocam_24, buttonColorId, this, Screen.dp(48f));
+        videoCallButton.setAlpha(callAlpha);
         callButton = header.addButton(realMenu, R.id.menu_btn_call, R.drawable.baseline_phone_24, buttonColorId, this, Screen.dp(48f));
-        callButton.setAlpha(userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f);
+        callButton.setAlpha(callAlpha);
       }
 
       if (mode == Mode.SECRET) {
@@ -488,6 +499,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     } else if (id == R.id.menu_btn_call) {
       if (userFull != null) {
         tdlib.context().calls().makeCall(this, user.id, userFull);
+      }
+    } else if (id == R.id.menu_btn_callVideo) {
+      if (userFull != null) {
+        tdlib.context().calls().makeCall(this, user.id, userFull, Settings.instance().needOutboundCallsPrompt(), true);
       }
       /*case R.id.menu_btn_edit: {
         if (supergroupFull != null) {
@@ -618,6 +633,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.StartEncryptedChat);
     }
 
+    if (user.id != myUserId && canSendGiftToUser()) {
+      ids.append(R.id.more_btn_sendGift);
+      strings.append(R.string.SendGift);
+    }
+
     if (isBot) {
       if (Td.hasUsername(user)) {
         ids.append(R.id.more_btn_share);
@@ -677,6 +697,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         ids.append(R.id.more_btn_share);
         strings.append(R.string.Share);
       }
+      ids.append(R.id.more_btn_boost);
+      strings.append(R.string.Boost);
+    }
+
+    // Add "Create Story" option for channels if user can post stories
+    if (mode == Mode.CHANNEL && supergroup != null && canPostStories()) {
+      ids.append(R.id.more_btn_createStory);
+      strings.append(R.string.CreateStory);
     }
 
     if (!tdlib.isDirectMessagesChat(getChatId()) && (mode == Mode.SUPERGROUP || mode == Mode.GROUP)) {
@@ -693,6 +721,25 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (supergroupFull != null && supergroupFull.canGetStatistics) {
       ids.append(R.id.more_btn_viewStats);
       strings.append(R.string.Stats);
+    }
+
+    if (supergroupFull != null && supergroupFull.canGetStarRevenueStatistics) {
+      ids.append(R.id.more_btn_monetization);
+      strings.append(R.string.Monetization);
+    }
+
+    TdApi.Chat currentVideoChat = tdlib.chat(getChatId());
+    boolean noActiveVideoChat = currentVideoChat == null || currentVideoChat.videoChat == null || currentVideoChat.videoChat.groupCallId == 0;
+    if (noActiveVideoChat && tdlib.canManageVideoChats(currentVideoChat)) {
+      ids.append(R.id.more_btn_startCall);
+      strings.append(isChannel() ? R.string.StartLiveStream : R.string.StartVoiceChat);
+      ids.append(R.id.more_btn_startStream);
+      strings.append(R.string.StartRtmpStream);
+    }
+
+    if (mode == Mode.CHANNEL && Settings.instance().getMessagesFilterSetting(Settings.MESSAGES_FILTER_ENABLED)) {
+      ids.append(R.id.more_btn_messagesFilter);
+      strings.append(R.string.MessagesFilter);
     }
 
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
@@ -762,6 +809,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
             }
           } else if (id == R.id.more_btn_delete) {
             tdlib.ui().deleteContact(this, user.id);
+          } else if (id == R.id.more_btn_sendGift) {
+            openGiftPicker(new TdApi.MessageSenderUser(user.id));
           }
         }
         break;
@@ -784,11 +833,24 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           manageChat();
         } else if (id == R.id.more_btn_viewStats) {
           openStats();
+        } else if (id == R.id.more_btn_boost) {
+          openChatBoost();
+        } else if (id == R.id.more_btn_monetization) {
+          openMonetization();
+        } else if (id == R.id.more_btn_startCall) {
+          tdlib.ui().createVideoChat(this, getChatId(), false);
+        } else if (id == R.id.more_btn_startStream) {
+          tdlib.ui().createVideoChat(this, getChatId(), true);
+        } else if (id == R.id.more_btn_createStory) {
+          openStoryCompose();
         } else if (id == R.id.more_btn_editDescription) {
           editDescription(false);
           return;
         } else if (id == R.id.more_btn_join) {
           joinChannel();
+          return;
+        } else if (id == R.id.more_btn_messagesFilter) {
+          tdlib.ui().openMessageFilterSettings(this, getChatId(), null);
           return;
         }
         break;
@@ -1799,6 +1861,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           } else {
             view.setName(TD.isBot(user) ? R.string.BotInfo : isUserMode() ? R.string.UserBio : R.string.Description);
           }
+        } else if (itemId == R.id.btn_profileNote) {
+          view.setText(profileNoteWrapper);
+          view.setName(R.string.ProfileNote);
+        } else if (itemId == R.id.btn_gifts) {
+          view.setData(Lang.plural(R.string.xGifts, getGiftCount()));
         } else if (itemId == R.id.btn_manageInviteLinks) {
           if (inviteLinksCount == -1) {
             view.setData(Lang.getString(R.string.LoadingInformation));
@@ -1838,7 +1905,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
                 break;
               }
               case MODE_SUPERGROUP:
-              case MODE_CHANNEL: {
+              case Mode.CHANNEL: {
                 if (supergroupFull != null) {
                   StringBuilder b = new StringBuilder();
                   b.append(Lang.plural(R.string.xMembers, supergroupFull.memberCount));
@@ -1943,7 +2010,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           itemId == R.id.btn_toggleProtection ||
           itemId == R.id.btn_toggleJoinByRequest ||
           itemId == R.id.btn_toggleAggressiveAntiSpam ||
-          itemId == R.id.btn_toggleHideMembers) {
+          itemId == R.id.btn_toggleHideMembers ||
+          itemId == R.id.btn_toggleForum ||
+          itemId == R.id.btn_toggleForumTabs) {
           view.getToggler().setRadioEnabled(item.isSelected(), isUpdate);
         }
         if (item.getViewType() == ListItem.TYPE_RADIO_SETTING) {
@@ -2352,6 +2421,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private TextWrapper aboutWrapper;
   private TdApi.FormattedText currentAbout;
 
+  private TextWrapper profileNoteWrapper;
+  private TdApi.FormattedText currentProfileNote;
+
   private static int getTextWidth (int width) {
     return Math.max(0, width - Screen.dp(73f) - Screen.dp(17f));
   }
@@ -2382,6 +2454,67 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       return true;
     }
     return false;
+  }
+
+  private boolean setProfileNote (TdApi.FormattedText text) {
+    if (Td.isEmpty(text)) {
+      text = null;
+    }
+    if (this.currentProfileNote == null || !Td.equalsTo(this.currentProfileNote, text)) {
+      currentProfileNote = text;
+      if (text != null) {
+        profileNoteWrapper = new TextWrapper(tdlib, text, Paints.robotoStyleProvider(15f), TextColorSets.Regular.NORMAL, new TdlibUi.UrlOpenParameters().sourceChat(getChatId()), null);
+        profileNoteWrapper.addTextFlags(Text.FLAG_CUSTOM_LONG_PRESS | (Lang.rtl() ? Text.FLAG_ALIGN_RIGHT : 0));
+        profileNoteWrapper.prepare(getTextWidth(Screen.currentWidth()));
+      } else {
+        profileNoteWrapper = null;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // Opens a single-field editor for the contact's profile note and persists it via SetUserNote.
+  private void editProfileNote () {
+    if (!isUserMode() || user == null) {
+      return;
+    }
+    final long userId = user.id;
+    // user_note_text_length_max is not surfaced as a structured TdlibOptions field, so read it
+    // directly; fall back to TDLib's documented default until the option arrives.
+    tdlib.send(new TdApi.GetOption("user_note_text_length_max"), (value, error) -> tdlib.ui().post(() -> {
+      if (isDestroyed()) {
+        return;
+      }
+      int maxLength = 1024;
+      if (value != null && value.getConstructor() == TdApi.OptionValueInteger.CONSTRUCTOR) {
+        long optionValue = ((TdApi.OptionValueInteger) value).value;
+        if (optionValue > 0) {
+          maxLength = (int) Math.min(optionValue, Integer.MAX_VALUE);
+        }
+      }
+      final int maxNoteLength = maxLength;
+      // Seed the editor with the FULL FormattedText (text + entities) so existing
+      // Bold/Italic/Link/etc. round-trip as editable spans, not just plain text.
+      final CharSequence currentNote = !Td.isEmpty(currentProfileNote) ? TD.toCharSequence(currentProfileNote) : null;
+      MaterialEditTextGroup editText = openInputAlert(Lang.getString(R.string.ProfileNote), Lang.getString(R.string.ProfileNote), R.string.Save, R.string.Cancel, currentNote, (inputView, result) -> {
+        // The alert's editor is an org.thunderdog.challegram.v.EditText subclass, so it can
+        // produce a FormattedText with entities directly (spans + inline Markdown like **bold**,
+        // __italic__, `code`, [text](url)). Ignore the plain `result` string and read the rich text.
+        TdApi.FormattedText formattedNote = Td.trim(inputView.getEditText().getOutputText(true));
+        if (formattedNote == null) {
+          formattedNote = new TdApi.FormattedText("", new TdApi.TextEntity[0]);
+        }
+        tdlib.send(new TdApi.SetUserNote(userId, formattedNote), (ok, setError) -> tdlib.ui().post(() -> {
+          if (setError != null) {
+            UI.showError(setError);
+          }
+          // On success, the resulting updateUserFullInfo refreshes the note row via checkProfileNote().
+        }));
+        return true;
+      }, true);
+      editText.setMaxLength(maxNoteLength);
+    }));
   }
 
   /*private SettingItem newMembersListItem () {
@@ -2422,6 +2555,82 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private ListItem newDescriptionItem () {
     return new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_description, R.drawable.baseline_info_24, TD.isBot(user) ? R.string.BotInfo : isUserMode() ? R.string.UserBio : R.string.Description);
+  }
+
+  private ListItem newProfileNoteItem () {
+    return new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_profileNote, R.drawable.baseline_edit_24, R.string.ProfileNote);
+  }
+
+  private ListItem newGiftsItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_gifts, R.drawable.baseline_gift_outline_24, R.string.Gifts);
+  }
+
+  private int getGiftCount () {
+    if (isUserMode() && userFull != null) {
+      return userFull.giftCount;
+    }
+    if ((mode == Mode.CHANNEL || mode == Mode.SUPERGROUP) && supergroupFull != null) {
+      return supergroupFull.giftCount;
+    }
+    return 0;
+  }
+
+  private void openGifts () {
+    final int giftCount = getGiftCount();
+    if (giftCount <= 0) {
+      return;
+    }
+    final TdApi.MessageSender ownerId;
+    final boolean isSelf;
+    if (isUserMode()) {
+      ownerId = new TdApi.MessageSenderUser(user.id);
+      isSelf = tdlib.isSelfUserId(user.id);
+    } else {
+      ownerId = new TdApi.MessageSenderChat(getChatId());
+      isSelf = false;
+    }
+    GiftsController c = new GiftsController(context, tdlib);
+    c.setArguments(new GiftsController.Args(ownerId, isSelf));
+    navigateTo(c);
+  }
+
+  // Whether the "Send a Gift" entry should be offered for this user/bot.
+  private boolean canSendGiftToUser () {
+    if (!isUserMode() || user == null || userFull == null) {
+      return false;
+    }
+    if (tdlib.isSelfUserId(user.id)) {
+      return false;
+    }
+    TdApi.GiftSettings settings = userFull.giftSettings;
+    if (settings == null) {
+      // Unknown - still allow; SendGift will fail server-side if disallowed.
+      return true;
+    }
+    TdApi.AcceptedGiftTypes types = settings.acceptedGiftTypes;
+    if (types == null) {
+      return true;
+    }
+    return types.unlimitedGifts || types.limitedGifts || types.upgradedGifts;
+  }
+
+  private void openGiftPicker (TdApi.MessageSender ownerId) {
+    GiftPickerController c = new GiftPickerController(context, tdlib);
+    c.setArguments(new GiftPickerController.Args(ownerId));
+    navigateTo(c);
+  }
+
+  private ListItem newGiftSettingsItem () {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_giftSettings, R.drawable.baseline_gift_outline_24, R.string.GiftSettings);
+  }
+
+  private void openGiftSettings () {
+    if (userFull == null) {
+      return;
+    }
+    GiftSettingsController c = new GiftSettingsController(context, tdlib);
+    c.setArguments(new GiftSettingsController.Args(userFull.giftSettings));
+    navigateTo(c);
   }
 
   private ListItem newPeerIdItem () {
@@ -2473,6 +2682,27 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         items.add(newDescriptionItem());
         addedCount++;
       }
+      if (!Td.isEmpty(userFull.note)) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newProfileNoteItem());
+        addedCount++;
+      }
+      if (userFull.giftCount > 0) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newGiftsItem());
+        addedCount++;
+      }
+      if (tdlib.isSelfUserId(user.id)) {
+        if (addedCount > 0) {
+          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        }
+        items.add(newGiftSettingsItem());
+        addedCount++;
+      }
     }
 
     if (!TD.isBot(user)) {
@@ -2515,11 +2745,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   @WorkerThread
   private void prepareFullCells (final TdApi.UserFullInfo userFull) {
     setDescription();
+    setProfileNote(userFull.note);
   }
 
   private void addFullCells (TdApi.UserFullInfo userFull) {
     checkBirthdate();
     checkDescription();
+    checkProfileNote();
     checkGroupsInCommon();
 
     /*if (userFull.commonChatCount > 0) {
@@ -2537,7 +2769,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private void checkUserButtons () {
     if (headerView != null && !isEditing()) {
-      headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_call, BuildConfig.CALLS_AVAILABLE && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f);
+      float callAlpha = BuildConfig.CALLS_AVAILABLE && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f;
+      headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_call, callAlpha);
+      headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_callVideo, callAlpha);
     }
   }
 
@@ -2818,6 +3052,88 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (setDescription()) {
         updateValuedItem(R.id.btn_description);
       }
+    }
+  }
+
+  private void checkProfileNote () {
+    if (isEditing() || userFull == null)
+      return;
+    int foundIndex = baseAdapter.indexOfViewById(R.id.btn_profileNote);
+    boolean hadNote = foundIndex != -1;
+    boolean hasNote = !Td.isEmpty(userFull.note);
+    if (hadNote != hasNote) {
+      if (hadNote) {
+        removeTopItem(foundIndex);
+      } else {
+        ListItem noteItem = newProfileNoteItem();
+        setProfileNote(userFull.note);
+
+        int index = 0;
+        if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_birthdate) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_description) != -1) {
+          index++;
+        }
+        addTopItem(noteItem, index);
+      }
+    } else if (hasNote) {
+      if (setProfileNote(userFull.note)) {
+        updateValuedItem(R.id.btn_profileNote);
+      }
+    }
+  }
+
+  // Inserts/removes/updates the btn_gifts row to reflect the current gift count.
+  // Mirrors checkProfileNote()/checkDescription(): the row is built once at full-cell
+  // time but giftCount can change afterwards (e.g. a gift is received/converted), so
+  // this keeps the row in sync. Placed last among the header "info" rows, matching
+  // both the user (after description/note) and channel (after inviteLink) builds.
+  private void checkGifts () {
+    if (isEditing())
+      return;
+    int foundIndex = baseAdapter.indexOfViewById(R.id.btn_gifts);
+    boolean hadGifts = foundIndex != -1;
+    // Only the user (USER/SECRET) and channel builds emit a gifts row; mirror that
+    // scope so an update doesn't introduce the row in modes that never built it.
+    boolean giftsEligible = mode == Mode.USER || mode == Mode.SECRET || mode == Mode.CHANNEL;
+    boolean hasGifts = giftsEligible && getGiftCount() > 0;
+    if (hadGifts != hasGifts) {
+      if (hadGifts) {
+        removeTopItem(foundIndex);
+      } else {
+        ListItem giftsItem = newGiftsItem();
+        // Count header rows that precede btn_gifts in both the user and channel
+        // builds; none of these appear after gifts, so this yields the right slot.
+        int index = 0;
+        if (Settings.instance().showPeerIds() && baseAdapter.indexOfViewById(R.id.btn_peer_id) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_username) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_birthdate) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_description) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_profileNote) != -1) {
+          index++;
+        }
+        if (baseAdapter.indexOfViewById(R.id.btn_inviteLink) != -1) {
+          index++;
+        }
+        addTopItem(giftsItem, index);
+      }
+    } else if (hasGifts) {
+      updateValuedItem(R.id.btn_gifts);
     }
   }
 
@@ -3171,6 +3487,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       addedCount++;
     }
 
+    if (supergroupFull != null && supergroupFull.giftCount > 0) {
+      if (addedCount > 0) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+      }
+      items.add(newGiftsItem());
+      addedCount++;
+    }
+
     if (addedCount > 0) {
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     }
@@ -3318,6 +3642,65 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     }
   }
 
+  private void toggleForum (View v) {
+    // Only owner can toggle forum mode
+    if (supergroup != null && TD.isCreator(supergroup.status)) {
+      boolean newValue = baseAdapter.toggleView(v);
+      toggleForumItem.setSelected(newValue);
+      // Dynamically show/hide tabs toggle
+      if (newValue) {
+        // Forum enabled - show tabs toggle
+        int insertIndex = baseAdapter.indexOfView(toggleForumItem);
+        if (insertIndex != -1 && toggleForumTabsItem != null) {
+          baseAdapter.addItems(insertIndex + 1,
+            new ListItem(ListItem.TYPE_SEPARATOR_FULL),
+            toggleForumTabsItem
+          );
+          // Update description to show tabs layout info
+          updateForumDescription(true);
+        }
+      } else {
+        // Forum disabled - hide tabs toggle
+        int deleteIndex = baseAdapter.indexOfView(toggleForumTabsItem);
+        if (deleteIndex != -1) {
+          baseAdapter.removeRange(deleteIndex - 1, 2);
+          // Reset tabs toggle
+          if (toggleForumTabsItem != null) {
+            toggleForumTabsItem.setSelected(false);
+          }
+          // Update description to show forum disabled info
+          updateForumDescription(false);
+        }
+      }
+      checkDoneButton();
+    }
+  }
+
+  private void toggleForumTabs (View v) {
+    // Only owner can toggle forum tabs mode
+    if (supergroup != null && TD.isCreator(supergroup.status) && toggleForumTabsItem != null) {
+      boolean newValue = baseAdapter.toggleView(v);
+      toggleForumTabsItem.setSelected(newValue);
+      checkDoneButton();
+    }
+  }
+
+  private void updateForumDescription (boolean isForumEnabled) {
+    // Find the description item and update its text
+    int count = baseAdapter.getItemCount();
+    for (int i = 0; i < count; i++) {
+      ListItem item = baseAdapter.getItem(i);
+      if (item != null && item.getViewType() == ListItem.TYPE_DESCRIPTION) {
+        int stringId = item.getStringResource();
+        if (stringId == R.string.EnableTopicsDesc || stringId == R.string.TopicsLayoutTabsDesc) {
+          item.setString(isForumEnabled ? R.string.TopicsLayoutTabsDesc : R.string.EnableTopicsDesc);
+          baseAdapter.updateValuedSettingByPosition(i);
+          break;
+        }
+      }
+    }
+  }
+
   private void toggleJoinByRequests (View v) {
     if (tdlib.canToggleJoinByRequest(chat)) {
       boolean newValue = baseAdapter.toggleView(v);
@@ -3449,6 +3832,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private void openStats () {
     ChatStatisticsController c = new ChatStatisticsController(context, tdlib);
     c.setArguments(new ChatStatisticsController.Args(chat.id));
+    navigateTo(c);
+  }
+
+  private void openChatBoost () {
+    ChatBoostController c = new ChatBoostController(context, tdlib);
+    c.setArguments(new ChatBoostController.Args(chat.id));
+    navigateTo(c);
+  }
+
+  private void openMonetization () {
+    StarRevenueController c = new StarRevenueController(context, tdlib);
+    c.setArguments(new StarRevenueController.Args(new TdApi.MessageSenderChat(chat.id)));
     navigateTo(c);
   }
 
@@ -3641,7 +4036,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       hasContentProtectionChanges() ||
       hasJoinByRequestChanges() ||
       hasSignMessagesChanges() ||
-      hasShowAuthorsChanges();
+      hasShowAuthorsChanges() ||
+      hasForumChanges();
   }
 
   private boolean hasSlowModeChanges () {
@@ -3677,6 +4073,26 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private boolean hasShowAuthorsChanges () {
     boolean originalValue = supergroup != null && supergroup.showMessageSender;
     return toggleShowAuthorsItem != null && originalValue != toggleShowAuthorsItem.isSelected();
+  }
+
+  private boolean hasForumChanges () {
+    boolean originalValue = supergroup != null && supergroup.isForum;
+    boolean forumChanged = toggleForumItem != null && originalValue != toggleForumItem.isSelected();
+    // Also trigger if tabs layout changed (while forum is enabled)
+    return forumChanged || hasForumTabsChanges();
+  }
+
+  private boolean hasForumTabsChanges () {
+    if (toggleForumTabsItem == null || supergroup == null || !supergroup.isForum) {
+      return false;
+    }
+    // Only consider changes if forum will be enabled (either already enabled or being enabled)
+    boolean willBeForumEnabled = toggleForumItem != null ? toggleForumItem.isSelected() : supergroup.isForum;
+    if (!willBeForumEnabled) {
+      return false; // Tabs changes don't matter if forum is being disabled
+    }
+    boolean originalValue = supergroup.hasForumTabs;
+    return originalValue != toggleForumTabsItem.isSelected();
   }
 
   private boolean hasTtlChanges () {
@@ -3727,8 +4143,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     boolean hasJoinByRequestChanges = hasJoinByRequestChanges();
     boolean hasSignMessagesChanges = hasSignMessagesChanges();
     boolean hasShowAuthorsChanges = hasShowAuthorsChanges();
+    boolean hasForumChanges = hasForumChanges();
 
-    if (!force && (hasSlowModeChanges || hasAggressiveAntiSpamChanges || hasHideMembersChanges || hasJoinByRequestChanges || hasSignMessagesChanges || hasShowAuthorsChanges) && ChatId.isBasicGroup(chat.id)) {
+    if (!force && (hasSlowModeChanges || hasAggressiveAntiSpamChanges || hasHideMembersChanges || hasJoinByRequestChanges || hasSignMessagesChanges || hasShowAuthorsChanges || hasForumChanges) && ChatId.isBasicGroup(chat.id)) {
       showConfirm(Lang.getMarkdownString(this, R.string.UpgradeChatPrompt), Lang.getString(R.string.Proceed), () -> applyChatChanges(true));
       return;
     }
@@ -3782,6 +4199,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
     if (hasHideMembersChanges) {
       changes.add(new TdApi.ToggleSupergroupHasHiddenMembers(ChatId.toSupergroupId(chat.id), hideMembersItem.isSelected()));
+    }
+
+    if (hasForumChanges) {
+      boolean isForum = toggleForumItem.isSelected();
+      // Pass current tabs selection when forum is enabled, false when disabled
+      boolean hasForumTabs = isForum && toggleForumTabsItem != null && toggleForumTabsItem.isSelected();
+      changes.add(new TdApi.ToggleSupergroupIsForum(ChatId.toSupergroupId(chat.id), isForum, hasForumTabs));
     }
 
     if (hasSignMessagesChanges || hasShowAuthorsChanges) {
@@ -3892,7 +4316,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private ListItem slowModeItem, slowModeDescItem;
-  private ListItem aggressiveAntiSpamItem, hideMembersItem,
+  private ListItem aggressiveAntiSpamItem, hideMembersItem, toggleForumItem, toggleForumTabsItem,
     toggleJoinByRequestItem, toggleHasProtectionItem, toggleSignMessagesItem, toggleShowAuthorsItem;
   private ListItem ttlItem, ttlDescItem;
 
@@ -4095,6 +4519,22 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.HideMembersDesc));
     }
 
+    // Forum toggle - only for supergroup owners without linked chat (discussion group)
+    if (supergroup != null && !supergroup.isChannel && TD.isCreator(supergroup.status) && !supergroup.hasLinkedChat) {
+      boolean isForum = supergroup.isForum;
+      boolean hasForumTabs = supergroup.hasForumTabs;
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(toggleForumItem = new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_toggleForum, 0, R.string.EnableTopics, isForum));
+      // Always create the tabs toggle item (for dynamic show/hide), but only add to list if forum is enabled
+      toggleForumTabsItem = new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_toggleForumTabs, 0, R.string.TopicsLayoutTabs, hasForumTabs);
+      if (isForum) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(toggleForumTabsItem);
+      }
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, isForum ? R.string.TopicsLayoutTabsDesc : R.string.EnableTopicsDesc));
+    }
+
     if (tdlib.canEditSlowMode(chat.id)) {
       int slowModeValue = supergroupFull != null ? supergroupFull.slowModeDelay : 0;
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.SlowMode));
@@ -4237,6 +4677,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void processEditContentChanged (TdApi.Supergroup updatedSupergroup) {
+    boolean wasForumChanged = this.supergroup != null && this.supergroup.isForum != updatedSupergroup.isForum;
+    boolean wasForumTabsChanged = this.supergroup != null && this.supergroup.isForum && updatedSupergroup.isForum
+        && this.supergroup.hasForumTabs != updatedSupergroup.hasForumTabs;
     this.supergroup = updatedSupergroup;
     checkCanToggleJoinByRequest();
     baseAdapter.updateValuedSettingById(R.id.btn_toggleProtection);
@@ -4254,6 +4697,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         baseAdapter.updateValuedSettingById(R.id.btn_channelType);
         break;
       }
+    }
+
+    // When forum mode or tabs layout changes, navigate back and reopen the chat
+    if ((wasForumChanged || wasForumTabsChanged) && chat != null) {
+      navigateBack();
+      tdlib.ui().post(() -> {
+        if (!isDestroyed()) {
+          tdlib.ui().openChat(this, chat.id, new TdlibUi.ChatOpenParameters().keepStack());
+        }
+      });
     }
   }
 
@@ -4342,6 +4795,119 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         return TD.isCreator(group.status);
     }
     return false;
+  }
+
+  private boolean canPostStories () {
+    if (supergroup == null || supergroup.status == null) {
+      return false;
+    }
+    switch (supergroup.status.getConstructor()) {
+      case TdApi.ChatMemberStatusCreator.CONSTRUCTOR:
+        return true;
+      case TdApi.ChatMemberStatusAdministrator.CONSTRUCTOR:
+        return ((TdApi.ChatMemberStatusAdministrator) supergroup.status).rights.canPostStories;
+    }
+    return false;
+  }
+
+  private void openStoryCompose () {
+    if (chat == null) return;
+    final long channelChatId = chat.id;
+
+    // Check if channel can post stories (boost level check)
+    tdlib.client().send(new TdApi.CanPostStory(channelChatId), result -> {
+      UI.post(() -> {
+        if (result.getConstructor() == TdApi.CanPostStoryResultOk.CONSTRUCTOR) {
+          // Can post story, open camera
+          openStoryComposeFromCamera(channelChatId);
+        } else if (result.getConstructor() == TdApi.CanPostStoryResultBoostNeeded.CONSTRUCTOR) {
+          // Channel needs more boosts
+          UI.showToast(R.string.StoryBoostNeeded, Toast.LENGTH_LONG);
+        } else if (result.getConstructor() == TdApi.CanPostStoryResultActiveStoryLimitExceeded.CONSTRUCTOR ||
+                   result.getConstructor() == TdApi.CanPostStoryResultWeeklyLimitExceeded.CONSTRUCTOR ||
+                   result.getConstructor() == TdApi.CanPostStoryResultMonthlyLimitExceeded.CONSTRUCTOR) {
+          // Story limit exceeded
+          UI.showToast(R.string.StoryLimitExceeded, Toast.LENGTH_LONG);
+        } else if (result.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+          // Error
+          UI.showToast(R.string.StoryPostError, Toast.LENGTH_LONG);
+        }
+      });
+    });
+  }
+
+  private void openStoryComposeFromCamera (final long channelChatId) {
+    CameraOpenOptions options = new CameraOpenOptions()
+      .mode(CameraController.MODE_MAIN)
+      .ignoreAnchor(true)
+      .allowSystem(false)
+      .optionalMicrophone(true)
+      .setMediaEditorDelegates(
+        new MediaViewDelegate() {
+          @Override
+          public MediaViewThumbLocation getTargetLocation (int indexInStack, MediaItem item) {
+            return null;
+          }
+
+          @Override
+          public void setMediaItemVisible (int index, MediaItem item, boolean isVisible) {
+          }
+        },
+        new MediaSelectDelegate() {
+          @Override
+          public boolean isMediaItemSelected (int index, MediaItem item) {
+            return false;
+          }
+
+          @Override
+          public void setMediaItemSelected (int index, MediaItem item, boolean isSelected) {
+          }
+
+          @Override
+          public int getSelectedMediaCount () {
+            return 0;
+          }
+
+          @Override
+          public boolean canDisableMarkdown () {
+            return false;
+          }
+
+          @Override
+          public long getOutputChatId () {
+            return 0;
+          }
+
+          @Override
+          public ArrayList<ImageFile> getSelectedMediaItems (boolean copy) {
+            return null;
+          }
+        },
+        new MediaSpoilerSendDelegate() {
+          @Override
+          public boolean sendSelectedItems (View view, ArrayList<ImageFile> images, TdApi.MessageSendOptions options, boolean disableMarkdown, boolean asFiles, boolean showCaptionAboveMedia, boolean hasSpoiler) {
+            if (images != null && !images.isEmpty()) {
+              ImageGalleryFile galleryFile = (ImageGalleryFile) images.get(0);
+              boolean isVideo = galleryFile.isVideo();
+              String filePath = galleryFile.getFilePath();
+              context().forceCloseCamera();
+              UI.post(() -> {
+                openStoryPreview(galleryFile, isVideo, channelChatId);
+              }, 350L);
+            }
+            return true;
+          }
+        }
+      );
+    openInAppCamera(options);
+  }
+
+  private void openStoryPreview (ImageGalleryFile file, boolean isVideo, long channelChatId) {
+    String filePath = file.getFilePath();
+    double videoDuration = isVideo ? file.getVideoDuration(false) : 0;
+    StoryPreviewController controller = new StoryPreviewController(context, tdlib);
+    controller.setArguments(new StoryPreviewController.Args(filePath, isVideo, videoDuration, channelChatId));
+    navigateTo(controller);
   }
 
   public boolean canAddAnyKindOfMembers () {
@@ -4859,6 +5425,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       } else {
         showDescriptionOptions(false, descriptionLanguage = null);
       }
+    } else if (viewId == R.id.btn_profileNote) {
+      editProfileNote();
+    } else if (viewId == R.id.btn_gifts) {
+      openGifts();
+    } else if (viewId == R.id.btn_giftSettings) {
+      openGiftSettings();
     } else if (viewId == R.id.btn_notifications) {
       tdlib.ui().showMuteOptions(this, chat.id, true, null);
     } else if (viewId == R.id.btn_encryptionKey) {
@@ -4907,6 +5479,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       toggleAggressiveAntiSpam(v);
     } else if (viewId == R.id.btn_toggleHideMembers) {
       toggleHideMembers(v);
+    } else if (viewId == R.id.btn_toggleForum) {
+      toggleForum(v);
+    } else if (viewId == R.id.btn_toggleForumTabs) {
+      toggleForumTabs(v);
     } else if (viewId == R.id.btn_toggleProtection) {
       toggleContentProtection(v);
     } else if (viewId == R.id.btn_toggleJoinByRequest) {
@@ -6267,6 +6843,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         checkUserButtons();
         checkGroupsInCommon();
         checkDescription();
+        checkProfileNote();
+        checkGifts();
         if (mode == Mode.EDIT_BOT_USER) {
           updateValuedItem(R.id.btn_botDescription);
         }
@@ -6581,6 +7159,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           }
           checkDescription();
           checkManage();
+          checkGifts();
           if (mode == Mode.EDIT_CHANNEL) {
             checkChannelMembers();
           }

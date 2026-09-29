@@ -2548,6 +2548,7 @@ public class TD {
       case "Not Found": res = R.string.error_NotFound; break;
       case "Can't access the chat": res = R.string.errorChatInaccessible; break;
       case "The maximum number of pinned chats exceeded": return Lang.plural(R.string.ErrorPinnedChatsLimit, TdlibManager.instance().current().pinnedChatsMaxCount());
+      case "BALANCE_TOO_LOW": case "not enough stars": res = R.string.PaidReactionInsufficientStars; break;
       default: {
         String lookup = StringUtils.toCamelCase(message);
         if (lookup.matches("^[A-Za-z0-9_]+$")) {
@@ -6295,5 +6296,31 @@ public class TD {
     }
 
     return content;
+  }
+
+  public static boolean isTelegramOwnedHost (Uri uri, boolean allowTelegraph) {
+    String host = uri.getHost();
+    if (host == null) {
+      return false;
+    }
+
+    for (String knownHost : TdConstants.TME_HOSTS) {
+      if (StringUtils.equalsOrBothEmpty(host, knownHost) || host.endsWith("." + knownHost)) {
+        return true;
+      }
+    }
+    if (allowTelegraph) {
+      for (String knownHost : TdConstants.TELEGRAM_HOSTS) {
+        if (StringUtils.equalsOrBothEmpty(host, knownHost) || host.endsWith("." + knownHost)) {
+          return true;
+        }
+      }
+      for (String knownHost : TdConstants.TELEGRAPH_HOSTS) {
+        if (StringUtils.equalsOrBothEmpty(host, knownHost) || host.endsWith("." + knownHost)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

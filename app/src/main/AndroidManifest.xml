@@ -69,6 +69,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
   <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
   <uses-permission android:name="android.permission.CHANGE_CONFIGURATION"
     tools:ignore="ProtectedPermissions" />
@@ -76,7 +77,10 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
   <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-  <uses-permission android:name="android.permission.BLUETOOTH" />
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+  <!-- Android 12+ requires BLUETOOTH_CONNECT (runtime) to enumerate/route to Bluetooth audio
+       devices during calls; without it getAvailableCommunicationDevices() hides BT headsets. -->
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
   <!--<uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />-->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
     tools:ignore="RequestInstallPackagesPolicy" />
@@ -182,6 +186,13 @@
       android:stopWithTask="false" />
 
     <service
+      android:name=".service.GroupCallService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="phoneCall|microphone|mediaPlayback|mediaProjection"
+      android:stopWithTask="false" />
+
+    <service
       android:name=".service.BootListenerService"
       android:enabled="@bool/bootServiceEnabled"
       android:exported="false"
@@ -265,7 +276,7 @@
     <service
       android:name=".service.TGCallService"
       android:exported="false"
-      android:foregroundServiceType="phoneCall|microphone|mediaPlayback" />
+      android:foregroundServiceType="phoneCall|microphone|mediaPlayback|mediaProjection" />
     <receiver android:name=".receiver.VoIPMediaButtonReceiver"
       android:exported="false">
       <intent-filter>

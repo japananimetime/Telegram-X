@@ -479,6 +479,17 @@ public class U {
   }
 
   public static void startForeground (Service service, int notificationId, Notification notification) {
+    startForeground(service, notificationId, notification, false);
+  }
+
+  /**
+   * @param includeMediaProjection when true, adds {@code FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION}
+   *   to the runtime foreground-service type. Required (Android 10+) before a call service can
+   *   obtain a {@code MediaProjection} for screen sharing; must only be passed once the user has
+   *   granted the projection permission. Dropping it (passing false again) reverts to the
+   *   call-only types.
+   */
+  public static void startForeground (Service service, int notificationId, Notification notification, boolean includeMediaProjection) {
     if (notification == null)
       throw new IllegalArgumentException();
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -494,6 +505,9 @@ public class U {
             knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
           }
           knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
+          if (includeMediaProjection) {
+            knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION;
+          }
           service.startForeground(notificationId, notification, knownType);
           return;
         }

@@ -495,8 +495,6 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessageGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageUpgradedGiftPurchaseOffer.CONSTRUCTOR:
-      case TdApi.MessageUpgradedGiftPurchaseOfferRejected.CONSTRUCTOR:
-      case TdApi.MessageStakeDice.CONSTRUCTOR:
       case TdApi.MessageRefundedUpgradedGift.CONSTRUCTOR:
       case TdApi.MessageContactRegistered.CONSTRUCTOR:
       case TdApi.MessageUsersShared.CONSTRUCTOR:
@@ -525,7 +523,8 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
       case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
       case TdApi.MessageUnsupported.CONSTRUCTOR: {
-        // No media preview.
+        // No media preview (rich messages have no single representative thumbnail; the text
+        // preview is still produced by ContentPreview).
         break;
       }
       default: {
