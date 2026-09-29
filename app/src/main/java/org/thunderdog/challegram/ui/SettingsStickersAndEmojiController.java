@@ -23,11 +23,14 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
+import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGReaction;
 import org.thunderdog.challegram.data.TGStickerSetInfo;
+import org.thunderdog.challegram.navigation.NavigationController;
 import org.thunderdog.challegram.navigation.SettingsWrapBuilder;
+import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.StickersListener;
 import org.thunderdog.challegram.telegram.TGLegacyManager;
 import org.thunderdog.challegram.telegram.Tdlib;
@@ -86,7 +89,13 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
           }
         } else if (itemId == R.id.btn_big_reactions) {
           StringBuilder b = new StringBuilder();
+          if (Settings.instance().getBigReactionsInDMs()) {
+            b.append(Lang.getString(R.string.BigReactionsDMs));
+          }
           if (Settings.instance().getBigReactionsInChats()) {
+            if (b.length() > 0) {
+              b.append(Lang.getConcatSeparator());
+            }
             b.append(Lang.getString(R.string.BigReactionsChats));
           }
           if (Settings.instance().getBigReactionsInChannels()) {
@@ -108,6 +117,12 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
           }
         } else if (itemId == R.id.btn_useBigEmoji) {
           v.getToggler().setRadioEnabled(Settings.instance().useBigEmoji(), isUpdate);
+        } else if (itemId == R.id.btn_showCameraWhileTyping) {
+          v.getToggler().setRadioEnabled(Settings.instance().getShowCameraWhileTyping(), isUpdate);
+        } else if (itemId == R.id.btn_showAttachWhileTyping) {
+          v.getToggler().setRadioEnabled(Settings.instance().getShowAttachWhileTyping(), isUpdate);
+        } else if (itemId == R.id.btn_showVoiceWhileTyping) {
+          v.getToggler().setRadioEnabled(Settings.instance().getShowVoiceWhileTyping(), isUpdate);
         } else if (itemId == R.id.btn_toggleNewSetting) {
           boolean value = Settings.instance().getNewSetting(item.getLongId());
           if (item.getBoolValue())
@@ -195,6 +210,8 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickerSettings, R.drawable.deproko_baseline_insert_sticker_24, R.string.StickerPacks));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickerSetCreate, R.drawable.baseline_create_24, R.string.StickerPackCreate));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_stickerSuggestions, 0, R.string.SuggestStickers));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_toggleNewSetting, 0, R.string.LoopAnimatedStickers).setLongId(Settings.SETTING_FLAG_NO_ANIMATED_STICKERS_LOOP).setBoolValue(true));
@@ -202,6 +219,15 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_toggleNewSetting, 0, R.string.DynamicStickerPackOrder).setLongId(Settings.SETTING_FLAG_DYNAMIC_ORDER_STICKER_PACKS));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.DynamicStickerPackOrderHint));
+    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.InputWhileTyping));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.InputWhileTypingInfo));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_showCameraWhileTyping, 0, R.string.ShowCameraWhileTyping));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_showAttachWhileTyping, 0, R.string.ShowAttachWhileTyping));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_showVoiceWhileTyping, 0, R.string.ShowVoiceWhileTyping));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     TGLegacyManager.instance().addEmojiListener(this);
 
     adapter.setItems(items, true);
@@ -246,12 +272,20 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
     } else if (viewId == R.id.btn_big_reactions) {
       showSettings(R.id.btn_big_reactions, new ListItem[] {
         new ListItem(ListItem.TYPE_INFO, 0, 0, R.string.BigReactionsInfo),
+        new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_bigReactionsDMs, 0, R.string.BigReactionsDMs, R.id.btn_bigReactionsDMs, Settings.instance().getBigReactionsInDMs()),
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_bigReactionsChats, 0, R.string.BigReactionsChats, R.id.btn_bigReactionsChats, Settings.instance().getBigReactionsInChats()),
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_bigReactionsChannels, 0, R.string.BigReactionsChannels, R.id.btn_bigReactionsChannels, Settings.instance().getBigReactionsInChannels())
       }, (id, result) -> {
+        Settings.instance().setBigReactionsInDMs(result.get(R.id.btn_bigReactionsDMs) == R.id.btn_bigReactionsDMs);
         Settings.instance().setBigReactionsInChannels(result.get(R.id.btn_bigReactionsChannels) == R.id.btn_bigReactionsChannels);
         Settings.instance().setBigReactionsInChats(result.get(R.id.btn_bigReactionsChats) == R.id.btn_bigReactionsChats);
         adapter.updateValuedSettingById(R.id.btn_big_reactions);
+        // The Big Reactions toggle is stored as plain preference keys and fires no
+        // SettingsChangeListener broadcast, so MessagesManager.refreshBigReactions()
+        // has to be invoked manually here. Walk the current navigation stack and
+        // refresh any open chat so the new reaction style takes effect immediately
+        // instead of only on the next chat re-open.
+        refreshOpenChatsBigReactions();
       });
     } else if (viewId == R.id.btn_emoji) {
       SettingsCloudEmojiController c = new SettingsCloudEmojiController(context, tdlib);
@@ -272,6 +306,8 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
       SettingsStickersController c = new SettingsStickersController(context, tdlib, SettingsStickersController.TYPE_STICKER);
       c.setArguments(getArguments());
       navigateTo(c);
+    } else if (viewId == R.id.btn_stickerSetCreate) {
+      navigateTo(new StickerSetsController(context, tdlib));
     } else if (viewId == R.id.btn_animatedEmojiSettings) {
       SettingsStickersController c = new SettingsStickersController(context, tdlib, SettingsStickersController.TYPE_EMOJI);
       c.setArguments(getArguments());
@@ -282,6 +318,27 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
       showStickerOptions(true);
     } else if (viewId == R.id.btn_avatarsInReactions) {
       showReactionAvatarsOptions();
+    } else if (viewId == R.id.btn_showCameraWhileTyping) {
+      Settings.instance().setShowCameraWhileTyping(adapter.toggleView(v));
+    } else if (viewId == R.id.btn_showAttachWhileTyping) {
+      Settings.instance().setShowAttachWhileTyping(adapter.toggleView(v));
+    } else if (viewId == R.id.btn_showVoiceWhileTyping) {
+      Settings.instance().setShowVoiceWhileTyping(adapter.toggleView(v));
+    }
+  }
+
+  private void refreshOpenChatsBigReactions () {
+    NavigationController navigation = context.navigation();
+    if (navigation == null) {
+      return;
+    }
+    for (ViewController<?> c : navigation.getStack().getAll()) {
+      if (c instanceof MessagesController) {
+        MessagesManager manager = ((MessagesController) c).getManager();
+        if (manager != null) {
+          manager.refreshBigReactions();
+        }
+      }
     }
   }
 

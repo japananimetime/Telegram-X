@@ -962,6 +962,20 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
     }
   }
 
+  private int extraRightPadding = 0;
+
+  public void setExtraRightPadding (int extraPadding) {
+    if (this.extraRightPadding != extraPadding) {
+      this.extraRightPadding = extraPadding;
+      final int verticalPadding = Screen.dp(12f);
+      if (Lang.rtl()) {
+        setPadding(Screen.dp(55f) + extraPadding, verticalPadding, Screen.dp(60f), verticalPadding);
+      } else {
+        setPadding(Screen.dp(60f), verticalPadding, Screen.dp(55f) + extraPadding, verticalPadding);
+      }
+    }
+  }
+
   private boolean needSendByEnter () {
     return Settings.instance().needSendByEnter() && !isSettingText && controller != null && controller.inSimpleSendMode();
   }
@@ -1289,8 +1303,15 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
     String current = getInput().trim();
     controller.setInputVisible(true, current.length() > 0);
     if (!draft.equals(current)) {
+      // ignoreDraft must only cover the programmatic setInput() below: TextWatcher callbacks
+      // run synchronously inside setText(). Leaving it set permanently made every later user
+      // edit report byUserAction=false, so ChatActionTyping was never sent again for this chat.
       ignoreDraft = true;
-      setInput(draft, draft.length() > 0, false);
+      try {
+        setInput(draft, draft.length() > 0, false);
+      } finally {
+        ignoreDraft = false;
+      }
       controller.updateSendButton(draft.toString(), false);
     }
   }
