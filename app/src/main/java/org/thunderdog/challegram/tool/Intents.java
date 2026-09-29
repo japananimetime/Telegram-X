@@ -78,6 +78,7 @@ public class Intents {
   public static final int ACTIVITY_RESULT_RINGTONE_NOTIFICATION = 108;
   public static final int ACTIVITY_RESULT_VIDEO_CAPTURE = 109;
   public static final int ACTIVITY_RESULT_MANAGE_STORAGE = 110;
+  public static final int ACTIVITY_RESULT_SCREEN_CAPTURE = 111;
 
   private static final String PACKAGE_NAME = BuildConfig.APPLICATION_ID; // UI.getAppContext().getPackageName();
 
@@ -710,12 +711,19 @@ public class Intents {
   }
 
   public static Intent valueOfLocalChatId (int accountId, long localChatId, long specificMessageId) {
+    return valueOfLocalChatId(accountId, localChatId, specificMessageId, 0);
+  }
+
+  public static Intent valueOfLocalChatId (int accountId, long localChatId, long specificMessageId, long messageThreadId) {
     Intent intent = new Intent(UI.getContext(), MainActivity.class);
     secureIntent(intent, true);
     intent.setAction(Intents.ACTION_OPEN_CHAT + "." + accountId + "." + localChatId + "." + Math.random());
     intent.putExtra("account_id", accountId);
     intent.putExtra("local_id", localChatId);
     intent.putExtra("message_id", specificMessageId);
+    if (messageThreadId != 0) {
+      intent.putExtra("message_thread_id", messageThreadId);
+    }
     // intent.setFlags(32768);
     return intent;
   }

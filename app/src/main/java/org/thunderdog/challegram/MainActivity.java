@@ -782,8 +782,9 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         }
       }
       long messageId = intent.getLongExtra("message_id", 0);
+      long messageThreadId = intent.getLongExtra("message_thread_id", 0);
       if (accountId != TdlibAccount.NO_ID && chatId != 0) {
-        openMessagesController(accountId, chatId, messageId);
+        openMessagesController(accountId, chatId, messageId, messageThreadId);
         return true;
       } else {
         Log.e("Cannot open chat, no information found: %s", intent);
@@ -1383,7 +1384,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     }
   }
 
-  private void openMessagesController (int accountId, long chatId, long specificMessageId) {
+  private void openMessagesController (int accountId, long chatId, long specificMessageId, long messageThreadId) {
     final Tdlib tdlib = TdlibManager.instanceForAccountId(accountId).account(accountId).tdlib();
     tdlib.awaitInitialization(() -> {
       tdlib.incrementUiReferenceCount();
@@ -1392,6 +1393,10 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         final TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().onDone(tdlib::decrementUiReferenceCount);
         if (specificMessageId != 0)
           params.highlightMessage(new MessageId(chatId, specificMessageId));
+        // Handle forum topic opening
+        if (messageThreadId != 0) {
+          params.messageTopic(new TdApi.MessageTopicForum((int) messageThreadId));
+        }
         tdlib.ui().openChat(context, chatId, params);
       });
     });
