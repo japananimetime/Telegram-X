@@ -74,11 +74,7 @@ public class WebkitController<T> extends ViewController<T> {
     webView.getSettings().setDomStorageEnabled(true);
     webView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      // FIXME maybe better to remove?
-      webView.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-    }
+    configureWebViewSecurity(webView);
 
     if (hasSpecialProcessing()) {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -178,6 +174,68 @@ public class WebkitController<T> extends ViewController<T> {
   @Override
   public View getCustomHeaderCell () {
     return headerCell;
+  }
+
+  /**
+   * Applies the security-sensitive WebView settings. The base implementation keeps the
+   * historically permissive behavior used by the generic in-app browser, the Telegram FAQ
+   * page and HTML5 games (these load only remote http(s) URLs and never need file access).
+   *
+   * Subclasses that expose a privileged surface — notably {@link WebAppController}, which
+   * injects the {@code TelegramWebviewProxy} JS bridge into attacker-influenced bot pages —
+   * MUST NOT relax these defaults and should override {@link #allowsMixedContent()},
+   * {@link #allowsThirdPartyCookies()} and {@link #allowsFileAccess()} to harden them.
+   */
+  protected void configureWebViewSecurity (WebView webView) {
+    final WebSettings settings = webView.getSettings();
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      // Decision (resolves former "maybe better to remove?" FIXME): the generic in-app browser
+      // keeps MIXED_CONTENT_ALWAYS_ALLOW and third-party cookies enabled on purpose, for
+      // compatibility with arbitrary remote sites (FAQ pages, HTML5 games, login flows that rely
+      // on cross-site cookies and pages that still serve mixed http(s) sub-resources). Tightening
+      // these globally would visibly break such pages. Hardening is therefore opt-in per surface:
+      // privileged WebViews that inject the JS bridge (WebAppController / Mini Apps) override
+      // allowsMixedContent()/allowsThirdPartyCookies() to return false (NEVER_ALLOW + no
+      // third-party cookies), so the permissive defaults never apply to attacker-influenced pages.
+      settings.setMixedContentMode(allowsMixedContent() ? WebSettings.MIXED_CONTENT_ALWAYS_ALLOW : WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, allowsThirdPartyCookies());
+    }
+
+    // setAllowFileAccess defaults to true on API < 30; explicitly pin the file/content
+    // access flags so they reflect allowsFileAccess() on every API level. Instant View is
+    // rendered natively by InstantViewController (no WebView), so this never affects it.
+    final boolean allowFileAccess = allowsFileAccess();
+    settings.setAllowFileAccess(allowFileAccess);
+    settings.setAllowContentAccess(allowFileAccess);
+    settings.setAllowFileAccessFromFileURLs(allowFileAccess);
+    settings.setAllowUniversalAccessFromFileURLs(allowFileAccess);
+  }
+
+  /**
+   * @return whether active mixed content (https pages loading http scripts) is allowed.
+   * Defaults to {@code true} to preserve the legacy browser behavior; overridden to
+   * {@code false} on privileged surfaces.
+   */
+  protected boolean allowsMixedContent () {
+    return true;
+  }
+
+  /**
+   * @return whether the WebView may set/read third-party cookies. Defaults to {@code true}
+   * for the legacy browser behavior; overridden to {@code false} on privileged surfaces.
+   */
+  protected boolean allowsThirdPartyCookies () {
+    return true;
+  }
+
+  /**
+   * @return whether the WebView may access {@code file://}/{@code content://} resources.
+   * Defaults to {@code true} to keep the browser/FAQ/game behavior unchanged; overridden to
+   * {@code false} on privileged surfaces so file:// is unreachable from bot-controlled pages.
+   */
+  protected boolean allowsFileAccess () {
+    return true;
   }
 
   protected boolean hasSpecialProcessing () {
