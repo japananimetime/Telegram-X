@@ -29,6 +29,7 @@ import androidx.annotation.Nullable;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.FillingDrawable;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.component.dialogs.ChatView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.AvatarPlaceholder;
@@ -68,6 +69,7 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
   // private final TextPaint namePaint, phonePaint;
   private DoubleImageReceiver receiver;
   private DoubleImageReceiver receiver2;
+  private DoubleImageReceiver blurredReceiver; // Community feature: blur drawer
 
   private DrawerController parent;
 
@@ -95,6 +97,9 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
     this.receiver2.setAnimationDisabled(true);
     this.receiver.setRadius(0);
     this.receiver2.setRadius(0);
+    // Community feature: blur drawer
+    this.blurredReceiver = new DoubleImageReceiver(this, 1);
+    this.blurredReceiver.setRadius(0);
 
     TdlibAccount account = TdlibManager.instance().currentAccount();
     TdlibManager.instance().global().addAccountListener(this);
@@ -277,6 +282,7 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
     private final long userId;
     private final String name, phone;
     private ImageFile avatar, avatarFull;
+    private ImageFile avatarBlurred, avatarFullBlurred; // Community feature: blur drawer
     private final AvatarPlaceholder avatarPlaceholder;
     private final EmojiStatusHelper emojiStatusHelper;
 
@@ -302,8 +308,26 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
         if (drawerWidth < 512) {
           avatarFull.setSize(drawerWidth);
         }
+
+        // Community feature: blur drawer - create blurred versions
+        if (CommunityConfig.blurDrawer) {
+          avatarBlurred = ImageFile.copyOf(imageFile);
+          avatarBlurred.setSize(ChatView.getDefaultAvatarCacheSize());
+          avatarBlurred.setScaleType(ImageFile.CENTER_CROP);
+          avatarBlurred.setBlur(7);
+
+          avatarFullBlurred = ImageFile.copyOf(bigFile != null ? bigFile : imageFile);
+          avatarFullBlurred.setScaleType(ImageFile.CENTER_CROP);
+          avatarFullBlurred.setBlur(7);
+          if (drawerWidth < 512) {
+            avatarFullBlurred.setSize(drawerWidth);
+          }
+        } else {
+          avatarBlurred = avatarFullBlurred = null;
+        }
       } else {
         avatar = avatarFull = null;
+        avatarBlurred = avatarFullBlurred = null;
       }
     }
 
@@ -505,6 +529,10 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
       this.displayInfoFuture = info;
       this.displayInfoFuture.calculateDiff(this.displayInfo);
       receiver2.requestFile(info.avatar, info.avatarFull);
+      // Community feature: blur drawer
+      if (CommunityConfig.blurDrawer) {
+        blurredReceiver.requestFile(info.avatarBlurred, info.avatarFullBlurred);
+      }
 
       animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, SWITCH_DURATION);
       animator.animateTo(1f);
@@ -512,6 +540,10 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
       DisplayInfo oldDisplayInfo = this.displayInfo;
       this.displayInfo = info;
       receiver.requestFile(info.avatar, info.avatarFull);
+      // Community feature: blur drawer
+      if (CommunityConfig.blurDrawer) {
+        blurredReceiver.requestFile(info.avatarBlurred, info.avatarFullBlurred);
+      }
       invalidate();
       if (oldDisplayInfo != null) {
         oldDisplayInfo.performDestroy();
@@ -547,6 +579,7 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
   protected void onAttachedToWindow () {
     super.onAttachedToWindow();
     receiver.attach();
+    blurredReceiver.attach(); // Community feature: blur drawer
     EmojiStatusHelper helper = findActiveEmojiStatusHelper();
     if (helper != null) {
       helper.attach();
@@ -557,6 +590,7 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
   protected void onDetachedFromWindow () {
     super.onDetachedFromWindow();
     receiver.detach();
+    blurredReceiver.detach(); // Community feature: blur drawer
     EmojiStatusHelper helper = findActiveEmojiStatusHelper();
     if (helper != null) {
       helper.detach();
@@ -605,6 +639,15 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
 
     final int viewWidth = getMeasuredWidth();
     final int viewHeight = getMeasuredHeight();
+
+    // Community feature: blur drawer - draw blurred background
+    if (CommunityConfig.blurDrawer && displayInfo != null && displayInfo.avatarBlurred != null) {
+      blurredReceiver.setBounds(0, 0, viewWidth, viewHeight);
+      blurredReceiver.draw(c);
+      // Draw semi-transparent overlay to darken the blur
+      c.drawColor(0x40000000);
+    }
+
     // int textColor = getTextColor();
     float avatarFactor;
     if (displayInfoFuture == null || displayInfo == null) {

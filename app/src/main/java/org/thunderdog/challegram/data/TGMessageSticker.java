@@ -26,6 +26,7 @@ import androidx.annotation.Nullable;
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.component.chat.MessageView;
 import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.config.Config;
@@ -693,6 +694,10 @@ public class TGMessageSticker extends TGMessage implements AnimatedEmojiListener
                 preview.disablePorterDuffColorFilter();
                 target.disablePorterDuffColorFilter();
               }
+              // Community feature: rounded stickers
+              float stickerRadius = CommunityConfig.roundedStickers ? Screen.dp(12f) : 0;
+              preview.setRadius(stickerRadius);
+              target.setRadius(stickerRadius);
               DrawAlgorithms.drawReceiver(c, preview, target, !representation.isAnimated(), false, left, top, right, bottom);
             }
           }

@@ -11,6 +11,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.component.dialogs.ChatView;
 import org.thunderdog.challegram.data.AvatarPlaceholder;
 import org.thunderdog.challegram.loader.gif.GifFile;
@@ -1124,6 +1125,10 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     float fullScreen = this.isFullScreen.getFloatValue();
     if (fullScreen != 1f) {
       float maxRadius = Math.min(getWidth(), getHeight()) / 2f;
+      // Community feature: square avatars
+      if (CommunityConfig.squareAvatars) {
+        return maxRadius * 0.1f * (1f - fullScreen);
+      }
       float defaultAvatarRadius = defaultAvatarRadiusPropertyId != 0 ? Theme.getProperty(defaultAvatarRadiusPropertyId) : -1.0f;
       if (defaultAvatarRadius == -1.0f) {
         defaultAvatarRadius = Theme.getProperty(PropertyId.AVATAR_RADIUS);

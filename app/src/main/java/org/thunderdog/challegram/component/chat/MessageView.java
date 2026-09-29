@@ -630,6 +630,14 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     boolean isSent = !msg.isNotSent();
     Object tag = null;
 
+    final boolean isHiddenByMessagesFilter = msg.isHiddenByMessagesFilter();
+
+    if (!isMore && (isHiddenByMessagesFilter /*|| BuildConfig.DEBUG*/)) {
+      ids.append(R.id.btn_messageChangeMessageFilterVisibility);
+      strings.append(Lang.getString(R.string.MessagesFilterShowMessage));
+      icons.append(R.drawable.baseline_visibility_24);
+    }
+
     // Promotion
 
     if (msg.isSponsoredMessage()) {
@@ -902,6 +910,27 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       ids.append(R.id.btn_chatTranslate);
       strings.append(R.string.Translate);
       icons.append(R.drawable.baseline_translate_24);
+    }
+
+    // AI summary — only when TDLib reports the message is summarizable
+    if (!isMore && isSent && messageCount == 1 && !StringUtils.isEmpty(newestMessage.summaryLanguageCode)) {
+      ids.append(R.id.btn_messageSummarize);
+      strings.append(R.string.Summarize);
+      icons.append(R.drawable.baseline_info_24);
+    }
+
+    // Voice/video-note transcription
+    if (!isMore && isSent && messageCount == 1 && msg.canRecognizeSpeech()) {
+      ids.append(R.id.btn_messageTranscribe);
+      strings.append(R.string.Transcribe);
+      icons.append(R.drawable.baseline_mic_24);
+    }
+
+    // Fact check (admins/moderators)
+    if (!isMore && isSent && messageCount == 1 && msg.canSetFactCheck()) {
+      ids.append(R.id.btn_messageFactCheck);
+      strings.append(msg.getFactCheck() != null ? R.string.FactCheckEdit : R.string.FactCheckAdd);
+      icons.append(R.drawable.baseline_info_24);
     }
 
     if (messageCount == 1) {
@@ -1551,7 +1580,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         } else {
           preventLongPress();
         }
-        if (c.inSelectMode() || !msg.onTouchEvent(this, e)) {
+        if (c.inSelectMode() || msg.isHiddenByMessagesFilter() || !msg.onTouchEvent(this, e)) {
           flags |= FLAG_CAUGHT_CLICK;
         } else {
           flags |= FLAG_CAUGHT_MESSAGE_TOUCH;
