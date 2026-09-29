@@ -21,6 +21,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.navigation.ViewController;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import me.vkryl.core.StringUtils;
 import tgx.td.Td;
@@ -407,9 +409,15 @@ public class FormattedText {
   }
 
   private static void parseRichText (ViewController<?> context, TdApi.RichText in, StringBuilder out, ArrayList<TextEntityCustom> entities, int[] offset, int flags, int linkOffset, int[] linkLength, int linkType, String link, boolean linkCached, @Nullable String referenceAnchorName, String copyLink, @Nullable TdlibUi.UrlOpenParameters openParameters, TdApi.InlineButton inlineButton) {
+    if (in == null) {
+      // Rich messages may carry malformed/partial trees with null-nested RichText nodes.
+      // Guard here so one null doesn't throw and collapse the whole message to "Unsupported".
+      return;
+    }
     switch (in.getConstructor()) {
       case TdApi.RichTextPlain.CONSTRUCTOR: {
-        final String text = ((TdApi.RichTextPlain) in).text;
+        final String rawText = ((TdApi.RichTextPlain) in).text;
+        final String text = rawText != null ? rawText : "";
         out.append(text);
         if (flags != 0) {
           TextEntityCustom custom = new TextEntityCustom(context, context.tdlib(), text, offset[0], offset[0] + text.length(), flags, linkCached ? new TdlibUi.UrlOpenParameters(openParameters).forceInstantView() : openParameters)
@@ -426,24 +434,45 @@ public class FormattedText {
       }
       case TdApi.RichTextCustomEmoji.CONSTRUCTOR: {
         TdApi.RichTextCustomEmoji customEmoji = (TdApi.RichTextCustomEmoji) in;
-        TextEntityCustom custom = new TextEntityCustom(context, context.tdlib(), "", offset[0], offset[0], flags, linkCached ? new TdlibUi.UrlOpenParameters(openParameters).forceInstantView() : openParameters)
+        // Render the actual custom emoji over its alternative text: Text draws the glyph for any
+        // entity whose isCustomEmoji() is true, via the same text-media receiver path as RichTextIcon.
+        final String altText = customEmoji.alternativeText != null ? customEmoji.alternativeText : "";
+        out.append(altText);
+        TextEntityCustom custom = new TextEntityCustom(context, context.tdlib(), altText, offset[0], offset[0] + altText.length(), flags, linkCached ? new TdlibUi.UrlOpenParameters(openParameters).forceInstantView() : openParameters)
           .setReferenceAnchorName(referenceAnchorName).setCopyLink(copyLink)
           .setEmoji(customEmoji);
         if (linkType != TextEntityCustom.LINK_TYPE_NONE) {
           custom.setLink(linkOffset, linkLength, linkType, link, linkCached);
+          linkLength[0] += altText.length();
         }
         entities.add(custom);
+        offset[0] += altText.length();
         break;
       }
       case TdApi.RichTextMathematicalExpression.CONSTRUCTOR: {
         TdApi.RichTextMathematicalExpression mathematicalExpression = (TdApi.RichTextMathematicalExpression) in;
-        TextEntityCustom custom = new TextEntityCustom(context, context.tdlib(), "", offset[0], offset[0], flags, linkCached ? new TdlibUi.UrlOpenParameters(openParameters).forceInstantView() : openParameters)
-          .setReferenceAnchorName(referenceAnchorName).setCopyLink(copyLink)
-          .setMathematicalExpression(mathematicalExpression);
-        if (linkType != TextEntityCustom.LINK_TYPE_NONE) {
-          custom.setLink(linkOffset, linkLength, linkType, link, linkCached);
+        // Prefer true typeset rendering (matches Telegram Desktop): render the expression to a
+        // tintable bitmap with the jlatexmath engine and emit it as a zero-width inline-media entity.
+        android.graphics.Bitmap mathBitmap = context != null && context.tdlib() != null
+          ? LatexRenderer.render(mathematicalExpression.expression)
+          : null;
+        if (mathBitmap != null) {
+          TextEntityCustom custom = new TextEntityCustom(context, context.tdlib(), "", offset[0], offset[0], flags, linkCached ? new TdlibUi.UrlOpenParameters(openParameters).forceInstantView() : openParameters)
+            .setReferenceAnchorName(referenceAnchorName).setCopyLink(copyLink)
+            .setMathematicalExpression(mathematicalExpression)
+            .setMath(mathematicalExpression.expression, mathBitmap);
+          if (linkType != TextEntityCustom.LINK_TYPE_NONE) {
+            custom.setLink(linkOffset, linkLength, linkType, link, linkCached);
+          }
+          entities.add(custom);
+          break;
         }
-        entities.add(custom);
+        // Fallback when jlatexmath cannot parse it: decompose caret/underscore into real super/subscripts.
+        TdApi.RichText math = buildMathRichText(mathematicalExpression.expression);
+        if (math == null) {
+          math = new TdApi.RichTextPlain(mathematicalExpression.expression != null ? mathematicalExpression.expression : "");
+        }
+        parseRichText(context, math, out, entities, offset, flags, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
         break;
       }
       case TdApi.RichTextButton.CONSTRUCTOR: {
@@ -513,7 +542,17 @@ public class FormattedText {
         break;
       }
       case TdApi.RichTextSpoiler.CONSTRUCTOR: {
+        final int spoilerStart = offset[0];
+        final int firstEntity = entities.size();
         parseRichText(context, ((TdApi.RichTextSpoiler) in).text, out, entities, offset, flags | TextEntityCustom.FLAG_SPOILER, linkOffset, linkLength, linkType, link, linkCached, referenceAnchorName, copyLink, openParameters);
+        // Tag every part of the region with one full-span spoiler entity so Text groups and obscures them together.
+        final int spoilerLength = offset[0] - spoilerStart;
+        if (spoilerLength > 0) {
+          TdApi.TextEntity spoilerEntity = new TdApi.TextEntity(spoilerStart, spoilerLength, new TdApi.TextEntityTypeSpoiler());
+          for (int i = firstEntity; i < entities.size(); i++) {
+            entities.get(i).setSpoiler(spoilerEntity);
+          }
+        }
         break;
       }
       case TdApi.RichTextPhoneNumber.CONSTRUCTOR: {
@@ -538,7 +577,22 @@ public class FormattedText {
       }
       case TdApi.RichTextDateTime.CONSTRUCTOR: {
         TdApi.RichTextDateTime dateTime = (TdApi.RichTextDateTime) in;
-        parseRichText(context, dateTime.text, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_DATE_TIME, Integer.toString(dateTime.unixTime), linkCached, referenceAnchorName, null, openParameters);
+        TdApi.RichText dateText = dateTime.text;
+        if (dateTime.formattingType != null) {
+          // The client must format unixTime per formattingType; the text field is only a
+          // stale/source fallback (it carried the wrong date in testing).
+          final long unixMillis = TimeUnit.SECONDS.toMillis(dateTime.unixTime);
+          final String formatted;
+          if (dateTime.formattingType.getConstructor() == TdApi.DateTimeFormattingTypeRelative.CONSTRUCTOR) {
+            formatted = Lang.getRelativeTimestamp(dateTime.unixTime, TimeUnit.SECONDS);
+          } else {
+            TdApi.DateTimeFormattingTypeAbsolute abs = dateTime.formattingType.getConstructor() == TdApi.DateTimeFormattingTypeAbsolute.CONSTRUCTOR ? (TdApi.DateTimeFormattingTypeAbsolute) dateTime.formattingType : null;
+            boolean withTime = abs != null && abs.timePrecision != null && abs.timePrecision.getConstructor() != TdApi.DateTimePartPrecisionNone.CONSTRUCTOR;
+            formatted = withTime ? Lang.getString(R.string.format_dateTime, Lang.getDate(unixMillis, TimeUnit.MILLISECONDS), Lang.time(unixMillis, TimeUnit.MILLISECONDS)) : Lang.getDate(unixMillis, TimeUnit.MILLISECONDS);
+          }
+          dateText = new TdApi.RichTextPlain(formatted);
+        }
+        parseRichText(context, dateText, out, entities, offset, flags | TextEntityCustom.FLAG_CLICKABLE, linkOffset, new int[1], TextEntityCustom.LINK_TYPE_DATE_TIME, Integer.toString(dateTime.unixTime), linkCached, referenceAnchorName, null, openParameters);
         break;
       }
       case TdApi.RichTextHashtag.CONSTRUCTOR: {
@@ -588,6 +642,62 @@ public class FormattedText {
         throw Td.unsupported(in);
       }
     }
+  }
+
+  /**
+   * Best-effort decomposition of a simple math expression using caret/underscore notation
+   * (e.g. "mc^2", "x^{10}", "a_i") into a RichText tree with real superscript/subscript nodes,
+   * so it renders inline instead of as raw LaTeX in a monospace box. Backslash commands and other
+   * markup are left as literal text. Returns null only for an empty expression.
+   */
+  public static TdApi.RichText buildMathRichText (String expr) {
+    if (StringUtils.isEmpty(expr)) {
+      return null;
+    }
+    ArrayList<TdApi.RichText> parts = new ArrayList<>();
+    StringBuilder plain = new StringBuilder();
+    int i = 0;
+    final int n = expr.length();
+    while (i < n) {
+      char c = expr.charAt(i);
+      if ((c == '^' || c == '_') && i + 1 < n) {
+        if (plain.length() > 0) {
+          parts.add(new TdApi.RichTextPlain(plain.toString()));
+          plain.setLength(0);
+        }
+        i++; // consume ^ or _
+        String group;
+        if (expr.charAt(i) == '{') {
+          int end = expr.indexOf('}', i + 1);
+          if (end == -1) {
+            // Unbalanced brace: treat the rest as literal text.
+            plain.append(c).append(expr.substring(i));
+            i = n;
+            break;
+          }
+          group = expr.substring(i + 1, end);
+          i = end + 1;
+        } else {
+          group = String.valueOf(expr.charAt(i));
+          i++;
+        }
+        TdApi.RichText inner = new TdApi.RichTextPlain(group);
+        parts.add(c == '^' ? new TdApi.RichTextSuperscript(inner) : new TdApi.RichTextSubscript(inner));
+      } else {
+        plain.append(c);
+        i++;
+      }
+    }
+    if (plain.length() > 0) {
+      parts.add(new TdApi.RichTextPlain(plain.toString()));
+    }
+    if (parts.isEmpty()) {
+      return null;
+    }
+    if (parts.size() == 1) {
+      return parts.get(0);
+    }
+    return new TdApi.RichTexts(parts.toArray(new TdApi.RichText[0]));
   }
 
   @Override

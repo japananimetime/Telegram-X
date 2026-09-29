@@ -66,6 +66,10 @@ public class TextMedia implements Destroyable, TdlibEmojiManager.Watcher {
   private ImageFile imageFile;
   private GifFile gifFile;
 
+  // Locally-rendered inline math (jlatexmath): a white-glyph bitmap tinted to the text color at draw
+  // time. Has no associated TDLib file, so it bypasses the receiver-based image pipeline entirely.
+  private android.graphics.Bitmap mathBitmap;
+
   public TextMedia (Text source, Tdlib tdlib, String keyId, long id, int size, long customEmojiId) {
     if (tdlib == null)
       throw new IllegalArgumentException();
@@ -120,6 +124,27 @@ public class TextMedia implements Destroyable, TdlibEmojiManager.Watcher {
       imageFile.setSize(Screen.dp(Math.max(icon.width, icon.height)));
       imageFile.setNoBlur();
     }
+  }
+
+  public TextMedia (Text source, Tdlib tdlib, String keyId, long id, android.graphics.Bitmap mathBitmap, int width, int height) {
+    if (tdlib == null)
+      throw new IllegalArgumentException();
+    this.source = source;
+    this.tdlib = tdlib;
+    this.keyId = keyId;
+    this.id = id;
+    this.width = width;
+    this.height = height;
+    this.customEmojiId = 0;
+    this.mathBitmap = mathBitmap;
+  }
+
+  public boolean isMath () {
+    return mathBitmap != null;
+  }
+
+  public static String keyForMath (String expression, int height) {
+    return "math_" + height + "_" + (expression != null ? expression : "");
   }
 
   public static String keyForIcon (Tdlib tdlib, TdApi.RichTextIcon icon)  {
@@ -201,6 +226,28 @@ public class TextMedia implements Destroyable, TdlibEmojiManager.Watcher {
     });
   }
 
+  private android.graphics.Paint mathPaint;
+  private int mathPaintColor;
+  private final android.graphics.Rect mathDstRect = new android.graphics.Rect();
+
+  private void drawMath (Canvas c, int left, int top, int right, int bottom, float alpha) {
+    if (mathBitmap == null) {
+      return;
+    }
+    if (mathPaint == null) {
+      mathPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      mathPaint.setFilterBitmap(true);
+    }
+    int color = source.getTextColor();
+    if (color != mathPaintColor || mathPaint.getColorFilter() == null) {
+      mathPaintColor = color;
+      mathPaint.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+    }
+    mathPaint.setAlpha((int) (255 * Math.max(0f, Math.min(1f, alpha))));
+    mathDstRect.set(left, top, right, bottom);
+    c.drawBitmap(mathBitmap, null, mathDstRect, mathPaint);
+  }
+
   public int getWidth () {
     return width;
   }
@@ -269,6 +316,10 @@ public class TextMedia implements Destroyable, TdlibEmojiManager.Watcher {
   }
 
   public void requestFiles (ComplexReceiver receiver) {
+    if (isMath()) {
+      // Local bitmap, nothing to load from the network.
+      return;
+    }
     long displayMediaKey = getDisplayMediaKey();
     if (displayMediaKey == -1)
       throw new IllegalStateException();
@@ -286,6 +337,10 @@ public class TextMedia implements Destroyable, TdlibEmojiManager.Watcher {
   }
 
   public void draw (Canvas c, ComplexReceiver receiver, int left, int top, int right, int bottom, float alpha, long displayMediaKey) {
+    if (isMath()) {
+      drawMath(c, left, top, right, bottom, alpha);
+      return;
+    }
     if (isCustomEmoji() && customEmoji == null) {
       if (BuildConfig.DEBUG) {
         c.drawCircle(left + (right - left) / 2f, top + (bottom - top) / 2f, height / 2f, Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0xffff0000)));

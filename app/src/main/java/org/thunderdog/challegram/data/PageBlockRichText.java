@@ -45,6 +45,7 @@ import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.ListItem;
+import org.thunderdog.challegram.util.text.FormattedText;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.util.text.TextColorSet;
 import org.thunderdog.challegram.util.text.TextColorSets;
@@ -61,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.animator.BoolAnimator;
+import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.util.ClickHelper;
 import me.vkryl.core.ColorUtils;
 import me.vkryl.core.DateUtils;
@@ -353,6 +355,72 @@ public class PageBlockRichText extends PageBlock {
     // TextColorSets.InstantView.BLOCK_QUOTE
   }
 
+  // Section heading; size: 1-6, 1 is the largest, 6 is the smallest
+  public PageBlockRichText (ViewController<?> context, TdApi.PageBlockSectionHeading sectionHeading, int quoteLevel, @Nullable TdlibUi.UrlOpenParameters openParameters) {
+    super(context, sectionHeading, quoteLevel);
+    if (sectionHeading.size <= 2) {
+      setText(new TdApi.RichTextBold(sectionHeading.text), getHeaderProvider(), TextColorSets.InstantView.HEADER, Text.FLAG_ARTICLE, openParameters);
+      this.paddingTop = 14f;
+      this.paddingBottom = 8f;
+    } else if (sectionHeading.size <= 4) {
+      setText(new TdApi.RichTextBold(sectionHeading.text), getSubheaderProvider(), TextColorSets.InstantView.SUBHEADER, Text.FLAG_ARTICLE, openParameters);
+      this.paddingTop = 8f;
+    } else {
+      setText(new TdApi.RichTextBold(sectionHeading.text), getParagraphProvider(), TextColorSets.InstantView.SUBHEADER, Text.FLAG_ARTICLE, openParameters);
+      this.paddingTop = 8f;
+    }
+  }
+
+  private static final int ANIMATOR_THINKING_PULSE = 1;
+  private boolean isThinking;
+  private FactorAnimator thinkingPulse;
+
+  // "Thinking..." placeholder; for pending rich messages only. Pulses the text opacity (a
+  // breathing effect) to signal the message is still being generated server-side.
+  public PageBlockRichText (ViewController<?> context, TdApi.PageBlockThinking thinking, int quoteLevel, @Nullable TdlibUi.UrlOpenParameters openParameters) {
+    super(context, thinking, quoteLevel);
+    this.isThinking = true;
+    // Ping-pong 0<->1 driven from onFactorChangeFinished; each frame invalidates the attached
+    // view(s). The loop self-stops when the block scrolls off (no targets to invalidate) and is
+    // re-kicked from drawInternal when it's drawn again, so it never spins off-screen.
+    this.thinkingPulse = new FactorAnimator(ANIMATOR_THINKING_PULSE, new FactorAnimator.Target() {
+      @Override
+      public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+        currentViews.invalidate();
+      }
+      @Override
+      public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
+        if (isThinking && currentViews != null && currentViews.hasAnyTargetToInvalidate()) {
+          callee.animateTo(finalFactor >= 1f ? 0f : 1f);
+        }
+      }
+    }, AnimatorUtils.DECELERATE_INTERPOLATOR, 720l, 0f);
+    TdApi.RichText thinkingText = thinking.text != null ? thinking.text : new TdApi.RichTextPlain("");
+    setText(new TdApi.RichTextItalic(thinkingText), getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+  }
+
+  // Breathing opacity for the "Thinking..." placeholder; 1f for every other block. Lazily kicks the
+  // ping-pong loop on first draw (so it only runs while the block is actually on screen).
+  private float thinkingAlpha () {
+    if (!isThinking || thinkingPulse == null) {
+      return 1f;
+    }
+    if (!thinkingPulse.isAnimating()) {
+      thinkingPulse.animateTo(thinkingPulse.getFactor() >= 1f ? 0f : 1f);
+    }
+    return 0.4f + 0.6f * thinkingPulse.getFactor();
+  }
+
+  // Mathematical expression in LaTeX format
+  public PageBlockRichText (ViewController<?> context, TdApi.PageBlockMathematicalExpression mathematicalExpression, int quoteLevel, @Nullable TdlibUi.UrlOpenParameters openParameters) {
+    super(context, mathematicalExpression, quoteLevel);
+    // Route block-level math through the same inline RichTextMathematicalExpression path as inline
+    // math: parseRichText renders it with the jlatexmath engine (true typeset of \sum, \frac, … as
+    // a tintable bitmap) and only decomposes caret/underscore super/subscripts when jlatexmath can't
+    // parse it — keeping block and inline math at the same fidelity.
+    setText(new TdApi.RichTextMathematicalExpression(mathematicalExpression.expression), getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+  }
+
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockPullQuote pullQuote, int quoteLevel, boolean isCredit, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, pullQuote, quoteLevel);
     if (isCredit) {
@@ -557,7 +625,7 @@ public class PageBlockRichText extends PageBlock {
   @Override
   public void drawInternal (View view, Canvas c, Receiver preview, Receiver receiver, @Nullable ComplexReceiver iconReceiver) {
     if (text != null) {
-      int viewWidth = view.getMeasuredWidth();
+      int viewWidth = getViewWidth(view);
       int textLeft = getTextPaddingLeft();
       int textTop = getContentTop();
 
@@ -605,7 +673,7 @@ public class PageBlockRichText extends PageBlock {
           c.drawRect(rectF.left, 0, rectF.right, rectF.top + lineWidth, Paints.fillingPaint(lineColor));
         }
         if (mergeBottom) {
-          c.drawRect(rectF.left, rectF.bottom - lineWidth, rectF.right, view.getMeasuredHeight(), Paints.fillingPaint(lineColor));
+          c.drawRect(rectF.left, rectF.bottom - lineWidth, rectF.right, getViewHeight(view), Paints.fillingPaint(lineColor));
         }
       }
 
@@ -627,7 +695,7 @@ public class PageBlockRichText extends PageBlock {
         int iconLeft = textLeft - Screen.dp(18f);
         int iconTop = textTop + text.getLineCenterY();
         DrawAlgorithms.drawCollapse(c, iconLeft, iconTop, Theme.getColor(ColorId.iv_icon), detailsOpened.getFloatValue(), 0f);
-        c.drawRect(0, view.getMeasuredHeight() - Screen.separatorSize(), viewWidth, view.getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.iv_separator)));
+        c.drawRect(0, getViewHeight(view) - Screen.separatorSize(), viewWidth, getViewHeight(view), Paints.fillingPaint(Theme.getColor(ColorId.iv_separator)));
       }
 
       if (subtitle != null) {
@@ -652,7 +720,7 @@ public class PageBlockRichText extends PageBlock {
         textLeft += (avatarSize + (forceBackground ? avatarPadding / 2 : avatarPadding)) * subtitleFactor;
         Views.restore(c, restoreCount);
       }
-      text.draw(c, textLeft, textEndX, 0,  textTop, null, 1f, iconReceiver);
+      text.draw(c, textLeft, textEndX, 0,  textTop, null, thinkingAlpha(), iconReceiver);
       if (subtitle != null) {
         subtitle.draw(c, textLeft, textEndX, 0, textTop + text.getHeight(), null, subtitleVisible != null ? subtitleVisible.getFloatValue() * .8f : .8f);
       }

@@ -26,6 +26,7 @@ import androidx.annotation.Nullable;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.MediaCollectorDelegate;
 import org.thunderdog.challegram.core.Lang;
@@ -155,6 +156,18 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
 
   private CollageContext collageContext;
 
+  // Used by the chat-bubble (TGMessageRich) path so a shared ComplexReceiver can host this
+  // collage's images at a non-colliding key range.
+  public void setCollageKeyOffset (int keyOffset) {
+    if (collageContext != null) {
+      collageContext.setKeyOffset(keyOffset);
+    }
+  }
+
+  public int getCollageItemCount () {
+    return collageContext != null && wrappers != null ? wrappers.size() : 0;
+  }
+
   public PageBlockMedia (ViewController<?> context, TdApi.PageBlockCollage collage, int quoteLevel) {
     super(context, collage, quoteLevel);
     setCaption(collage.caption);
@@ -280,6 +293,8 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
   private boolean ignoreBottomPadding;
 
   private void setCaption (TdApi.PageBlockCaption caption) {
+    // Rich-message media blocks may carry a null caption (unlike instant-view page blocks),
+    // so guard before dereferencing — otherwise the whole rich message falls back to "Unsupported".
     if (caption != null && (!Td.isEmpty(caption.text) || !Td.isEmpty(caption.credit))) {
       this.caption = caption;
       ignoreBottomPadding = true;
@@ -435,7 +450,7 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
   @Override
   protected <T extends View & DrawableProvider> void drawInternal (T view, Canvas c, Receiver preview, Receiver receiver, ComplexReceiver iconReceiver) {
     if (embedded != null || map != null) {
-      preview.setBounds(getMinimumContentPadding(true), getContentTop(), view.getMeasuredWidth() - getMinimumContentPadding(false), getComputedHeight() - (!isCover && !ignoreBottomPadding ? getContentTop() : 0));
+      preview.setBounds(getMinimumContentPadding(true), getContentTop(), getViewWidth(view) - getMinimumContentPadding(false), getComputedHeight() - (!isCover && !ignoreBottomPadding ? getContentTop() : 0));
       receiver.setBounds(preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom());
       if (receiver.needPlaceholder()) {
         if (preview.needPlaceholder()) {
@@ -444,13 +459,28 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
         preview.draw(c);
       }
       receiver.draw(c);
-    } else if (collageContext != null && view instanceof PageBlockView) {
-      int maxWidth = view.getMeasuredWidth() - getMinimumContentPadding(true) - getMinimumContentPadding(false);
-      int collageWidth = collageContext.getWidth();
-      int x = !isIndependent() ? getMinimumContentPadding(true) : collageWidth < maxWidth ? (maxWidth - collageWidth) / 2 : 0;
-      collageContext.draw(view, c, x, getContentTop(), ((PageBlockView) view).getMultipleReceiver());
+      if (map != null) {
+        // Neither the Google static-map URL nor TDLib's GetMapThumbnailFile bakes in a location pin,
+        // so draw a marker overlay whose tip points at the map centre (the location), like a real client.
+        Drawable pinIcon = view.getSparseDrawable(R.drawable.baseline_location_on_24, ColorId.NONE);
+        int cx = (receiver.getLeft() + receiver.getRight()) / 2;
+        int cy = (receiver.getTop() + receiver.getBottom()) / 2;
+        float pinW = pinIcon.getMinimumWidth();
+        float pinH = pinIcon.getMinimumHeight();
+        Drawables.draw(c, pinIcon, cx - pinW / 2f, cy - pinH, Paints.getPorterDuffPaint(0xffeb5757));
+      }
+    } else if (collageContext != null) {
+      // Instant View provides the multi-image receiver from the PageBlockView; the chat-bubble
+      // (TGMessageRich) shares one ComplexReceiver and passes it via iconReceiver + a key offset.
+      ComplexReceiver multipleReceiver = (view instanceof PageBlockView) ? ((PageBlockView) view).getMultipleReceiver() : iconReceiver;
+      if (multipleReceiver != null) {
+        int maxWidth = getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false);
+        int collageWidth = collageContext.getWidth();
+        int x = !isIndependent() ? getMinimumContentPadding(true) : collageWidth < maxWidth ? (maxWidth - collageWidth) / 2 : 0;
+        collageContext.draw(view, c, x, getContentTop(), multipleReceiver);
+      }
     } else if (wrapper != null) {
-      final int x = ((view.getMeasuredWidth() - getMinimumContentPadding(true) - getMinimumContentPadding(false)) / 2 - wrapper.getCellWidth() / 2) + getMinimumContentPadding(true);
+      final int x = ((getViewWidth(view) - getMinimumContentPadding(true) - getMinimumContentPadding(false)) / 2 - wrapper.getCellWidth() / 2) + getMinimumContentPadding(true);
       wrapper.draw(view, c, x, getContentTop(), preview, receiver, 1f);
       if (!StringUtils.isEmpty(url)) {
         Drawables.draw(c, linkIcon, receiver.getRight() - linkIcon.getMinimumWidth() - Screen.dp(9f), receiver.getTop() + Screen.dp(9f), Paints.whitePorterDuffPaint());

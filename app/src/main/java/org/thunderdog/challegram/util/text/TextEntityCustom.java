@@ -87,8 +87,11 @@ public class TextEntityCustom extends TextEntity {
   private String referenceAnchorName;
   private TdApi.RichTextIcon icon;
   private TdApi.RichTextCustomEmoji emoji;
+  private TdApi.TextEntity spoilerEntity;
   private TdApi.RichTextMathematicalExpression mathematicalExpression;
   private String copyLink;
+  private android.graphics.Bitmap mathBitmap;
+  private String mathExpression;
 
   public TextEntityCustom (@Nullable ViewController<?> context, @Nullable Tdlib tdlib, String in, int offset, int end, int flags, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     this(context, tdlib, (flags & FLAG_BOLD) != 0 && Text.needFakeBold(in), offset, end, flags, openParameters);
@@ -102,6 +105,19 @@ public class TextEntityCustom extends TextEntity {
 
   public TextEntityCustom setIcon (TdApi.RichTextIcon icon) {
     this.icon = icon;
+    return this;
+  }
+
+  // Inline LaTeX typeset by LatexRenderer (jlatexmath); drawn as zero-width inline media by Text.
+  public TextEntityCustom setMath (String expression, android.graphics.Bitmap bitmap) {
+    this.mathExpression = expression;
+    this.mathBitmap = bitmap;
+    return this;
+  }
+
+  // Full-span spoiler region this part belongs to, so Text groups and obscures the region together.
+  public TextEntityCustom setSpoiler (TdApi.TextEntity spoilerEntity) {
+    this.spoilerEntity = spoilerEntity;
     return this;
   }
 
@@ -178,6 +194,12 @@ public class TextEntityCustom extends TextEntity {
     if (emoji != null) {
       copy.setEmoji(emoji);
     }
+    if (mathBitmap != null) {
+      copy.setMath(mathExpression, mathBitmap);
+    }
+    if (spoilerEntity != null) {
+      copy.setSpoiler(spoilerEntity);
+    }
     if (mathematicalExpression != null) {
       copy.setMathematicalExpression(mathematicalExpression);
     }
@@ -252,12 +274,12 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public boolean isCustomEmoji () {
-    return false;
+    return emoji != null;
   }
 
   @Override
   public long getCustomEmojiId () {
-    return 0;
+    return emoji != null ? emoji.customEmojiId : 0;
   }
 
   @Override
@@ -267,12 +289,27 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public boolean hasMedia () {
-    return isIcon();
+    return isIcon() || isCustomEmoji() || isMath();
   }
 
   @Override
   public TdApi.RichTextIcon getIcon () {
     return icon;
+  }
+
+  @Override
+  public boolean isMath () {
+    return mathBitmap != null;
+  }
+
+  @Override
+  public android.graphics.Bitmap getMathBitmap () {
+    return mathBitmap;
+  }
+
+  @Override
+  public String getMathExpression () {
+    return mathExpression;
   }
 
   @Override
@@ -320,7 +357,7 @@ public class TextEntityCustom extends TextEntity {
 
   @Override
   public TdApi.TextEntity getSpoiler () {
-    return null;
+    return spoilerEntity;
   }
 
   @Override
@@ -381,6 +418,19 @@ public class TextEntityCustom extends TextEntity {
   @Override
   public void performClick (View view, Text text, TextPart part, @Nullable Text.ClickCallback callback, boolean isFromLongPressMenu) {
     switch (linkType) {
+      case LINK_TYPE_MENTION_NAME: {
+        // Mention of a user without a username (RichTextMentionName): open their profile directly,
+        // exactly like a normal-message TextEntityTypeMentionName. (tg://user?id= is not a handled
+        // deep link, so routing it through openLinkAlert silently does nothing.)
+        long userId = 0;
+        try {
+          userId = Long.parseLong(link);
+        } catch (NumberFormatException ignored) { }
+        if (userId != 0 && (callback == null || !callback.onUserClick(userId)) && context != null) {
+          context.tdlib().ui().openPrivateProfile(context, userId, this.openParameters(view, text, part, isFromLongPressMenu));
+        }
+        break;
+      }
       case LINK_TYPE_EMAIL: {
         if (callback == null || !callback.onEmailClick(link)) {
           Intents.sendEmail(link);
@@ -423,6 +473,35 @@ public class TextEntityCustom extends TextEntity {
       case LINK_TYPE_BUTTON: {
         if (callback == null || !(callback.onButtonClick(view, button, this.openParameters(view, text, part, isFromLongPressMenu)))) {
           // TODO
+        }
+        break;
+      }
+      case LINK_TYPE_MENTION: {
+        if (context != null) {
+          String username = link.startsWith("@") ? link.substring(1) : link;
+          context.tdlib().ui().openPublicChat(context, username, this.openParameters(view, text, part, isFromLongPressMenu));
+        }
+        break;
+      }
+      case LINK_TYPE_HASHTAG:
+      case LINK_TYPE_CASHTAG: {
+        // Let the host (chat) handle the hashtag/cashtag search; no chat-independent action.
+        if (callback != null) {
+          callback.onHashtagClick(link);
+        }
+        break;
+      }
+      case LINK_TYPE_BANK_CARD_NUMBER: {
+        if (callback == null || !callback.onBankCardNumberClick(link)) {
+          if (context != null) {
+            context.tdlib().ui().openCardNumber(context, link);
+          }
+        }
+        break;
+      }
+      case LINK_TYPE_BOT_COMMAND: {
+        if (callback != null) {
+          callback.onCommandClick(view, text, part, link, isFromLongPressMenu);
         }
         break;
       }
@@ -507,6 +586,13 @@ public class TextEntityCustom extends TextEntity {
   @Override
   public boolean equals (TextEntity bRaw, int compareMode, @Nullable String originalText) {
     TextEntityCustom b = (TextEntityCustom) bRaw;
+    if (compareMode == COMPARE_MODE_SPOILER) {
+      // Group parts that belong to the same spoiler region (same full-span entity), regardless of
+      // their inner formatting (bold/italic/etc.).
+      return this.spoilerEntity != null && b.spoilerEntity != null
+        && this.spoilerEntity.offset == b.spoilerEntity.offset
+        && this.spoilerEntity.length == b.spoilerEntity.length;
+    }
     if (isClickable() != b.isClickable()) {
       return false;
     }

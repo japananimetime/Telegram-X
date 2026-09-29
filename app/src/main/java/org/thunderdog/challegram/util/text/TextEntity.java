@@ -128,6 +128,9 @@ public abstract class TextEntity {
   public abstract boolean isBold ();
   public abstract boolean isIcon ();
   public TdApi.RichTextIcon getIcon () { return null; }
+  public boolean isMath () { return false; }
+  public android.graphics.Bitmap getMathBitmap () { return null; }
+  public String getMathExpression () { return null; }
   public abstract boolean isItalic ();
   public abstract boolean isUnderline ();
   public abstract boolean isStrikethrough ();

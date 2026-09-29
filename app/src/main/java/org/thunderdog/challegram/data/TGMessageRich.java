@@ -1,0 +1,577 @@
+/*
+ * This file is a part of Telegram X
+ * Copyright © 2014 (tgx-android@pm.me)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.thunderdog.challegram.data;
+
+import android.graphics.Canvas;
+import android.view.MotionEvent;
+import android.view.View;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.Log;
+import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.chat.MessageView;
+import org.thunderdog.challegram.component.chat.MessagesManager;
+import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.loader.ComplexReceiver;
+import org.thunderdog.challegram.loader.DoubleImageReceiver;
+import org.thunderdog.challegram.loader.Receiver;
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.tool.Views;
+import org.thunderdog.challegram.ui.ListItem;
+import org.thunderdog.challegram.util.text.Text;
+import org.thunderdog.challegram.util.text.TextColorSet;
+import org.thunderdog.challegram.util.text.TextColorSets;
+
+import java.util.ArrayList;
+
+import me.vkryl.android.AnimatorUtils;
+import me.vkryl.android.animator.FactorAnimator;
+import me.vkryl.android.util.ClickHelper;
+import me.vkryl.core.StringUtils;
+import me.vkryl.core.lambda.Destroyable;
+
+/**
+ * Renders {@link TdApi.MessageRichMessage} inside a chat bubble
+ * by reusing the Instant View {@link PageBlock} renderers.
+ *
+ * TODO(rich-theming): blocks use {@code TextColorSets.InstantView.*} palettes; they adapt
+ * to the current theme, but do not follow bubbleIn/bubbleOut-specific text colors.
+ * TODO(rich-rtl): {@code richMessage.isRtl} is forwarded to the parser, but per-paragraph
+ * direction is currently handled by {@code Text} auto-detection only, same as Instant View.
+ */
+public class TGMessageRich extends TGMessage implements ClickHelper.Delegate {
+  private static final int MEDIA_MODE_NONE = 0;
+  private static final int MEDIA_MODE_IMAGE = 1;
+  private static final int MEDIA_MODE_GIF = 2;
+  private static final int MEDIA_MODE_COLLAGE = 3;
+
+  private TdApi.RichMessage richMessage;
+  private final ArrayList<PageBlock> blocks = new ArrayList<>();
+  private final ClickHelper clickHelper = new ClickHelper(this);
+
+  private int contentWidth, contentHeight;
+  private int totalReceiverKeys; // upper bound of media-receiver keys in use (incl. collage images)
+
+  // "Show more" affordance for truncated (isFull == false) messages
+  private @Nullable Text showMoreText;
+  private boolean showMoreLoading;
+
+  // Smooth expand/collapse of PageBlockDetails ("Structure"-style collapsibles). detailsExpandDelta is
+  // (oldHeight - newHeight); during the animation getContentHeight() interpolates back over it so the
+  // bubble grows/shrinks instead of snapping, and drawContent clips the revealed region.
+  private static final int ANIMATOR_DETAILS = 1;
+  private float detailsExpandDelta;
+  private final FactorAnimator detailsExpand = new FactorAnimator(ANIMATOR_DETAILS, new FactorAnimator.Target() {
+    @Override
+    public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+      if (contentWidth > 0) {
+        buildBubble(false);
+        requestLayout();
+      }
+      invalidate();
+    }
+
+    @Override
+    public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
+      detailsExpandDelta = 0f;
+      if (contentWidth > 0) {
+        buildBubble(false);
+        requestLayout();
+      }
+      invalidate();
+    }
+  }, AnimatorUtils.DECELERATE_INTERPOLATOR, 220L);
+
+  public TGMessageRich (MessagesManager context, TdApi.Message msg, @NonNull TdApi.RichMessage richMessage) {
+    super(context, msg);
+    this.richMessage = richMessage;
+    parseBlocks();
+  }
+
+  // == Parsing ==
+
+  private void parseBlocks () {
+    destroyBlocks();
+    ArrayList<PageBlock> parsedBlocks;
+    try {
+      parsedBlocks = PageBlock.parseRichMessage(controller(), this, richMessage, openParameters());
+    } catch (Throwable t) {
+      Log.e("Cannot parse rich message blocks", t);
+      parsedBlocks = new ArrayList<>(1);
+      parsedBlocks.add(new PageBlockRichText(controller(), new TdApi.PageBlockParagraph(new TdApi.RichTextItalic(new TdApi.RichTextPlain(Lang.getString(R.string.UnsupportedMessageType)))), 0, openParameters()));
+    }
+    blocks.addAll(parsedBlocks);
+    // Re-attach freshly parsed blocks to the views this message is already displayed in
+    for (View view : currentViews) {
+      for (PageBlock block : blocks) {
+        block.attachToView(view);
+      }
+    }
+  }
+
+  private void destroyBlocks () {
+    for (PageBlock block : blocks) {
+      for (View view : currentViews) {
+        block.detachFromView(view);
+      }
+      if (block instanceof Destroyable) {
+        ((Destroyable) block).performDestroy();
+      }
+    }
+    blocks.clear();
+  }
+
+  private boolean needShowMore () {
+    return !richMessage.isFull;
+  }
+
+  // == Layout ==
+
+  @Override
+  protected void buildContent (int maxWidth) {
+    this.contentWidth = maxWidth;
+    View view = findCurrentView();
+    int totalHeight = 0;
+    for (PageBlock block : blocks) {
+      // Reserve a left column for list markers (Instant View does this via a RecyclerView
+      // ItemDecoration; in the bubble we lay the block out narrower and translate it right).
+      int layoutWidth = maxWidth - listMarkerReserve(block);
+      block.setViewWidthOverride(layoutWidth);
+      totalHeight += block.getHeight(view, layoutWidth);
+    }
+    // Assign each collage block a key range on the shared media receiver, beyond the per-block
+    // preview/content keys ([0, blockCount*2)), so its N images don't collide with other blocks.
+    int collageKeyCursor = blocks.size() * 2;
+    for (PageBlock block : blocks) {
+      if (block instanceof PageBlockMedia && getMediaMode(block) == MEDIA_MODE_COLLAGE) {
+        ((PageBlockMedia) block).setCollageKeyOffset(collageKeyCursor);
+        collageKeyCursor += ((PageBlockMedia) block).getCollageItemCount();
+      }
+    }
+    this.totalReceiverKeys = collageKeyCursor;
+    if (needShowMore()) {
+      this.showMoreText = new Text.Builder(Lang.getString(R.string.RichMessageShowMore), maxWidth - getShowMorePaddingLeft(), PageBlockRichText.getParagraphProvider(), getShowMoreColorSet())
+        .singleLine()
+        .build();
+      totalHeight += getShowMoreHeight();
+    } else {
+      this.showMoreText = null;
+    }
+    this.contentHeight = totalHeight;
+  }
+
+  @Override
+  protected int getContentWidth () {
+    // PageBlocks are width-takers: occupy the maximum available bubble width
+    return contentWidth;
+  }
+
+  @Override
+  protected int getContentHeight () {
+    if (detailsExpandDelta != 0f) {
+      return Math.round(contentHeight + (1f - detailsExpand.getFactor()) * detailsExpandDelta);
+    }
+    return contentHeight;
+  }
+
+  private int getBlocksHeight () {
+    return contentHeight - (showMoreText != null ? getShowMoreHeight() : 0);
+  }
+
+  private int getShowMorePaddingLeft () {
+    return Screen.dp(PageBlockRichText.TEXT_HORIZONTAL_OFFSET);
+  }
+
+  private int getShowMoreHeight () {
+    return showMoreText != null ? showMoreText.getHeight() + Screen.dp(12f) : 0;
+  }
+
+  private TextColorSet getShowMoreColorSet () {
+    if (!useBubbles()) {
+      return TextColorSets.Regular.LINK;
+    }
+    return isOutgoingBubble() ? TextColorSets.BubbleOut.LINK : TextColorSets.BubbleIn.LINK;
+  }
+
+  // == Media ==
+
+  // Width of the left column reserved for list markers (mirrors InstantViewController's
+  // FillingDecoration.getItemOffsets), or 0 for non-list blocks.
+  private static int listMarkerReserve (PageBlock block) {
+    PageBlock.ListItemInfo[] info = block.getListItem();
+    if (info == null) {
+      return 0;
+    }
+    int reserve = Screen.dp(18f);
+    for (PageBlock.ListItemInfo itemInfo : info) {
+      reserve += Math.max(Screen.dp(16f), (int) itemInfo.list.maxLabelWidth + Screen.dp(4f));
+    }
+    return reserve;
+  }
+
+  private static int getMediaMode (PageBlock block) {
+    switch (block.getRelatedViewType()) {
+      case ListItem.TYPE_PAGE_BLOCK_MEDIA:
+      case ListItem.TYPE_PAGE_BLOCK_AVATAR:
+        return MEDIA_MODE_IMAGE;
+      case ListItem.TYPE_PAGE_BLOCK_GIF:
+        return MEDIA_MODE_GIF;
+      case ListItem.TYPE_PAGE_BLOCK_COLLAGE:
+        return MEDIA_MODE_COLLAGE;
+    }
+    return MEDIA_MODE_NONE;
+  }
+
+  private static long previewKey (int blockIndex) {
+    return blockIndex * 2L;
+  }
+
+  private static long contentKey (int blockIndex) {
+    return blockIndex * 2L + 1L;
+  }
+
+  @Override
+  public boolean needComplexReceiver () {
+    return true;
+  }
+
+  @Override
+  public void requestMediaContent (ComplexReceiver receiver, boolean invalidate, int invalidateArg) {
+    final int blockCount = blocks.size();
+    for (int i = 0; i < blockCount; i++) {
+      PageBlock block = blocks.get(i);
+      switch (getMediaMode(block)) {
+        case MEDIA_MODE_IMAGE: {
+          if (!invalidate) {
+            block.requestPreview(receiver.getPreviewReceiver(previewKey(i)));
+          }
+          block.requestImage(receiver.getImageReceiver(contentKey(i)));
+          break;
+        }
+        case MEDIA_MODE_GIF: {
+          if (!invalidate) {
+            block.requestPreview(receiver.getPreviewReceiver(previewKey(i)));
+          }
+          block.requestGif(receiver.getGifReceiver(contentKey(i)));
+          break;
+        }
+        case MEDIA_MODE_COLLAGE: {
+          // Collage requests its own images on the shared receiver at the offset assigned in buildContent.
+          block.requestFiles(receiver, invalidate);
+          break;
+        }
+      }
+    }
+    receiver.clearReceiversWithHigherKey(Math.max(blockCount * 2L, totalReceiverKeys));
+  }
+
+  @Override
+  public void requestTextMedia (ComplexReceiver textMediaReceiver) {
+    // TODO(rich-media): PageBlock.requestIcons does not support key offsets, so RichTextIcon
+    // keys may collide if multiple blocks contain inline icons (last block wins)
+    boolean requested = false;
+    for (PageBlock block : blocks) {
+      if (block instanceof PageBlockRichText || block instanceof PageBlockTable) {
+        block.requestIcons(textMediaReceiver);
+        requested = true;
+      }
+    }
+    if (!requested) {
+      textMediaReceiver.clear();
+    }
+  }
+
+  @Override
+  public void autoDownloadContent (TdApi.ChatType type) {
+    for (PageBlock block : blocks) {
+      block.autoDownloadContent();
+    }
+  }
+
+  // == Drawing ==
+
+  @Override
+  protected void drawContent (MessageView view, Canvas c, int startX, int startY, int maxWidth) {
+    drawContent(view, c, startX, startY, maxWidth, null);
+  }
+
+  @Override
+  protected void drawContent (MessageView view, Canvas c, int startX, int startY, int maxWidth, @Nullable ComplexReceiver receiver) {
+    final ComplexReceiver iconReceiver = view.getTextMediaReceiver();
+    final int blockCount = blocks.size();
+    // While a details section is expanding/collapsing, clip the content to the animated height so the
+    // revealed blocks unfold into the growing bubble instead of overflowing it.
+    final boolean clipForDetails = detailsExpandDelta != 0f;
+    int detailsClipRestore = -1;
+    if (clipForDetails) {
+      detailsClipRestore = Views.save(c);
+      c.clipRect(startX, startY, startX + maxWidth, startY + getContentHeight());
+    }
+    int y = startY;
+    for (int i = 0; i < blockCount; i++) {
+      PageBlock block = blocks.get(i);
+      final int reserve = listMarkerReserve(block);
+      final int blockX = startX + reserve;
+      final int blockHeight = block.getHeight(view, contentWidth - reserve);
+      final int mediaMode = getMediaMode(block);
+      Receiver preview = null, content = null;
+      ComplexReceiver blockComplexReceiver = iconReceiver;
+      if (mediaMode == MEDIA_MODE_COLLAGE) {
+        if (receiver == null) {
+          y += blockHeight;
+          continue;
+        }
+        // Collage draws its grid from the shared media receiver (its images live at an offset key range).
+        blockComplexReceiver = receiver;
+      } else if (mediaMode != MEDIA_MODE_NONE) {
+        if (receiver == null) {
+          // Media blocks cannot be drawn without their receivers
+          y += blockHeight;
+          continue;
+        }
+        preview = receiver.getPreviewReceiver(previewKey(i));
+        content = mediaMode == MEDIA_MODE_GIF ? receiver.getGifReceiver(contentKey(i)) : receiver.getImageReceiver(contentKey(i));
+      }
+      // Block backgrounds (e.g. code/preformatted) are painted by a RecyclerView ItemDecoration in
+      // Instant View; in the chat bubble we must paint them ourselves before drawing the block.
+      final int bgColorId = block.getBackgroundColorId();
+      if (bgColorId != ColorId.NONE && bgColorId != ColorId.filling) {
+        c.drawRect(blockX, y, startX + contentWidth, y + blockHeight, Paints.fillingPaint(Theme.getColor(bgColorId)));
+      }
+      final int saveCount = Views.save(c);
+      c.translate(blockX, y);
+      block.draw(view, c, preview, content, blockComplexReceiver);
+      Views.restore(c, saveCount);
+      // List markers (bullets / checkboxes / numbers): Instant View draws these in an ItemDecoration;
+      // replicate here in the reserved left column [startX, blockX).
+      PageBlock.ListItemInfo[] listInfo = block.getListItem();
+      if (listInfo != null) {
+        int left = blockX;
+        final int top = y + block.getBulletTop();
+        for (int k = listInfo.length - 1; k >= 0; k--) {
+          PageBlock.ListItemInfo itemInfo = listInfo[k];
+          if (itemInfo.firstBlock != null && itemInfo.firstBlock != block)
+            break;
+          int x = left - itemInfo.label.getWidth();
+          itemInfo.label.draw(c, x, x, 0, top, null, 1f);
+          left -= Math.max(Screen.dp(16f), (int) itemInfo.list.maxLabelWidth + Screen.dp(4f));
+        }
+      }
+      y += blockHeight;
+    }
+    if (showMoreText != null) {
+      showMoreText.draw(c, startX + getShowMorePaddingLeft(), startX + maxWidth, 0, y + Screen.dp(6f), null, showMoreLoading ? 0.6f : 1f);
+    }
+    if (clipForDetails) {
+      Views.restore(c, detailsClipRestore);
+    }
+  }
+
+  // == Touch ==
+
+  @Override
+  public boolean onTouchEvent (MessageView view, MotionEvent e) {
+    if (super.onTouchEvent(view, e)) {
+      return true;
+    }
+    if (clickHelper.onTouchEvent(view, e)) {
+      return true;
+    }
+    final int startX = getContentX();
+    int y = getContentY();
+    for (PageBlock block : blocks) {
+      final int reserve = listMarkerReserve(block);
+      final int blockX = startX + reserve;
+      final int blockHeight = block.getHeight(view, contentWidth - reserve);
+      e.offsetLocation(-blockX, -y);
+      boolean result = block.onTouchEvent(view, e);
+      e.offsetLocation(blockX, y);
+      if (result) {
+        return true;
+      }
+      y += blockHeight;
+    }
+    return false;
+  }
+
+  @Override
+  public boolean performLongPress (View view, float x, float y) {
+    clickHelper.cancel(view, x, y);
+    return super.performLongPress(view, x, y);
+  }
+
+  private static final int CLICK_TARGET_NONE = 0;
+  private static final int CLICK_TARGET_SHOW_MORE = 1;
+  private static final int CLICK_TARGET_DETAILS = 2;
+
+  private int findClickTarget (float x, float y) {
+    final float localX = x - getContentX();
+    final float localY = y - getContentY();
+    if (localX < 0 || localX >= contentWidth || localY < 0 || localY >= contentHeight) {
+      return CLICK_TARGET_NONE;
+    }
+    if (showMoreText != null && !showMoreLoading && localY >= getBlocksHeight()) {
+      return CLICK_TARGET_SHOW_MORE;
+    }
+    PageBlock block = findBlockAt(localY);
+    if (block instanceof PageBlockRichText && block.isClickable() && block.getOriginalBlock() != null &&
+      block.getOriginalBlock().getConstructor() == TdApi.PageBlockDetails.CONSTRUCTOR) {
+      return CLICK_TARGET_DETAILS;
+    }
+    return CLICK_TARGET_NONE;
+  }
+
+  /**
+   * Y offset (within this message's content) of the given in-message anchor, or -1 if not found.
+   * Mirrors InstantViewController.scrollToAnchor's block- and child-anchor matching.
+   */
+  public int findAnchorContentY (@Nullable String anchor) {
+    if (StringUtils.isEmpty(anchor)) {
+      return 0; // "top" / empty anchor → start of content
+    }
+    String decoded = StringUtils.decodeURIComponent(anchor);
+    View view = findCurrentView();
+    int y = 0;
+    for (PageBlock block : blocks) {
+      final int layoutWidth = contentWidth - listMarkerReserve(block);
+      final int blockHeight = block.getHeight(view, layoutWidth);
+      if (anchor.equals(block.getAnchor()) || (decoded != null && decoded.equals(block.getAnchor()))) {
+        return y;
+      }
+      if (block.hasChildAnchor(anchor)) {
+        return y + block.getChildAnchorTop(anchor, layoutWidth);
+      }
+      if (decoded != null && !decoded.equals(anchor) && block.hasChildAnchor(decoded)) {
+        return y + block.getChildAnchorTop(decoded, layoutWidth);
+      }
+      y += blockHeight;
+    }
+    return -1;
+  }
+
+  private @Nullable PageBlock findBlockAt (float localY) {
+    int y = 0;
+    View view = findCurrentView();
+    for (PageBlock block : blocks) {
+      int blockHeight = block.getHeight(view, contentWidth - listMarkerReserve(block));
+      if (localY >= y && localY < y + blockHeight) {
+        return block;
+      }
+      y += blockHeight;
+    }
+    return null;
+  }
+
+  @Override
+  public boolean needClickAt (View view, float x, float y) {
+    return findClickTarget(x, y) != CLICK_TARGET_NONE;
+  }
+
+  @Override
+  public void onClickAt (View view, float x, float y) {
+    switch (findClickTarget(x, y)) {
+      case CLICK_TARGET_SHOW_MORE: {
+        loadFullMessage();
+        break;
+      }
+      case CLICK_TARGET_DETAILS: {
+        PageBlock block = findBlockAt(y - getContentY());
+        if (block instanceof PageBlockRichText) {
+          TdApi.PageBlockDetails details = (TdApi.PageBlockDetails) block.getOriginalBlock();
+          final int oldHeight = contentHeight;
+          details.isOpen = !details.isOpen;
+          parseBlocks();
+          if (contentWidth > 0) {
+            buildContent(contentWidth); // recompute contentHeight to the new (toggled) state
+            // forceFactor() may fire onFactorChangeFinished (which zeroes the delta), so reset the
+            // animator FIRST and only then seed the height delta the animation interpolates over.
+            detailsExpand.forceFactor(0f);
+            detailsExpandDelta = oldHeight - contentHeight;
+          }
+          rebuildAndUpdateContent();
+          if (contentWidth > 0) {
+            detailsExpand.animateTo(1f);
+          }
+          invalidateContentReceiver();
+          invalidateTextMediaReceiver();
+        }
+        break;
+      }
+    }
+  }
+
+  // == "Show more" (truncated messages) ==
+
+  private void loadFullMessage () {
+    if (showMoreLoading || richMessage.isFull) {
+      return;
+    }
+    showMoreLoading = true;
+    invalidate();
+    tdlib.send(new TdApi.GetFullRichMessage(msg.chatId, msg.id), (fullRichMessage, error) -> runOnUiThreadOptional(() -> {
+      showMoreLoading = false;
+      if (error != null) {
+        UI.showError(error);
+        invalidate();
+      } else {
+        setRichMessage(fullRichMessage);
+      }
+    }));
+  }
+
+  private void setRichMessage (@NonNull TdApi.RichMessage newRichMessage) {
+    this.richMessage = newRichMessage;
+    if (msg.content != null && msg.content.getConstructor() == TdApi.MessageRichMessage.CONSTRUCTOR) {
+      ((TdApi.MessageRichMessage) msg.content).message = newRichMessage;
+    }
+    parseBlocks();
+    rebuildAndUpdateContent();
+    invalidateContentReceiver();
+    invalidateTextMediaReceiver();
+  }
+
+  // == Updates & lifecycle ==
+
+  @Override
+  protected boolean updateMessageContent (TdApi.Message message, TdApi.MessageContent newContent, boolean isBottomMessage) {
+    if (newContent.getConstructor() != TdApi.MessageRichMessage.CONSTRUCTOR) {
+      return false;
+    }
+    this.msg.content = newContent;
+    setRichMessage(((TdApi.MessageRichMessage) newContent).message);
+    return true;
+  }
+
+  @Override
+  protected void onMessageAttachedToView (@NonNull MessageView view, boolean attached) {
+    for (PageBlock block : blocks) {
+      if (attached) {
+        block.attachToView(view);
+      } else {
+        block.detachFromView(view);
+      }
+    }
+  }
+
+  @Override
+  protected void onMessageContainerDestroyed () {
+    destroyBlocks();
+  }
+}
