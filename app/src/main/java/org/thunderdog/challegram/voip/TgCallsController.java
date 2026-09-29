@@ -28,6 +28,7 @@ import org.thunderdog.challegram.voip.annotation.VideoState;
 public class TgCallsController extends VoIPInstance {
   private final String version;
   private long nativePtr;
+  private long videoCapturePtr;
   public TgCallsController (@NonNull Tdlib tdlib, @NonNull TdApi.Call call, @NonNull CallConfiguration configuration, @NonNull CallOptions options, @NonNull ConnectionStateListener stateListener, String version) {
     super(tdlib, call, configuration, options, stateListener);
     if (configuration.state.encryptionKey.length != 256)
@@ -61,6 +62,17 @@ public class TgCallsController extends VoIPInstance {
   private native void updateEchoCancellationStrength (long ptr, int strength);
   private native void updateAudioOutputGainControlEnabled (long ptr, boolean isEnabled);
   private native void destroyInstance (long ptr);
+
+  // Video (Stage 1: native plumbing). The capturer is owned by a separate native
+  // pointer (videoCapturePtr) created via nativeCreateVideoCapturer and handed to
+  // the instance via nativeSetVideoCapture.
+  private native long nativeCreateVideoCapturer (String deviceId, boolean isScreencast);
+  private native void nativeDestroyVideoCapturer (long capturePtr);
+  private native void nativeSwitchCamera (long capturePtr, boolean useFrontCamera);
+  private native void nativeSetVideoState (long capturePtr, @VideoState int state);
+  private native void nativeSetVideoCapture (long ptr, long capturePtr);
+  private native void nativeSetIncomingVideoOutput (long ptr, @Nullable org.webrtc.VideoSink sink);
+  private native void nativeSetVideoCaptureLocalOutput (long capturePtr, @Nullable org.webrtc.VideoSink sink);
 
   @Override
   public String getLibraryName () {
@@ -117,8 +129,162 @@ public class TgCallsController extends VoIPInstance {
     fetchNetworkStats(nativePtr(), out);
   }
 
+  // Video (Stage 1: native plumbing; Stage 3 wires these into CallController via
+  // the VoIPInstance overrides). These expose the camera + remote-video pipeline.
+
+  private @Nullable org.webrtc.VideoSink pendingLocalSink;
+  // Whether the current outgoing capturer is a screen-share (vs. camera). Mirrors the
+  // deviceId used to create videoCapturePtr.
+  private boolean outgoingScreencast;
+  // Written on the native VoIP thread (handleRemoteMediaStateChange), read on the UI thread.
+  private volatile @VideoState int remoteVideoState = VideoState.INACTIVE;
+
+  @Override
+  public boolean isVideoOutgoing () {
+    return videoCapturePtr != 0;
+  }
+
+  @Override
+  public boolean isScreenSharing () {
+    return videoCapturePtr != 0 && outgoingScreencast;
+  }
+
+  /**
+   * Creates (if needed) the camera capturer and attaches it to the running call.
+   *
+   * @param useFrontCamera whether to start on the front-facing camera.
+   */
+  @Override
+  public void enableOutgoingVideo (boolean useFrontCamera) {
+    // Switching from screen-share to camera: tear down the screencast capturer first,
+    // since the outgoing source is mutually exclusive.
+    if (videoCapturePtr != 0 && outgoingScreencast) {
+      disableOutgoingVideo();
+    }
+    if (videoCapturePtr == 0) {
+      // Enqueue the camera flag (FALSE) right before the native create so the concurrent-capturer
+      // FIFO in VideoCameraCapturer routes THIS init() to a camera. See PENDING_SCREENCAST.
+      org.telegram.messenger.voip.VideoCameraCapturer.enqueueNextCaptureIsScreencast(false);
+      videoCapturePtr = nativeCreateVideoCapturer(useFrontCamera ? "front" : "back", false);
+      outgoingScreencast = false;
+      if (videoCapturePtr != 0 && pendingLocalSink != null) {
+        nativeSetVideoCaptureLocalOutput(videoCapturePtr, pendingLocalSink);
+      }
+    }
+    if (videoCapturePtr != 0) {
+      nativeSetVideoState(videoCapturePtr, VideoState.ACTIVE);
+      nativeSetVideoCapture(nativePtr(), videoCapturePtr);
+    }
+  }
+
+  /**
+   * Creates (if needed) a screen-capture capturer and attaches it to the running call.
+   * The MediaProjection permission result must already be stored in
+   * {@link org.thunderdog.challegram.voip.VoIPScreenCapture} (the Java
+   * {@code VideoCameraCapturer} reads it back when building the screen capturer).
+   * Mutually exclusive with the camera: an active camera capturer is torn down first.
+   */
+  @Override
+  public void enableOutgoingScreencast () {
+    if (videoCapturePtr != 0 && !outgoingScreencast) {
+      disableOutgoingVideo();
+    }
+    if (videoCapturePtr == 0) {
+      // Hand off the screencast intent to the Java VideoCameraCapturer out-of-band: upstream
+      // tgcalls only passes useFrontCamera to init(), so we enqueue the flag (TRUE = screencast)
+      // IMMEDIATELY before the native create, which constructs the capturer on tgcalls' media
+      // thread. The FIFO queue keeps this correct even when camera/screen capturers are created
+      // concurrently elsewhere (group calls) — see PENDING_SCREENCAST.
+      org.telegram.messenger.voip.VideoCameraCapturer.enqueueNextCaptureIsScreencast(true);
+      videoCapturePtr = nativeCreateVideoCapturer("screen", true);
+      outgoingScreencast = true;
+      if (videoCapturePtr != 0 && pendingLocalSink != null) {
+        nativeSetVideoCaptureLocalOutput(videoCapturePtr, pendingLocalSink);
+      }
+    }
+    if (videoCapturePtr != 0) {
+      nativeSetVideoState(videoCapturePtr, VideoState.ACTIVE);
+      nativeSetVideoCapture(nativePtr(), videoCapturePtr);
+    }
+  }
+
+  /**
+   * Detaches and releases the camera/screen capturer from the running call.
+   */
+  @Override
+  public void disableOutgoingVideo () {
+    if (nativePtr != 0) {
+      nativeSetVideoCapture(nativePtr, 0);
+    }
+    if (videoCapturePtr != 0) {
+      nativeSetVideoCaptureLocalOutput(videoCapturePtr, null);
+      nativeDestroyVideoCapturer(videoCapturePtr);
+      videoCapturePtr = 0;
+    }
+    outgoingScreencast = false;
+  }
+
+  /**
+   * Switches between front and back camera. No-op if video is not active.
+   */
+  @Override
+  public void switchCamera (boolean useFrontCamera) {
+    if (videoCapturePtr != 0) {
+      nativeSwitchCamera(videoCapturePtr, useFrontCamera);
+    }
+  }
+
+  /**
+   * Updates the local capture state. No-op if video is not active.
+   */
+  public void setVideoState (@VideoState int state) {
+    if (videoCapturePtr != 0) {
+      nativeSetVideoState(videoCapturePtr, state);
+    }
+  }
+
+  /**
+   * Routes incoming (remote) video frames to the given sink, or clears the output
+   * when {@code sink} is null.
+   */
+  @Override
+  public void setIncomingVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    if (nativePtr != 0) {
+      nativeSetIncomingVideoOutput(nativePtr, sink);
+    }
+  }
+
+  /**
+   * Routes local (preview) video frames to the given sink. Stored until the
+   * capturer exists so it survives an enable/disable cycle.
+   */
+  @Override
+  public void setLocalVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    this.pendingLocalSink = sink;
+    if (videoCapturePtr != 0) {
+      nativeSetVideoCaptureLocalOutput(videoCapturePtr, sink);
+    }
+  }
+
+  @Override
+  public @VideoState int getRemoteVideoState () {
+    return remoteVideoState;
+  }
+
   @Override
   public void performDestroy () {
+    // Clear any stale screen-capture permission token + teardown callback so a later call
+    // can't pick up this call's projection grant or fire a teardown against a dead instance.
+    org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+    VoIPScreenCapture.clear();
+    if (videoCapturePtr != 0) {
+      if (nativePtr != 0) {
+        nativeSetVideoCapture(nativePtr, 0);
+      }
+      nativeDestroyVideoCapturer(videoCapturePtr);
+      videoCapturePtr = 0;
+    }
+    outgoingScreencast = false;
     if (nativePtr != 0) {
       destroyInstance(nativePtr);
       nativePtr = 0;
@@ -129,6 +295,7 @@ public class TgCallsController extends VoIPInstance {
 
   @Keep
   protected final void handleRemoteMediaStateChange (@AudioState int audioState, @VideoState int videoState) {
+    this.remoteVideoState = videoState;
     connectionStateListener.onRemoteMediaStateChanged(this, audioState, videoState);
   }
 

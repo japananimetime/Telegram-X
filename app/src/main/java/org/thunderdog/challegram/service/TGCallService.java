@@ -78,8 +78,10 @@ import org.thunderdog.challegram.voip.NetworkStats;
 import org.thunderdog.challegram.voip.Socks5Proxy;
 import org.thunderdog.challegram.voip.VoIP;
 import org.thunderdog.challegram.voip.VoIPInstance;
+import org.thunderdog.challegram.voip.VoIPScreenCapture;
 import org.thunderdog.challegram.voip.annotation.CallNetworkType;
 import org.thunderdog.challegram.voip.annotation.CallState;
+import org.thunderdog.challegram.voip.annotation.VideoState;
 import org.thunderdog.challegram.voip.gui.CallSettings;
 import org.thunderdog.challegram.voip.gui.VoIPFeedbackActivity;
 
@@ -655,6 +657,194 @@ public class TGCallService extends Service implements
 
   public long getConnectionId () {
     return tgcalls != null ? tgcalls.getConnectionId() : 0;
+  }
+
+  // Video (1:1 calls). The active VoIPInstance owns the camera + render pipeline;
+  // CallController drives it through these methods and observes remote video state
+  // via VideoStateListener.
+
+  public interface VideoStateListener {
+    void onCallVideoStateChanged (@VideoState int remoteVideoState, boolean isVideoOutgoing);
+  }
+
+  private @Nullable VideoStateListener videoStateListener;
+  private @VideoState int remoteVideoState = VideoState.INACTIVE;
+
+  public void setVideoStateListener (@Nullable VideoStateListener listener) {
+    this.videoStateListener = listener;
+  }
+
+  /**
+   * Clears the video-state listener only if it is still the given instance. Prevents a second
+   * CallController (bound to this service) from being unregistered when an earlier controller
+   * tears down.
+   */
+  public void removeVideoStateListener (@Nullable VideoStateListener listener) {
+    if (this.videoStateListener == listener) {
+      this.videoStateListener = null;
+    }
+  }
+
+  public @Nullable VoIPInstance getVoip () {
+    return tgcalls;
+  }
+
+  public @VideoState int getRemoteVideoState () {
+    return remoteVideoState;
+  }
+
+  public boolean isVideoOutgoing () {
+    return tgcalls != null && tgcalls.isVideoOutgoing();
+  }
+
+  public boolean isScreenSharing () {
+    return tgcalls != null && tgcalls.isScreenSharing();
+  }
+
+  public void setOutgoingVideoEnabled (boolean enabled, boolean useFrontCamera) {
+    if (tgcalls == null) {
+      return;
+    }
+    boolean wasScreencast = tgcalls.isScreenSharing();
+    if (wasScreencast) {
+      // Leaving the screencast (switch to camera or off): stop listening for its teardown and
+      // drop the stale projection permission token so a later capture can't reuse it.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+      VoIPScreenCapture.clear();
+    }
+    if (enabled) {
+      tgcalls.enableOutgoingVideo(useFrontCamera);
+    } else {
+      tgcalls.disableOutgoingVideo();
+    }
+    if (wasScreencast) {
+      // Either switched screen -> camera or turned video off: drop the mediaProjection FGS type.
+      updateScreenSharingForegroundType(false);
+    }
+    notifyVideoStateChanged();
+  }
+
+  /**
+   * Starts screen sharing as the outgoing video source (replacing the camera), or stops
+   * outgoing video entirely. The MediaProjection permission result must already be stored
+   * in {@link org.thunderdog.challegram.voip.VoIPScreenCapture}, and the foreground service
+   * must be running with the {@code mediaProjection} type.
+   */
+  /**
+   * Starts or stops outgoing screen sharing. Returns {@code true} on success. When starting,
+   * returns {@code false} (without enabling) if the {@code mediaProjection} FGS type couldn't
+   * be re-asserted, or if the screencast capturer failed to come up — the caller must surface
+   * an error / re-prompt rather than proceeding into a doomed startCapture. State (FGS type,
+   * UI toggle) is reconciled on every failure path.
+   */
+  public boolean setScreenSharingEnabled (boolean enabled) {
+    if (tgcalls == null) {
+      return false;
+    }
+    if (enabled) {
+      // Android 10+: the service must be foreground with the mediaProjection type BEFORE
+      // MediaProjectionManager.getMediaProjection() is called inside the screen capturer.
+      // If the FGS re-assert fails, ABORT — don't run into a startCapture that will throw.
+      if (!updateScreenSharingForegroundType(true)) {
+        Log.e("Aborting screen share: failed to assert mediaProjection foreground type");
+        VoIPScreenCapture.clear();
+        notifyVideoStateChanged();
+        return false;
+      }
+      // Register the teardown callback (system-revoke / start-failure) before starting. For 1:1
+      // calls the started-callback is a no-op (no server-side presentation handshake to defer —
+      // the screencast is just attached to the existing call); only the unavailable path matters.
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(
+        new org.telegram.messenger.voip.VideoCameraCapturer.ScreencastStateCallback() {
+          @Override
+          public void onScreencastStarted () { }
+
+          @Override
+          public void onScreencastUnavailable () {
+            TGCallService.this.onScreencastUnavailable();
+          }
+        });
+      tgcalls.enableOutgoingScreencast();
+      // Reconcile: if creation failed, the capturer's failure path already cleared things; drop
+      // the FGS type back and report failure so we don't pretend screen sharing is live.
+      if (!tgcalls.isScreenSharing()) {
+        org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+        VoIPScreenCapture.clear();
+        updateScreenSharingForegroundType(false);
+        notifyVideoStateChanged();
+        return false;
+      }
+      notifyVideoStateChanged();
+      return true;
+    } else {
+      org.telegram.messenger.voip.VideoCameraCapturer.setScreencastStateCallback(null);
+      tgcalls.disableOutgoingVideo();
+      VoIPScreenCapture.clear();
+      // Drop the projection FGS type once screen sharing stops.
+      updateScreenSharingForegroundType(false);
+      notifyVideoStateChanged();
+      return true;
+    }
+  }
+
+  /**
+   * Drives screen-share teardown when the source becomes unavailable below the controller layer
+   * (system revoked the projection, or the screencast capturer failed to start). Invoked on the
+   * main thread by {@link org.telegram.messenger.voip.VideoCameraCapturer}.
+   */
+  private void onScreencastUnavailable () {
+    if (tgcalls != null && tgcalls.isScreenSharing()) {
+      setScreenSharingEnabled(false);
+    } else {
+      // Already torn down natively; just reconcile FGS type / UI.
+      VoIPScreenCapture.clear();
+      updateScreenSharingForegroundType(false);
+      notifyVideoStateChanged();
+    }
+  }
+
+  /**
+   * Re-asserts the foreground-service type, optionally adding {@code mediaProjection}. Called
+   * around screen-share start/stop so the runtime FGS type matches the active capture.
+   * Returns {@code true} if the type was (re-)asserted successfully, {@code false} if the
+   * service wasn't foreground yet or the OS rejected the type change.
+   */
+  private boolean updateScreenSharingForegroundType (boolean includeMediaProjection) {
+    if (ongoingCallNotification == null) {
+      return false;
+    }
+    try {
+      U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION, ongoingCallNotification, includeMediaProjection);
+      return true;
+    } catch (Throwable t) {
+      Log.e("Failed to update call foreground service type for screen sharing", t);
+      return false;
+    }
+  }
+
+  public void switchCamera (boolean useFrontCamera) {
+    if (tgcalls != null) {
+      tgcalls.switchCamera(useFrontCamera);
+    }
+  }
+
+  public void setIncomingVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    if (tgcalls != null) {
+      tgcalls.setIncomingVideoOutput(sink);
+    }
+  }
+
+  public void setLocalVideoOutput (@Nullable org.webrtc.VideoSink sink) {
+    if (tgcalls != null) {
+      tgcalls.setLocalVideoOutput(sink);
+    }
+  }
+
+  private void notifyVideoStateChanged () {
+    VideoStateListener listener = this.videoStateListener;
+    if (listener != null) {
+      listener.onCallVideoStateChanged(remoteVideoState, isVideoOutgoing());
+    }
   }
 
   private void hangUp () {
@@ -1321,9 +1511,16 @@ public class TGCallService extends Service implements
       if (tdlib == null) {
         tdlib = tgcalls.tdlib();
       }
+      // Proactively drop the video sinks and notify the listener that video ended, so a
+      // CallController that outlives this service (e.g. still on screen) releases its renderers
+      // and stops showing stale frames cleanly.
+      tgcalls.setIncomingVideoOutput(null);
+      tgcalls.setLocalVideoOutput(null);
       lastDebugLog = tgcalls.collectDebugLog();
       tgcalls.performDestroy();
       tgcalls = null;
+      remoteVideoState = VideoState.INACTIVE;
+      notifyVideoStateChanged();
     }
     if (callListener != null && tdlib != null && call != null) {
       tdlib.listeners().unsubscribeFromCallUpdates(call.id, callListener);
@@ -1388,6 +1585,14 @@ public class TGCallService extends Service implements
       @Override
       public void onSignallingDataEmitted (byte[] data) {
         tdlib.client().send(new TdApi.SendCallSignalingData(call.id, data), tdlib.silentHandler());
+      }
+
+      @Override
+      public void onRemoteMediaStateChanged (VoIPInstance context, int audioState, @VideoState int videoState) {
+        UI.post(() -> {
+          remoteVideoState = videoState;
+          notifyVideoStateChanged();
+        });
       }
     };
 
