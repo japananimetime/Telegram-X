@@ -29,6 +29,7 @@ public class TGReaction {
 
   private final TdApi.EmojiReaction emojiReaction;
   private final TdApi.Sticker customReaction;
+  private final boolean isPaid;
 
   private TGStickerObj _staticIconSicker;
   private TGStickerObj _activateAnimationSicker;
@@ -43,6 +44,7 @@ public class TGReaction {
     this.type = new TdApi.ReactionTypeEmoji(reaction.emoji);
     this.key = TD.makeReactionKey(type);
     this.customReaction = null;
+    this.isPaid = false;
 
     initialize();
   }
@@ -53,6 +55,21 @@ public class TGReaction {
     this.type = new TdApi.ReactionTypeCustomEmoji(Td.customEmojiId(customReaction));
     this.key = TD.makeReactionKey(type);
     this.emojiReaction = null;
+    this.isPaid = false;
+
+    initialize();
+  }
+
+  /**
+   * Constructor for paid reactions (star reactions)
+   */
+  public TGReaction (@NonNull Tdlib tdlib) {
+    this.tdlib = tdlib;
+    this.type = new TdApi.ReactionTypePaid();
+    this.key = TD.makeReactionKey(type);
+    this.emojiReaction = null;
+    this.customReaction = null;
+    this.isPaid = true;
 
     initialize();
   }
@@ -75,7 +92,7 @@ public class TGReaction {
   }
 
   public boolean needThemedColorFilter () {
-    return TD.needThemedColorFilter(customReaction);
+    return isPaid || TD.needThemedColorFilter(customReaction);
   }
 
   public boolean isPremium () {
@@ -84,6 +101,10 @@ public class TGReaction {
 
   public boolean isCustom () {
     return type.getConstructor() == TdApi.ReactionTypeCustomEmoji.CONSTRUCTOR;
+  }
+
+  public boolean isPaid () {
+    return isPaid;
   }
 
   public String getTitle () {
@@ -166,6 +187,10 @@ public class TGReaction {
   }
 
   private TGStickerObj newStaticIconSicker () {
+    if (isPaid) {
+      // Return cached paid star or create new one
+      return _staticIconSicker != null ? _staticIconSicker : TGStickerObj.makePaidReactionStar(tdlib);
+    }
     if (emojiReaction != null) {
       return new TGStickerObj(tdlib, emojiReaction.staticIcon, emojiReaction.emoji, emojiReaction.staticIcon.fullType).setReactionType(type).setDisplayScale(.5f);
     } else {
@@ -198,6 +223,10 @@ public class TGReaction {
   }
 
   public TGStickerObj newCenterAnimationSicker () {
+    if (isPaid) {
+      // Return cached paid star or create new one
+      return _centerAnimationSicker != null ? _centerAnimationSicker : TGStickerObj.makePaidReactionStar(tdlib);
+    }
     if (emojiReaction != null && emojiReaction.centerAnimation != null && !Config.TEST_STATIC_REACTIONS) {
       return new TGStickerObj(tdlib, emojiReaction.centerAnimation, emojiReaction.emoji, emojiReaction.centerAnimation.fullType).setReactionType(type);
     }
