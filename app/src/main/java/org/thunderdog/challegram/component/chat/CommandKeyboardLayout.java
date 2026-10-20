@@ -182,6 +182,14 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
         callback.onRequestContact(oneTime);
         break;
       }
+      case TdApi.KeyboardButtonTypeRequestUsers.CONSTRUCTOR: {
+        callback.onRequestUsers(oneTime, (TdApi.KeyboardButtonTypeRequestUsers) button.type);
+        break;
+      }
+      case TdApi.KeyboardButtonTypeRequestChat.CONSTRUCTOR: {
+        callback.onRequestChat(oneTime, (TdApi.KeyboardButtonTypeRequestChat) button.type);
+        break;
+      }
     }
   }
 
@@ -314,6 +322,8 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
     void onRequestLocation (boolean oneTime);
     void onRequestContact (boolean oneTime);
     void onRequestPoll (boolean oneTime, boolean forceQuiz, boolean forceRegular);
+    void onRequestUsers (boolean oneTime, TdApi.KeyboardButtonTypeRequestUsers requestUsers);
+    void onRequestChat (boolean oneTime, TdApi.KeyboardButtonTypeRequestChat requestChat);
     void onDestroyCommandKeyboard ();
     void onResizeCommandKeyboard (int size);
   }

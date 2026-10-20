@@ -6823,6 +6823,7 @@
   <string name="YouChangedWallpaper">You changed the wallpaper</string>
   <string name="YouChangedWallpaperForThisChat">You set a new wallpaper for this chat</string>
   <string name="YouSharedChat">You shared **%1$s**</string>
+  <string name="RequestPeerRequirementsNotMet">This doesn\'t meet the bot\'s requirements</string>
   <string name="YouSharedUser">You shared **%1$s**</string>
   <string name="YouSharedUsers_one">You shared **%1$s user**</string>
   <string name="YouSharedUsers_other">You shared **%1$s users**</string>
