@@ -5133,7 +5133,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public final boolean isOld () {
-    return tdlib().timeElapsedSinceDate(getDate(), TimeUnit.SECONDS) >= TimeUnit.MINUTES.toMillis(5);
+    return tdlib().timeElapsedSinceDate(getDate(), TimeUnit.SECONDS) >= TimeUnit.MINUTES.toSeconds(5);
   }
 
   public final boolean isChatMember () {

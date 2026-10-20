@@ -321,6 +321,8 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
     }
   }
 
+  private static final String UPSTREAM_APPLICATION_ID = "org.thunderdog.challegram";
+
   private void checkForTelegramChannelUpdates () {
     setState(State.CHECKING);
     Tdlib tdlib = context.hasTdlib() ? context.currentTdlib() : null;
@@ -328,7 +330,8 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
       onUpdateUnavailable();
       return;
     }
-    if (BuildConfig.EXPERIMENTAL || (!AppInstallationUtil.allowInAppTelegramUpdates(AppContext.get()) && !tdlib.hasUrgentInAppUpdate())) {
+    // Neurogram X: the channel publishes upstream Telegram X APKs, which are not updates of this fork
+    if (BuildConfig.EXPERIMENTAL || !UPSTREAM_APPLICATION_ID.equals(BuildConfig.APPLICATION_ID) || (!AppInstallationUtil.allowInAppTelegramUpdates(AppContext.get()) && !tdlib.hasUrgentInAppUpdate())) {
       onUpdateUnavailable();
       return;
     }

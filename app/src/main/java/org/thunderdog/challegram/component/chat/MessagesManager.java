@@ -113,6 +113,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   private boolean isScrolling;
   private boolean wasScrollByUser;
+  // Whether the visit may overwrite a saved mid-chat scroll position (see saveScrollPosition)
+  private boolean canOverwriteSavedPosition;
+  private int openHighlightMode;
+  private boolean pendingViewMessages;
   private int userScrollActionsCount;
 
   public MessagesManager (final MessagesController controller) {
@@ -131,6 +135,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
           }
           userScrollActionsCount++;
           wasScrollByUser = true;
+          canOverwriteSavedPosition = true;
         }
         boolean isScrolling = newState != RecyclerView.SCROLL_STATE_IDLE;
         if (MessagesManager.this.isScrolling != isScrolling) {
@@ -570,6 +575,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     clearHeaderMessage();
     awaitingForPinnedMessages = false;
     wasScrollByUser = false;
+    canOverwriteSavedPosition = false;
+    openHighlightMode = HIGHLIGHT_MODE_NONE;
+    pendingViewMessages = false;
   }
 
   public void checkItemAnimatorEnabled () {
@@ -728,6 +736,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       tdlib.openChat(chat.id, context);
       // readOneShot = true;
     }
+    this.openHighlightMode = highlightMessageId != null ? highlightMode : HIGHLIGHT_MODE_NONE;
+    this.canOverwriteSavedPosition = false;
     if (chat.id != 0 && messageThread == null && !areScheduled && needPinnedMessages) {
       initPinned(chat.id, topicId, 10, 50);
     } else {
@@ -1397,7 +1407,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         topEndReached = true;
       } else if (!items.isEmpty()) {
         final int accountId = tdlib.id();
-        Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.getMessageTopicId());
+        Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), getScrollTopicId());
         if (messageId != null && messageId.topEndMessageId != 0) {
           TGMessage topMessage = items.get(items.size() - 1);
           topEndReached = topMessage.isDescendantOrSelf(messageId.topEndMessageId);
@@ -1970,6 +1980,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         }
         bottomMessage.invalidateContentReceiver(message.getId(), -1);
         message.onDestroy();
+        if (atBottom) {
+          scheduleViewMessages();
+        }
         return;
       }
       boolean scrollToBottom = (message.isSending() || (atBottom && (!message.isOld() || message.isChatMember()))) && !message.isSponsoredMessage();
@@ -1979,8 +1992,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         if (!hasScrolled)
           scrollToBottom(false);
         if (message.isSending()) {
+          canOverwriteSavedPosition = true;
           revokeReturnMessages();
         }
+        scheduleViewMessages();
       } else if (atBottom) {
         int scrollOffsetInPixels = 0;
         View view = manager.findViewByPosition(0);
@@ -2000,12 +2015,31 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
             scrollToPositionWithOffsetImpl(0, scrollOffsetInPixels);
           }
         }
+        scheduleViewMessages();
       } else {
         adapter.addMessage(message, false, scrollToBottom);
       }
     } else if (message.isSending()) {
+      canOverwriteSavedPosition = true;
       loadFromStart();
     }
+  }
+
+  // A message added at the bottom does not always trigger onScrolled: when the list is full,
+  // the range of visible positions stays the same (and merged album parts change no positions).
+  // Without an explicit check such messages stay unread until the next scroll, and on re-entry
+  // the "Unread messages" separator lands above them.
+  private void scheduleViewMessages () {
+    if (pendingViewMessages || !isFocused) {
+      return;
+    }
+    pendingViewMessages = true;
+    controller.getMessagesView().post(() -> {
+      pendingViewMessages = false;
+      if (isFocused && messageViewer != null) {
+        viewMessages(false);
+      }
+    });
   }
 
   private int getExtraScrollSpacing () {
@@ -2549,6 +2583,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       if (Log.isEnabled(Log.TAG_MESSAGES_LOADER)) {
         Log.i(Log.TAG_MESSAGES_LOADER, "MessagesManager isFocused -> %b", isFocused);
       }
+      if (!isFocused) {
+        // Report what is on screen while view requests are still allowed (see allowViewRequest)
+        viewMessages(false);
+      }
       this.isFocused = isFocused;
       if (isFocused) {
         onFocus();
@@ -2611,6 +2649,15 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
     if (!isFocused) {
       return;
+    }
+
+    if (!canOverwriteSavedPosition && openHighlightMode != HIGHLIGHT_MODE_POSITION_RESTORE) {
+      // Opened somewhere else (bottom, notification, link, reply) and the user hasn't scrolled yet:
+      // keep the mid-chat position from the previous visit instead of replacing it with this one.
+      Settings.SavedMessageId savedMessageId = Settings.instance().getScrollMessageId(tdlib.id(), loader.getChatId(), getScrollTopicId());
+      if (savedMessageId != null && !savedMessageId.readFully && savedMessageId.id.getMessageId() != 0) {
+        return;
+      }
     }
 
     int firstVisibleItemPosition = manager.findFirstVisibleItemPosition();
@@ -2692,7 +2739,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     if (scrollChatId != 0) {
       final int accountId = tdlib.id();
       final long chatId = loader.getChatId();
-      final TdApi.MessageTopic topicId = loader.getMessageTopicId();
+      final TdApi.MessageTopic topicId = getScrollTopicId();
       Settings.SavedMessageId savedMessageId = new Settings.SavedMessageId(
         new MessageId(scrollMessageChatId, scrollMessageId, scrollMessageOtherIds),
         scrollOffsetInPixels,
@@ -2708,6 +2755,13 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         pinnedMessages.ensureMessageAvailability(scrollMessageId);
       }
     }
+  }
+
+  // Comment threads use their thread topic; forum topic tabs (no messageThread) use the forum topic,
+  // so that tabs and the plain chat view don't overwrite each other's saved position.
+  private TdApi.MessageTopic getScrollTopicId () {
+    TdApi.MessageTopic messageTopicId = loader.getMessageTopicId();
+    return messageTopicId != null ? messageTopicId : loader.getTopicId();
   }
 
   public void onMissedMessagesHintReceived () {
@@ -3114,7 +3168,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
     if (highlightMode == HIGHLIGHT_MODE_POSITION_RESTORE) {
       final int accountId = tdlib.id();
-      Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.getMessageTopicId());
+      Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), getScrollTopicId());
       int offset = messageId != null ? messageId.offsetPixels - scrollMessage.getExtraPadding() : 0;
       this.returnToMessageIds = messageId != null ? messageId.returnToMessageIds : null;
       scrollToPositionWithOffset(index, offset, false);
