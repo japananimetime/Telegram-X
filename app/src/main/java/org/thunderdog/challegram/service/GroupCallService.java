@@ -78,7 +78,7 @@ public class GroupCallService extends Service implements AudioManager.OnAudioFoc
       return false;
     }
     try {
-      U.startForeground(service, TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION, service.buildNotification(), screenSharing);
+      U.startForeground(service, TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION, service.buildNotification(), true, screenSharing);
       return true;
     } catch (Throwable t) {
       Log.e(Log.TAG_VOIP, "Unable to update group call foreground type for screen sharing", t);

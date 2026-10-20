@@ -13,8 +13,9 @@ import org.gradle.api.Project
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.kotlin.dsl.*
 import tgx.gradle.findExtraFolders
-import tgx.gradle.ndkVersionMajor
+import tgx.gradle.gradleFlag
 import tgx.gradle.ndkVersionToMinSdk
+import tgx.gradle.requireFile
 import tgx.gradle.source.AppBuildVersionSource
 import tgx.gradle.source.KeystoreSource
 import java.io.File
@@ -22,17 +23,22 @@ import java.io.File
 @Suppress("UnstableApiUsage")
 open class ModulePlugin : Plugin<Project> {
   override fun apply(project: Project) {
-    val config = try {
-      project.extensions.getByType<AppConfigurationExtension>().config.get()
-    } catch (_: Exception) {
-      null
+    val config by lazy {
+      try {
+        project.extensions.getByType<AppConfigurationExtension>().config.get()
+      } catch (_: Exception) {
+        null
+      }
     }
-    val useLegacyNdk = try {
-      project.extensions.getByType<AppConfigurationExtension>().useLegacyNdk.get()
-    } catch (_: Exception) {
-      project.providers.gradleProperty("useLegacyNdk").map {
-        it.toBoolean()
-      }.getOrElse(false)
+    val doNotObfuscate by lazy {
+      config?.doNotObfuscate ?: false
+    }
+    val useLegacyNdk by lazy {
+      try {
+        project.extensions.getByType<AppConfigurationExtension>().useLegacyNdk.get()
+      } catch (_: Exception) {
+        project.gradleFlag("useLegacyNdk").get()
+      }
     }
     val build by lazy {
       config?.build ?:
@@ -41,6 +47,41 @@ open class ModulePlugin : Plugin<Project> {
           project.isolated.rootProject.projectDirectory.file("version.properties")
         )
       }.get()
+    }
+    val appliedNdkVersion by lazy {
+      if (useLegacyNdk) {
+        build.legacyNdkVersion
+      } else {
+        build.primaryNdkVersion
+      }
+    }
+
+    val abi by lazy {
+      project.providers.gradleProperty("abi")
+    }
+
+    val enableSplitAbi by lazy {
+      try {
+        project.extensions.getByType<AppConfigurationExtension>().enableSplitAbi.get()
+      } catch (_: Exception) {
+        abi.map { it.isEmpty() }.orElse(true).get()
+      }
+    }
+
+    val globalAbiFilters by lazy {
+      try {
+        project.extensions.getByType<AppConfigurationExtension>().abiFilters.get()
+      } catch (_: Exception) {
+        project.providers.gradleProperty("android.injected.build.abi").map {
+          it.split(",")
+        }.orElse(
+          abi.map(Abi::toFilters).orElse(Abi.FILTERS)
+        ).map {
+          it.filter { abi ->
+            abi == "x86" || abi == "armeabi-v7a" || !useLegacyNdk
+          }
+        }.get()
+      }
     }
 
     val libs = project.the<LibrariesForLibs>()
@@ -62,7 +103,7 @@ open class ModulePlugin : Plugin<Project> {
           "-Xlint:-overloads",
           "-Xlint:-overrides",
           "-Xlint:-this-escape",
-          // "-Xlint:-dangling-doc-comments",
+          "-Xlint:-dangling-doc-comments",
 
           // TODO: fix deprecation warnings by migrating to newer APIs.
           "-Xlint:-deprecation",
@@ -83,11 +124,7 @@ open class ModulePlugin : Plugin<Project> {
       when (this) {
         is LibraryExtension -> {
           buildToolsVersion = build.buildToolsVersion
-          ndkVersion = if (useLegacyNdk) {
-            build.legacyNdkVersion
-          } else {
-            build.primaryNdkVersion
-          }
+          ndkVersion = appliedNdkVersion
           compileSdk {
             version = release(build.compileSdkVersion)
           }
@@ -114,23 +151,31 @@ open class ModulePlugin : Plugin<Project> {
               ndkVersion.ndkVersionToMinSdk()
             )
             multiDexEnabled = true
-          }
-          flavorDimensions += arrayOf("SDK", "ABI")
-          productFlavors {
-            Abi.VARIANTS.forEach { (_, variant) ->
-              register(variant.flavor) {
-                dimension = "ABI"
-                ndk.abiFilters.addAll(variant.filters)
-                externalNativeBuild.ndkBuild.abiFilters(*variant.filters)
-                externalNativeBuild.cmake.abiFilters(*variant.filters)
-              }
+            if (!enableSplitAbi) {
+              ndk.abiFilters += globalAbiFilters
+              externalNativeBuild.cmake.abiFilters += globalAbiFilters
             }
-            Sdk.VARIANTS.forEach { (_, variant) ->
+          }
+          splits.abi {
+            isEnable = enableSplitAbi
+            reset()
+            include(*globalAbiFilters.toTypedArray())
+            isUniversalApk = false
+          }
+          flavorDimensions += "SDK"
+          productFlavors {
+            Sdk.VARIANTS.values.forEach { variant ->
+              val selectedMinSdk = maxOf(
+                Config.MIN_SDK_VERSION,
+                variant.minSdk,
+                ndkVersion.ndkVersionToMinSdk()
+              )
               register(variant.flavor) {
                 dimension = "SDK"
                 externalNativeBuild.cmake.arguments(
-                  "-DANDROID_PLATFORM=android-${maxOf(variant.minSdk, ndkVersion.ndkVersionToMinSdk())}",
-                  "-DANDROID_STL=${if (ndkVersion.ndkVersionMajor() >= 27) "c++_shared" else "c++_static"}",
+                  "-DANDROID_PLATFORM=android-${selectedMinSdk}",
+                  "-DANDROID_MIN_SDK_VERSION=${selectedMinSdk}",
+                  "-DANDROID_STL=c++_shared",
                   "-DTGX_FLAVOR=${variant.flavor}"
                 )
                 sourceSets.getByName(variant.flavor) {
@@ -148,11 +193,7 @@ open class ModulePlugin : Plugin<Project> {
 
         is ApplicationExtension -> {
           buildToolsVersion = build.buildToolsVersion
-          ndkVersion = if (useLegacyNdk) {
-            build.primaryNdkVersion
-          } else {
-            build.legacyNdkVersion
-          }
+          ndkVersion = appliedNdkVersion
           compileSdk {
             version = release(build.compileSdkVersion)
           }
@@ -180,7 +221,18 @@ open class ModulePlugin : Plugin<Project> {
             )
             targetSdk = build.targetSdkVersion
             multiDexEnabled = true
+            if (!enableSplitAbi) {
+              ndk.abiFilters += globalAbiFilters
+              externalNativeBuild.cmake.abiFilters += globalAbiFilters
+            }
           }
+          splits.abi {
+            isEnable = enableSplitAbi
+            reset()
+            include(*globalAbiFilters.toTypedArray())
+            isUniversalApk = false
+          }
+
           keystore?.orNull?.let { keystore ->
             signingConfigs {
               arrayOf(
@@ -198,44 +250,55 @@ open class ModulePlugin : Plugin<Project> {
                 }
               }
             }
+          }
 
-            buildTypes {
-              getByName("debug") {
-                signingConfig = signingConfigs["debug"]
+          buildTypes {
+            getByName("debug") {
+              signingConfig = signingConfigs["debug"]
 
-                isDebuggable = true
-                isJniDebuggable = true
-                isMinifyEnabled = false
+              isDebuggable = true
+              isJniDebuggable = true
+              isMinifyEnabled = false
 
-                ndk.debugSymbolLevel = "full"
+              multiDexKeepProguard = requireFile(project.layout.projectDirectory.file("multidex-rules.pro").asFile)
 
-                if (config.forceOptimize) {
-                  proguardFiles(
-                    getDefaultProguardFile(ProguardFiles.ProguardFile.OPTIMIZE.fileName),
-                    "proguard-rules.pro"
-                  )
-                  if (config.isHuaweiBuild) {
-                    proguardFile("proguard-hms.pro")
-                  }
-                }
-              }
+              ndk.debugSymbolLevel = "full"
 
-              getByName("release") {
-                signingConfig = signingConfigs["release"]
-
-                isMinifyEnabled = !config.doNotObfuscate
-                isShrinkResources = !config.doNotObfuscate
-
-                ndk.debugSymbolLevel = "full"
+              config?.takeIf {
+                it.forceOptimize
+              }?.let { config ->
+                isMinifyEnabled = !doNotObfuscate
+                isShrinkResources = !doNotObfuscate
 
                 proguardFiles(
                   getDefaultProguardFile(ProguardFiles.ProguardFile.OPTIMIZE.fileName),
                   "proguard-rules.pro"
                 )
-
                 if (config.isHuaweiBuild) {
                   proguardFile("proguard-hms.pro")
                 }
+              }
+            }
+
+            getByName("release") {
+              signingConfig = signingConfigs.findByName("release") ?: signingConfigs["debug"].takeIf {
+                config?.isExperimentalBuild ?: false
+              }
+
+              isMinifyEnabled = !doNotObfuscate
+              isShrinkResources = !doNotObfuscate
+
+              multiDexKeepProguard = requireFile(project.layout.projectDirectory.file("multidex-rules.pro").asFile)
+
+              ndk.debugSymbolLevel = "full"
+
+              proguardFiles(
+                getDefaultProguardFile(ProguardFiles.ProguardFile.OPTIMIZE.fileName),
+                "proguard-rules.pro"
+              )
+
+              if (config?.isHuaweiBuild ?: false) {
+                proguardFile("proguard-hms.pro")
               }
             }
           }
@@ -243,11 +306,7 @@ open class ModulePlugin : Plugin<Project> {
 
         is TestExtension -> {
           buildToolsVersion = build.buildToolsVersion
-          ndkVersion = if (useLegacyNdk) {
-            build.legacyNdkVersion
-          } else {
-            build.primaryNdkVersion
-          }
+          ndkVersion = appliedNdkVersion
           compileSdk {
             version = release(build.compileSdkVersion)
           }
@@ -262,7 +321,18 @@ open class ModulePlugin : Plugin<Project> {
               ndkVersion.ndkVersionToMinSdk()
             )
             multiDexEnabled = true
+            if (!enableSplitAbi) {
+              ndk.abiFilters += globalAbiFilters
+              externalNativeBuild.cmake.abiFilters += globalAbiFilters
+            }
           }
+          splits.abi {
+            isEnable = enableSplitAbi
+            reset()
+            include(*globalAbiFilters.toTypedArray())
+            isUniversalApk = false
+          }
+
           sourceSets.configureEach {
             jniLibs.directories += "jniLibs"
           }
@@ -295,13 +365,15 @@ open class ModulePlugin : Plugin<Project> {
 
                 ndk.debugSymbolLevel = "full"
 
-                if (config.forceOptimize) {
-                  proguardFiles(
-                    getDefaultProguardFile(ProguardFiles.ProguardFile.OPTIMIZE.fileName),
-                    "proguard-rules.pro"
-                  )
-                  if (config.isHuaweiBuild) {
-                    proguardFile("proguard-hms.pro")
+                config?.let { config ->
+                  if (config.forceOptimize) {
+                    proguardFiles(
+                      getDefaultProguardFile(ProguardFiles.ProguardFile.OPTIMIZE.fileName),
+                      "proguard-rules.pro"
+                    )
+                    if (config.isHuaweiBuild) {
+                      proguardFile("proguard-hms.pro")
+                    }
                   }
                 }
               }
@@ -309,8 +381,9 @@ open class ModulePlugin : Plugin<Project> {
               getByName("release") {
                 signingConfig = signingConfigs["release"]
 
-                isMinifyEnabled = !config.doNotObfuscate
-                isShrinkResources = !config.doNotObfuscate
+                val doNotObfuscate = config?.doNotObfuscate ?: false
+                isMinifyEnabled = !doNotObfuscate
+                isShrinkResources = !doNotObfuscate
 
                 ndk.debugSymbolLevel = "full"
 
@@ -319,7 +392,7 @@ open class ModulePlugin : Plugin<Project> {
                   "proguard-rules.pro"
                 )
 
-                if (config.isHuaweiBuild) {
+                if (config?.isHuaweiBuild ?: false) {
                   proguardFile("proguard-hms.pro")
                 }
               }

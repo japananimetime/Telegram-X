@@ -38,7 +38,7 @@ import me.vkryl.core.StringUtils;
 /**
  * Shows a Telegram community: its name and photo, the current user's role, the chats that
  * belong to it and, for administrators, a few counters. Data arrives through updateCommunity /
- * updateCommunityFullInfo (cached by TdlibCache); loadCommunityFullInfo triggers the latter.
+ * updateCommunityFullInfo (cached by TdlibCache); getCommunityFullInfo results are fed into the same cache.
  *
  * FORK-TDLIB: chat list editing (setCommunityChatIsHidden, removeCommunityChat) and the add-chat
  * requests screen use functions from tdlib/source/patches/td-communities.patch; switch to the
@@ -100,9 +100,11 @@ public class CommunityController extends RecyclerViewController<CommunityControl
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
     TdApi.Community community = tdlib.cache().community(communityId());
     if (community == null || community.haveAccess) {
-      tdlib.send(new TdApi.LoadCommunityFullInfo(communityId()), (ok, error) -> {
+      tdlib.send(new TdApi.GetCommunityFullInfo(communityId()), (fullInfo, error) -> {
         if (error != null) {
           UI.showError(error);
+        } else {
+          tdlib.cache().onCommunityFullInfoLoaded(communityId(), fullInfo);
         }
       });
     }

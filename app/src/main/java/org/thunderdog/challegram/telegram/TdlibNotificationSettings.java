@@ -13,6 +13,7 @@
  * File created on 25/12/2018
  */
 package org.thunderdog.challegram.telegram;
+import org.thunderdog.challegram.unsorted.AppContext;
 
 import android.app.Notification;
 import android.net.Uri;
@@ -125,7 +126,7 @@ public class TdlibNotificationSettings {
     } else if (!soundPath.isEmpty()) {
       /*
       * if (!Strings.isEmpty(soundPath) && soundPath.startsWith("file://")) {
-        UI.getAppContext().grantUriPermission("com.android.systemui", Uri.parse(soundPath), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        AppContext.get().grantUriPermission("com.android.systemui", Uri.parse(soundPath), Intent.FLAG_GRANT_READ_URI_PERMISSION);
       }
       * */
       /*Uri uri = null;

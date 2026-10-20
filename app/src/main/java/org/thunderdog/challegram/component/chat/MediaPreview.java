@@ -522,13 +522,15 @@ public abstract class MediaPreview implements ListAnimator.Measurable {
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
       case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
       case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
+      case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
+      case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
       case TdApi.MessageUnsupported.CONSTRUCTOR: {
         // No media preview (rich messages have no single representative thumbnail; the text
         // preview is still produced by ContentPreview).
         break;
       }
       default: {
-        Td.assertMessageContent_af730a78();
+        Td.assertMessageContent_f7758f8b();
         throw Td.unsupported(message.content);
       }
     }

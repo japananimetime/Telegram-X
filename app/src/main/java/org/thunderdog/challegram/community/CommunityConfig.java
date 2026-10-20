@@ -11,7 +11,7 @@ import androidx.annotation.Nullable;
 
 import org.drinkmore.Tracer;
 import org.thunderdog.challegram.Log;
-import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.unsorted.AppContext;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -57,7 +57,7 @@ public class CommunityConfig {
   public static boolean roundedStickers = false;
 
   private CommunityConfig () {
-    File configDir = new File(UI.getAppContext().getFilesDir(), "community_config");
+    File configDir = new File(AppContext.get().getFilesDir(), "community_config");
     if (!configDir.exists() && !configDir.mkdir()) {
       throw new IllegalStateException("Unable to create community config directory");
     }

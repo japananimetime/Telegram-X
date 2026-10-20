@@ -141,6 +141,7 @@ import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.TGMimeType;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.TextController;
+import org.thunderdog.challegram.unsorted.AppContext;
 import org.thunderdog.challegram.util.AppBuildInfo;
 import org.thunderdog.challegram.util.Permissions;
 import org.thunderdog.challegram.util.text.TextReplacementSpan;
@@ -237,7 +238,7 @@ public class U {
 
   public static boolean isRoaming() {
     try {
-      ConnectivityManager cm = (ConnectivityManager) UI.getAppContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+      ConnectivityManager cm = (ConnectivityManager) AppContext.get().getSystemService(Context.CONNECTIVITY_SERVICE);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         android.net.Network network = cm.getActiveNetwork();
         android.net.NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
@@ -366,7 +367,7 @@ public class U {
     ArrayList<String> results = null;
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) { //Method 1 for KitKat & above
-      File[] externalDirs = UI.getAppContext().getExternalFilesDirs(null);
+      File[] externalDirs = AppContext.get().getExternalFilesDirs(null);
 
       for (File file : externalDirs) {
         String path = file.getPath().split("/Android")[0];
@@ -482,6 +483,10 @@ public class U {
     startForeground(service, notificationId, notification, false);
   }
 
+  public static void startForeground (Service service, int notificationId, Notification notification, boolean callAnswered) {
+    startForeground(service, notificationId, notification, callAnswered, false);
+  }
+
   /**
    * @param includeMediaProjection when true, adds {@code FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION}
    *   to the runtime foreground-service type. Required (Android 10+) before a call service can
@@ -489,7 +494,7 @@ public class U {
    *   granted the projection permission. Dropping it (passing false again) reverts to the
    *   call-only types.
    */
-  public static void startForeground (Service service, int notificationId, Notification notification, boolean includeMediaProjection) {
+  public static void startForeground (Service service, int notificationId, Notification notification, boolean callAnswered, boolean includeMediaProjection) {
     if (notification == null)
       throw new IllegalArgumentException();
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -501,7 +506,11 @@ public class U {
         case TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION:
         case TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION: {
           int knownType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL;
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+            callAnswered ||
+            notificationId == TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION
+          )) {
             knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
           }
           knownType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
@@ -931,7 +940,7 @@ public class U {
   public static String getNotificationChannel (String id, int stringRes) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       android.app.NotificationChannel channel = new android.app.NotificationChannel(id, Lang.getString(stringRes), NotificationManager.IMPORTANCE_LOW);
-      NotificationManager manager = (NotificationManager) UI.getAppContext().getSystemService(Context.NOTIFICATION_SERVICE);
+      NotificationManager manager = (NotificationManager) AppContext.get().getSystemService(Context.NOTIFICATION_SERVICE);
       try {
         manager.createNotificationChannel(channel);
       } catch (Throwable t) {
@@ -1198,7 +1207,7 @@ public class U {
   public static Uri contentUriFromFile (File file) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
       try {
-        return FileProvider.getUriForFile(UI.getAppContext(), Config.FILE_PROVIDER_AUTHORITY, file);
+        return FileProvider.getUriForFile(AppContext.get(), Config.FILE_PROVIDER_AUTHORITY, file);
       } catch (Throwable t) {
         Log.e("Can't create content uri for path", t);
         // UI.showToast("Could not open path: " + file.getPath() + ", reason: " + t.getMessage(), Toast.LENGTH_LONG);
@@ -2008,9 +2017,9 @@ public class U {
       FileUtils.deleteFile(file);
       return;
     }
-    MediaScannerConnection.scanFile(UI.getAppContext(), new String[] {file.getPath()}, null, (path, uri) -> {
+    MediaScannerConnection.scanFile(AppContext.get(), new String[] {file.getPath()}, null, (path, uri) -> {
       if (uri != null) {
-        UI.getAppContext().getContentResolver().delete(uri, null, null);
+        AppContext.get().getContentResolver().delete(uri, null, null);
       }
       FileUtils.deleteFile(file);
     });
@@ -2024,7 +2033,7 @@ public class U {
     if (file == null)
       return;
     /*String mimeType = TGMimeType.mimeTypeForExtension(U.getExtension(file.getPath()));
-    MediaScannerConnection.scanFile(UI.getAppContext(), new String[] {file.getPath()}, !Strings.isEmpty(mimeType) ? new String[] {mimeType} : null, (path, uri) -> {
+    MediaScannerConnection.scanFile(AppContext.get(), new String[] {file.getPath()}, !Strings.isEmpty(mimeType) ? new String[] {mimeType} : null, (path, uri) -> {
 
     });*/
     Uri uri = Uri.fromFile(file);
@@ -2374,7 +2383,7 @@ public class U {
     String metadata = Lang.getAppBuildAndVersion(tdlib) + " (" + BuildConfig.COMMIT + ")\n" +
       (!buildInfo.getPullRequests().isEmpty() ? "PRs: " + buildInfo.pullRequestsList() + "\n" : "") +
       (!"none".equals(BuildConfig.TGX_EXTENSION) ? "Extension: " + BuildConfig.TGX_EXTENSION + "\n" : "") +
-      (!BuildConfig.LATEST_FLAVOR ? ("flavor: " + BuildConfig.FLAVOR_SDK + "\n") : "") +
+      (!BuildConfig.LATEST_FLAVOR ? ("flavor: " + BuildConfig.FLAVOR + "\n") : "") +
       "TDLib: " + Td.tdlibVersion() + " (tdlib/td@" + Td.tdlibCommitHash() + ")\n" +
       "androidx-media3: " + MediaLibraryInfo.VERSION + " [" + MediaLibraryInfo.registeredModules().replaceAll("(?<=^| )media3\\.", "") + "]\n" +
       "tgcalls: TGX-Android/tgcalls@" + BuildConfig.TGCALLS_COMMIT + "\n" +
@@ -2384,13 +2393,13 @@ public class U {
       "Device: " + Build.MANUFACTURER + " " + Build.BRAND + " " + Build.MODEL + " (" + Build.DISPLAY + ")\n" +
       "Screen: " + Screen.widestSide() + "x" + Screen.smallestSide() + " (density: " + Screen.density() + ", fps: " + Screen.refreshRate() + ")" + "\n" +
       "Build: `" + Build.FINGERPRINT + "`\n" +
-      "Package: " + UI.getAppContext().getPackageName() + "\n" +
+      "Package: " + AppContext.get().getPackageName() + "\n" +
       "Locale: " + locale + (!locale.equals(appLocale) ? " (app: " + appLocale + ")" : "");
-    String installerName = AppInstallationUtil.getInstallerPackageName(UI.getAppContext());
+    String installerName = AppInstallationUtil.getInstallerPackageName(AppContext.get());
     if (!StringUtils.isEmpty(installerName)) {
       metadata += "\nInstaller: " + AppInstallationUtil.prettifyPackageName(installerName);
     }
-    String initiatorName = AppInstallationUtil.getInitiatorPackageName(UI.getAppContext());
+    String initiatorName = AppInstallationUtil.getInitiatorPackageName(AppContext.get());
     if (!StringUtils.isEmpty(initiatorName)) {
       metadata += "\nInitiator: " + AppInstallationUtil.prettifyPackageName(initiatorName);
     }
@@ -2412,7 +2421,7 @@ public class U {
   @Nullable
   public static String getApkFingerprint (String algorithm, boolean needSeparator) {
     try {
-      final PackageInfo info = UI.getAppContext().getPackageManager()
+      final PackageInfo info = AppContext.get().getPackageManager()
         .getPackageInfo(BuildConfig.APPLICATION_ID, PackageManager.GET_SIGNATURES);
       for (Signature signature : info.signatures) {
         final MessageDigest md = MessageDigest.getInstance(algorithm);
@@ -2662,9 +2671,9 @@ public class U {
     try {
       File appDir;
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        appDir = UI.getAppContext().getDataDir();
+        appDir = AppContext.get().getDataDir();
       } else {
-        appDir = UI.getAppContext().getFilesDir().getParentFile();
+        appDir = AppContext.get().getFilesDir().getParentFile();
       }
       File prefsDir = new File(appDir, "shared_prefs");
       if (prefsDir.exists()) {
@@ -2682,7 +2691,7 @@ public class U {
   public static boolean deleteSharedPreferences (String name) {
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        return UI.getAppContext().deleteSharedPreferences(name);
+        return AppContext.get().deleteSharedPreferences(name);
       } else {
         File file = sharedPreferencesFile(name);
         return file != null && file.delete();
@@ -2942,7 +2951,7 @@ public class U {
 
   public static boolean isInternalUri (Uri uri) {
     String pathString = normalizeFilePath(uri.getPath());
-    File dir = UI.getAppContext().getFilesDir();
+    File dir = AppContext.get().getFilesDir();
     return !StringUtils.isEmpty(pathString) && pathString.startsWith(dir.getPath());
   }
 
@@ -3464,7 +3473,7 @@ public class U {
 
   public static String[] getInputLanguages () {
     final List<String> inputLanguages = new ArrayList<>();
-    InputMethodManager imm = (InputMethodManager) UI.getAppContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+    InputMethodManager imm = (InputMethodManager) AppContext.get().getSystemService(Context.INPUT_METHOD_SERVICE);
     if (imm != null) {
       String inputLanguageCode = null;
       try {
@@ -3595,19 +3604,12 @@ public class U {
 
   public static String getPreferredAbiFlavor () {
     final String abi = U.getCpuAbi();
-    final String flavor = switch (abi) {
+    return switch (abi) {
       case "arm64-v8a" -> "arm64";
       case "armeabi-v7a" -> "arm32";
       case "x86" -> "x86";
       case "x86_64", "x64" -> "x64";
       default -> null;
     };
-    if (flavor == null) {
-      String[] flavors = new String[] {"arm64", "arm32", "x86", "x64"};
-      if (ArrayUtils.contains(flavors, BuildConfig.FLAVOR_ABI)) {
-        return BuildConfig.FLAVOR_ABI;
-      }
-    }
-    return flavor;
   }
 }

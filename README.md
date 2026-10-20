@@ -33,8 +33,8 @@ Neurogram X is developed and built primarily on **Windows** (PowerShell + Git Ba
 
 ### Prerequisites
 
-* **Android SDK** (with NDK `27.3.13750724` (+ `23.2.8568313` for the legacy flavor), CMake `3.22.1` — pinned in `version.properties`)
-* **JDK 21** (e.g. Eclipse Temurin)
+* **Android SDK** (with NDK `30.0.16248370` (+ `23.2.8568313` for the legacy flavor), CMake `3.22.1` — pinned in `version.properties`)
+* **JDK 25** (e.g. Eclipse Temurin)
 * **git** with **LFS**: `git lfs install`
 * ~**5 GB+** free disk for sources + build outputs
 * Windows: a POSIX shell (Git Bash / MSYS2) for `scripts/setup.sh`

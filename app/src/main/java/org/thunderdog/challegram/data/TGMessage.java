@@ -8619,6 +8619,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         case TdApi.MessageSuggestedPostDeclined.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostPaid.CONSTRUCTOR:
         case TdApi.MessageSuggestedPostRefunded.CONSTRUCTOR:
+        case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
+        case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
           break;
 
         case TdApi.MessageUnsupported.CONSTRUCTOR:
@@ -8634,7 +8636,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           break;
         }
         default: {
-          Td.assertMessageContent_af730a78();
+          Td.assertMessageContent_f7758f8b();
           throw Td.unsupported(msg.content);
         }
       }

@@ -586,9 +586,15 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
       TdApi.CommunityFullInfo community = update.communityFullInfo;
       communitiesFull.put(update.communityId, community);
     }
-    // Always notify: CommunityController waits for the first full info after loadCommunityFullInfo.
+    // Always notify: CommunityController waits for the first full info after getCommunityFullInfo.
     notifyListeners(communityGlobalListeners.iterator(), update.communityId, update.communityFullInfo);
     notifyListeners(communityListeners.iterator(update.communityId), update.communityId, update.communityFullInfo);
+  }
+
+  // GetCommunityFullInfo may answer from TDLib's cache without sending updateCommunityFullInfo
+  @TdlibThread
+  public void onCommunityFullInfoLoaded (long communityId, TdApi.CommunityFullInfo fullInfo) {
+    onUpdateCommunityFull(new TdApi.UpdateCommunityFullInfo(communityId, fullInfo));
   }
 
   // User Blacklist
