@@ -51,6 +51,7 @@ add_library(tgcalls STATIC
   "${TGCALLS_DIR}/tgcalls/group/GroupInstanceReferenceImpl.cpp"
   "${TGCALLS_DIR}/tgcalls/group/GroupJoinPayloadInternal.cpp"
   "${TGCALLS_DIR}/tgcalls/group/GroupNetworkManager.cpp"
+  "${TGCALLS_DIR}/tgcalls/group/StreamingAudioRenderer.cpp"
   "${TGCALLS_DIR}/tgcalls/group/StreamingMediaContext.cpp"
   "${TGCALLS_DIR}/tgcalls/group/VideoStreamingPart.cpp"
 
