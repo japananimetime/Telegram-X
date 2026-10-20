@@ -191,6 +191,7 @@ import org.thunderdog.challegram.player.RecordAudioVideoController;
 import org.thunderdog.challegram.player.RoundVideoController;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.support.ViewSupport;
+import org.thunderdog.challegram.telegram.ChatFilter;
 import org.thunderdog.challegram.telegram.ChatListener;
 import org.thunderdog.challegram.telegram.EmojiMediaType;
 import org.thunderdog.challegram.telegram.GlobalAccountListener;
@@ -8110,6 +8111,122 @@ public class MessagesController extends ViewController<MessagesController.Argume
       builder.setNegativeButton(Lang.getString(R.string.Cancel), (dialog, which) -> dialog.dismiss());
       showAlert(builder);
     }
+  }
+
+  @Override
+  public void onRequestUsers (final boolean oneTime, TdApi.KeyboardButtonTypeRequestUsers requestUsers) {
+    if (chat == null || commandsMessageId == 0) {
+      return;
+    }
+    final long chatId = chat.id;
+    final long messageId = commandsMessageId;
+    // TODO: requestUsers.maxQuantity > 1 (multi-pick); currently a single user is shared.
+    ContactsController c = new ContactsController(context, tdlib);
+    c.initWithMode(ContactsController.MODE_PICK);
+    c.setAllowBots(!requestUsers.restrictUserIsBot || requestUsers.userIsBot);
+    c.setArguments(new ContactsController.Args(new SenderPickerDelegate() {
+      @Override
+      public boolean onSenderPick (ContactsController context, View view, TdApi.MessageSender senderId) {
+        long userId = Td.getSenderUserId(senderId);
+        if (userId == 0 || !canShareUserWithBot(requestUsers, userId)) {
+          UI.showToast(R.string.RequestPeerRequirementsNotMet, Toast.LENGTH_SHORT);
+          return false;
+        }
+        tdlib.send(new TdApi.ShareUsersWithBot(new TdApi.KeyboardButtonSourceMessage(chatId, messageId), requestUsers.id, new long[] {userId}, false), (result, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          } else if (oneTime) {
+            onDestroyCommandKeyboard();
+          }
+        }));
+        return true;
+      }
+
+      @Override
+      public boolean allowGlobalSearch () {
+        return true;
+      }
+    }));
+    navigateTo(c);
+  }
+
+  private boolean canShareUserWithBot (TdApi.KeyboardButtonTypeRequestUsers requestUsers, long userId) {
+    TdApi.User user = tdlib.cache().user(userId);
+    if (user == null) {
+      return true; // Let the server decide
+    }
+    if (requestUsers.restrictUserIsBot && (user.type.getConstructor() == TdApi.UserTypeBot.CONSTRUCTOR) != requestUsers.userIsBot) {
+      return false;
+    }
+    if (requestUsers.restrictUserIsPremium && user.isPremium != requestUsers.userIsPremium) {
+      return false;
+    }
+    return true;
+  }
+
+  @Override
+  public void onRequestChat (final boolean oneTime, TdApi.KeyboardButtonTypeRequestChat requestChat) {
+    if (chat == null || commandsMessageId == 0) {
+      return;
+    }
+    final long chatId = chat.id;
+    final long messageId = commandsMessageId;
+    final ChatsController c = new ChatsController(context, tdlib);
+    ChatFilter filter = new ChatFilter() {
+      @Override
+      public boolean accept (TdApi.Chat sharedChat) {
+        return canShareChatWithBot(requestChat, sharedChat);
+      }
+
+      @Override
+      public int getTotalStringRes () {
+        return requestChat.chatIsChannel ? R.string.xChannels : R.string.xGroups;
+      }
+
+      @Override
+      public int getEmptyStringRes () {
+        return requestChat.chatIsChannel ? R.string.NoChannels : R.string.NoGroups;
+      }
+    };
+    c.setArguments(new ChatsController.Arguments(filter, new ChatsController.PickerDelegate() {
+      @Override
+      public boolean onChatPicked (TdApi.Chat sharedChat, Runnable onDone) {
+        // Bot administrator rights and membership are verified by the server
+        tdlib.send(new TdApi.ShareChatWithBot(new TdApi.KeyboardButtonSourceMessage(chatId, messageId), requestChat.id, sharedChat.id, false), (result, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            UI.showToast(TD.toErrorString(error), Toast.LENGTH_SHORT);
+          } else {
+            if (oneTime) {
+              onDestroyCommandKeyboard();
+            }
+            if (!c.isDestroyed()) {
+              c.navigateBack();
+            }
+          }
+        }));
+        return false;
+      }
+    }));
+    navigateTo(c);
+  }
+
+  private boolean canShareChatWithBot (TdApi.KeyboardButtonTypeRequestChat requestChat, TdApi.Chat sharedChat) {
+    if (requestChat.chatIsChannel ? !tdlib.isChannelChat(sharedChat) : !tdlib.isMultiChat(sharedChat)) {
+      return false;
+    }
+    if (requestChat.restrictChatIsForum && tdlib.isForum(sharedChat.id) != requestChat.chatIsForum) {
+      return false;
+    }
+    if (requestChat.restrictChatHasUsername && StringUtils.isEmpty(tdlib.chatUsername(sharedChat)) == requestChat.chatHasUsername) {
+      return false;
+    }
+    if (requestChat.chatIsCreated) {
+      TdApi.ChatMemberStatus status = tdlib.chatStatus(sharedChat.id);
+      if (status == null || status.getConstructor() != TdApi.ChatMemberStatusCreator.CONSTRUCTOR) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private GoogleApiClient googleClient;

@@ -580,6 +580,17 @@
   <item type="id" name="btn_premiumDescription" />
   <item type="id" name="btn_paymentCard" />
   <item type="id" name="btn_paymentSavedCard" />
+  <item type="id" name="btn_paymentTip" />
+  <item type="id" name="btn_paymentName" />
+  <item type="id" name="btn_paymentPhone" />
+  <item type="id" name="btn_paymentEmail" />
+  <item type="id" name="btn_paymentStreet1" />
+  <item type="id" name="btn_paymentStreet2" />
+  <item type="id" name="btn_paymentCity" />
+  <item type="id" name="btn_paymentState" />
+  <item type="id" name="btn_paymentPostcode" />
+  <item type="id" name="btn_paymentCountry" />
+  <item type="id" name="btn_paymentShippingOption" />
   <item type="id" name="btn_paymentSubmit" />
   <item type="id" name="controller_premium" />
   <item type="id" name="controller_stars" />
@@ -652,6 +663,11 @@
   <item type="id" name="btn_chatFontSizeReset" />
   <item type="id" name="btn_encryptionKey" />
   <item type="id" name="btn_cancel" />
+  <item type="id" name="btn_paidReactionPreset1" />
+  <item type="id" name="btn_paidReactionPreset2" />
+  <item type="id" name="btn_paidReactionPreset3" />
+  <item type="id" name="btn_paidReactionPreset4" />
+  <item type="id" name="btn_paidReactionCustom" />
   <item type="id" name="btn_clear" />
   <item type="id" name="btn_removeProxy" />
   <item type="id" name="btn_save" />

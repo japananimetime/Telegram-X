@@ -380,6 +380,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     this.messageReactions = new TGReactions(this, tdlib, msg.interactionInfo != null ? msg.interactionInfo.reactions : null, new TGReactions.MessageReactionsDelegate() {
       @Override
       public void onClick (View v, TGReactions.MessageReactionEntry entry) {
+        if (entry.getReactionType().getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+          confirmPaidReaction(v, entry.getTGReaction());
+          return;
+        }
         boolean hasReaction = messageReactions.hasReaction(entry.getReactionType());
         if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && !hasReaction && tdlib.isAnonymousAdminNonCreator(msg.chatId)) {
           showReactionBubbleTooltip(v, entry, Lang.getString(R.string.error_ANONYMOUS_REACTIONS_DISABLED));
@@ -9258,6 +9262,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
         final boolean isOdd = a % 2 == 1;
         final SwipeQuickAction quickReaction = new SwipeQuickAction(reactionObj.getTitle(), reactionDrawable, () -> {
+          if (reactionType.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+            confirmPaidReaction(findCurrentView(), reactionObj);
+            return;
+          }
           boolean hasReaction = messageReactions.hasReaction(reactionType);
           if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && !hasReaction && tdlib.isAnonymousAdminNonCreator(msg.chatId)) {
             showContentHint(findCurrentView(), null, R.string.error_ANONYMOUS_REACTIONS_DISABLED);
@@ -9827,6 +9835,65 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   private void onSendError (@Nullable View v, @Nullable TGReactions.MessageReactionEntry entry, TdApi.Error error) {
     showReactionBubbleTooltip(v, entry, TD.toErrorString(error));
+  }
+
+  private static final long[] PAID_REACTION_PRESETS = {1, 5, 10, 50};
+
+  public void confirmPaidReaction (View v, TGReaction reaction) {
+    final TdApi.PaidReactionType type = tdlib.defaultPaidReaction();
+    final int[] ids = {
+      R.id.btn_paidReactionPreset1,
+      R.id.btn_paidReactionPreset2,
+      R.id.btn_paidReactionPreset3,
+      R.id.btn_paidReactionPreset4,
+      R.id.btn_paidReactionCustom
+    };
+    final String[] titles = new String[ids.length];
+    final int[] icons = new int[ids.length];
+    for (int i = 0; i < PAID_REACTION_PRESETS.length; i++) {
+      titles[i] = Lang.plural(R.string.xStars, PAID_REACTION_PRESETS[i]);
+      icons[i] = R.drawable.baseline_star_24;
+    }
+    titles[ids.length - 1] = Lang.getString(R.string.PaidReactionCustom);
+    icons[ids.length - 1] = R.drawable.baseline_edit_24;
+    messagesController().showOptions(Lang.getString(R.string.PaidReactionChoose), ids, titles, null, icons, (itemView, id) -> {
+      if (id == R.id.btn_paidReactionCustom) {
+        promptCustomPaidReactionAmount(v, reaction, type);
+      } else {
+        int index = ArrayUtils.indexOf(ids, id);
+        if (index >= 0 && index < PAID_REACTION_PRESETS.length) {
+          sendPaidReactionAmount(v, reaction, PAID_REACTION_PRESETS[index], type);
+        }
+      }
+      return true;
+    });
+  }
+
+  private void promptCustomPaidReactionAmount (View v, TGReaction reaction, TdApi.PaidReactionType type) {
+    messagesController().openInputAlert(
+      Lang.getString(R.string.PaidReactionCustom),
+      Lang.getString(R.string.PaidReactionAmountHint),
+      R.string.Send, R.string.Cancel, "1",
+      (inputView, result) -> {
+        long amount;
+        try {
+          amount = Long.parseLong(result != null ? result.trim() : "");
+        } catch (NumberFormatException e) {
+          amount = 0;
+        }
+        if (amount < 1) {
+          return false;
+        }
+        sendPaidReactionAmount(v, reaction, amount, type);
+        return true;
+      },
+      false
+    );
+  }
+
+  private void sendPaidReactionAmount (View v, TGReaction reaction, long amount, TdApi.PaidReactionType type) {
+    scheduleSetReactionAnimation(new NextReactionAnimation(reaction, NextReactionAnimation.TYPE_CLICK));
+    messageReactions.sendPaidReaction(amount, type, handler(v, null, () -> {}));
   }
 
   private void showReactionBubbleTooltip (View v, TGReactions.MessageReactionEntry entry, String text) {

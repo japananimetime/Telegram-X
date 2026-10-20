@@ -4925,6 +4925,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         }
         break;
       }
+      case TdApi.ReactionTypePaid.CONSTRUCTOR: {
+        // Paid reactions use a star icon, nothing to fetch from TDLib
+        TGReaction reaction = new TGReaction(this);
+        synchronized (dataLock) {
+          cachedReactions.put(key, reaction);
+        }
+        return reaction;
+      }
     }
     return null;
   }
