@@ -13,10 +13,13 @@
 package org.thunderdog.challegram.ui;
 
 import android.content.Context;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import android.view.View;
-import android.widget.Toast;
 
 import org.drinkless.tdlib.TdApi;
 import org.json.JSONException;
@@ -27,6 +30,7 @@ import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
@@ -39,6 +43,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
+import me.vkryl.core.CurrencyUtils;
 import me.vkryl.core.StringUtils;
 
 /**
@@ -68,6 +73,20 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
   private String cardExpiry = "";
   private String cardCvc = "";
   private String cardHolder = "";
+
+  // Tip + order info
+  private long tipAmount = 0;
+  private String orderName = "";
+  private String orderPhone = "";
+  private String orderEmail = "";
+  private String validatedOrderInfoId = "";
+  private ListItem orderNameItem, orderPhoneItem, orderEmailItem;
+
+  // Shipping address + options
+  private String orderCountry = "", orderState = "", orderCity = "", orderStreet1 = "", orderStreet2 = "", orderPostcode = "";
+  private ListItem orderCountryItem, orderStateItem, orderCityItem, orderStreet1Item, orderStreet2Item, orderPostcodeItem;
+  private TdApi.ShippingOption[] shippingOptions;
+  private String selectedShippingOptionId = "";
 
   // ListItem references for text fields
   private ListItem cardNumberItem;
@@ -106,6 +125,23 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
     Args args = getArgumentsStrict();
     this.paymentForm = args.paymentForm;
     this.inputInvoice = args.inputInvoice;
+    if (paymentForm.type instanceof TdApi.PaymentFormTypeRegular) {
+      // Prefill contact/shipping fields with the order info the user saved earlier
+      TdApi.OrderInfo saved = ((TdApi.PaymentFormTypeRegular) paymentForm.type).savedOrderInfo;
+      if (saved != null) {
+        orderName = saved.name;
+        orderPhone = saved.phoneNumber;
+        orderEmail = saved.emailAddress;
+        if (saved.shippingAddress != null) {
+          orderCountry = saved.shippingAddress.countryCode;
+          orderState = saved.shippingAddress.state;
+          orderCity = saved.shippingAddress.city;
+          orderStreet1 = saved.shippingAddress.streetLine1;
+          orderStreet2 = saved.shippingAddress.streetLine2;
+          orderPostcode = saved.shippingAddress.postalCode;
+        }
+      }
+    }
 
     adapter = new SettingsAdapter(this) {
       @Override
@@ -116,7 +152,58 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
           if (creds != null) {
             view.setData(creds.title);
           }
+        } else if (itemId == R.id.btn_paymentShippingOption) {
+          TdApi.ShippingOption option = (TdApi.ShippingOption) item.getData();
+          TdApi.Invoice invoice = invoice();
+          view.setData(option != null && invoice != null ? formatPrice(invoice.currency, calculateTotalAmount(option.priceParts)) : null);
+        } else if (itemId == R.id.btn_paymentTip) {
+          view.setData(null);
         }
+      }
+
+      @Override
+      protected void modifyEditText (ListItem item, ViewGroup parent, MaterialEditTextGroup editText) {
+        // Edit text views are recycled between fields, so always reset both the
+        // input type and the filters for every field this screen shows.
+        int inputType;
+        InputFilter[] filters;
+        if (item == cardNumberItem) {
+          inputType = InputType.TYPE_CLASS_NUMBER;
+          filters = new InputFilter[] {new InputFilter.LengthFilter(19)};
+        } else if (item == cardExpiryItem) {
+          // Phone keyboard: digits plus '/' for MM/YY
+          inputType = InputType.TYPE_CLASS_PHONE;
+          filters = new InputFilter[] {new InputFilter.LengthFilter(7)};
+        } else if (item == cardCvcItem) {
+          inputType = InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+          filters = new InputFilter[] {new InputFilter.LengthFilter(4)};
+        } else if (item == cardHolderItem) {
+          inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS;
+          filters = new InputFilter[0];
+        } else if (item == orderNameItem) {
+          inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PERSON_NAME | InputType.TYPE_TEXT_FLAG_CAP_WORDS;
+          filters = new InputFilter[0];
+        } else if (item == orderPhoneItem) {
+          inputType = InputType.TYPE_CLASS_PHONE;
+          filters = new InputFilter[0];
+        } else if (item == orderEmailItem) {
+          inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS;
+          filters = new InputFilter[0];
+        } else if (item == orderCountryItem) {
+          // ISO 3166-1 alpha-2 country code
+          inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS;
+          filters = new InputFilter[] {new InputFilter.LengthFilter(2), new InputFilter.AllCaps()};
+        } else if (item == orderStreet1Item || item == orderStreet2Item || item == orderCityItem || item == orderStateItem) {
+          inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_POSTAL_ADDRESS | InputType.TYPE_TEXT_FLAG_CAP_WORDS;
+          filters = new InputFilter[0];
+        } else if (item == orderPostcodeItem) {
+          inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS;
+          filters = new InputFilter[0];
+        } else {
+          return;
+        }
+        editText.getEditText().setInputType(inputType);
+        editText.getEditText().setFilters(filters);
       }
     };
     adapter.setTextChangeListener(this);
@@ -136,7 +223,72 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
       cardCvc = text;
     } else if (item == cardHolderItem) {
       cardHolder = text;
+    } else if (item == orderNameItem) {
+      if (!text.equals(orderName)) {
+        orderName = text;
+        validatedOrderInfoId = ""; // contact info changed: re-validate before paying
+      }
+    } else if (item == orderPhoneItem) {
+      if (!text.equals(orderPhone)) {
+        orderPhone = text;
+        validatedOrderInfoId = "";
+      }
+    } else if (item == orderEmailItem) {
+      if (!text.equals(orderEmail)) {
+        orderEmail = text;
+        validatedOrderInfoId = "";
+      }
+    } else if (item == orderStreet1Item) {
+      if (!text.equals(orderStreet1)) {
+        orderStreet1 = text;
+        invalidateShippingAddress();
+      }
+    } else if (item == orderStreet2Item) {
+      if (!text.equals(orderStreet2)) {
+        orderStreet2 = text;
+        invalidateShippingAddress();
+      }
+    } else if (item == orderCityItem) {
+      if (!text.equals(orderCity)) {
+        orderCity = text;
+        invalidateShippingAddress();
+      }
+    } else if (item == orderStateItem) {
+      if (!text.equals(orderState)) {
+        orderState = text;
+        invalidateShippingAddress();
+      }
+    } else if (item == orderPostcodeItem) {
+      if (!text.equals(orderPostcode)) {
+        orderPostcode = text;
+        invalidateShippingAddress();
+      }
+    } else if (item == orderCountryItem) {
+      if (!text.equals(orderCountry)) {
+        orderCountry = text;
+        invalidateShippingAddress();
+      }
     }
+  }
+
+  // Address changed: the previous validation (and its shipping options) is stale.
+  // The options list stays visible until the next validation replaces it, so the
+  // focused field is not unbound by a rebuild while the user is typing.
+  private void invalidateShippingAddress () {
+    validatedOrderInfoId = "";
+    selectedShippingOptionId = "";
+  }
+
+  private long selectedShippingPrice () {
+    if (shippingOptions == null || StringUtils.isEmpty(selectedShippingOptionId)) {
+      return 0;
+    }
+    for (TdApi.ShippingOption option : shippingOptions) {
+      if (option.id.equals(selectedShippingOptionId)) {
+        return calculateTotalAmount(option.priceParts);
+      }
+    }
+    return 0;
   }
 
   private void buildCells() {
@@ -155,6 +307,75 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
     if (paymentForm.type instanceof TdApi.PaymentFormTypeRegular) {
       TdApi.PaymentFormTypeRegular regular = (TdApi.PaymentFormTypeRegular) paymentForm.type;
 
+      // Contact information (collected before payment via ValidateOrderInfo)
+      if (regular.invoice.needName || regular.invoice.needPhoneNumber || regular.invoice.needEmailAddress) {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentContactInfo));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        boolean firstField = true;
+        if (regular.invoice.needName) {
+          orderNameItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentName, 0, R.string.PaymentName).setStringValue(orderName);
+          items.add(orderNameItem);
+          firstField = false;
+        }
+        if (regular.invoice.needPhoneNumber) {
+          if (!firstField) items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          orderPhoneItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentPhone, 0, R.string.PaymentPhone).setStringValue(orderPhone);
+          items.add(orderPhoneItem);
+          firstField = false;
+        }
+        if (regular.invoice.needEmailAddress) {
+          if (!firstField) items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          orderEmailItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentEmail, 0, R.string.PaymentEmail).setStringValue(orderEmail);
+          items.add(orderEmailItem);
+        }
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
+
+      // Shipping address
+      if (regular.invoice.needShippingAddress) {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentShippingAddress));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        orderStreet1Item = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentStreet1, 0, R.string.PaymentStreet1).setStringValue(orderStreet1);
+        items.add(orderStreet1Item);
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        orderStreet2Item = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentStreet2, 0, R.string.PaymentStreet2).setStringValue(orderStreet2);
+        items.add(orderStreet2Item);
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        orderCityItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCity, 0, R.string.PaymentCity).setStringValue(orderCity);
+        items.add(orderCityItem);
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        orderStateItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentState, 0, R.string.PaymentState).setStringValue(orderState);
+        items.add(orderStateItem);
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        orderPostcodeItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentPostcode, 0, R.string.PaymentPostcode).setStringValue(orderPostcode);
+        items.add(orderPostcodeItem);
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+        orderCountryItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCountry, 0, R.string.PaymentCountry).setStringValue(orderCountry);
+        items.add(orderCountryItem);
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.PaymentCountryHint));
+      }
+
+      // Shipping options (populated after ValidateOrderInfo)
+      if (shippingOptions != null && shippingOptions.length > 0) {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentShippingMethod));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        boolean firstOpt = true;
+        for (TdApi.ShippingOption option : shippingOptions) {
+          if (!firstOpt) {
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          }
+          firstOpt = false;
+          ListItem item = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_paymentShippingOption, 0, option.title);
+          item.setData(option);
+          if (option.id.equals(selectedShippingOptionId)) {
+            item.setTextColorId(ColorId.textNeutral);
+          }
+          items.add(item);
+        }
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
+
       // Saved cards
       if (regular.savedCredentials != null && regular.savedCredentials.length > 0) {
         items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentSavedCards));
@@ -172,22 +393,44 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
         items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
       }
 
+      // Tip (optional)
+      if (regular.invoice.maxTipAmount > 0 && regular.invoice.suggestedTipAmounts != null && regular.invoice.suggestedTipAmounts.length > 0) {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentTipOptional));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        boolean firstTip = true;
+        for (long tip : regular.invoice.suggestedTipAmounts) {
+          if (!firstTip) {
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          }
+          firstTip = false;
+          ListItem item = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_paymentTip, 0,
+            formatPrice(regular.invoice.currency, tip));
+          item.setLongValue(tip);
+          if (tip == tipAmount) {
+            item.setTextColorId(ColorId.textNeutral);
+          }
+          items.add(item);
+        }
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.PaymentTipHint));
+      }
+
       // New card input
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PaymentNewCard));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
       // Card number
-      cardNumberItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardNumber);
+      cardNumberItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardNumber).setStringValue(cardNumber);
       items.add(cardNumberItem);
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
 
       // Expiry
-      cardExpiryItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardExpiry);
+      cardExpiryItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardExpiry).setStringValue(cardExpiry);
       items.add(cardExpiryItem);
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
 
       // CVC
-      cardCvcItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardCVC);
+      cardCvcItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardCVC).setStringValue(cardCvc);
       items.add(cardCvcItem);
 
       // Cardholder name (if required by provider)
@@ -195,16 +438,16 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
         TdApi.PaymentProviderStripe stripe = (TdApi.PaymentProviderStripe) regular.paymentProvider;
         if (stripe.needCardholderName) {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR));
-          cardHolderItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardHolder);
+          cardHolderItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING, R.id.btn_paymentCard, 0, R.string.PaymentCardHolder).setStringValue(cardHolder);
           items.add(cardHolderItem);
         }
       }
 
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-      // Pay button
+      // Pay button (total includes the chosen tip + selected shipping option)
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      long totalAmount = calculateTotalAmount(regular.invoice.priceParts);
+      long totalAmount = calculateTotalAmount(regular.invoice.priceParts) + tipAmount + selectedShippingPrice();
       String priceText = formatPrice(regular.invoice.currency, totalAmount);
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_paymentSubmit, R.drawable.baseline_payment_24, Lang.getString(R.string.PaymentPay, priceText)));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -222,11 +465,25 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
       ListItem item = (ListItem) v.getTag();
       if (item != null && item.getData() instanceof TdApi.SavedCredentials) {
         TdApi.SavedCredentials creds = (TdApi.SavedCredentials) item.getData();
-        payWithSavedCredentials(creds);
+        ensureOrderInfoThenPay(() -> payWithSavedCredentials(creds));
+      }
+    } else if (viewId == R.id.btn_paymentTip) {
+      ListItem item = (ListItem) v.getTag();
+      if (item != null) {
+        long tip = item.getLongValue();
+        // Tapping the selected tip clears it.
+        tipAmount = (tip == tipAmount) ? 0 : tip;
+        buildCells();
+      }
+    } else if (viewId == R.id.btn_paymentShippingOption) {
+      ListItem item = (ListItem) v.getTag();
+      if (item != null && item.getData() instanceof TdApi.ShippingOption) {
+        selectedShippingOptionId = ((TdApi.ShippingOption) item.getData()).id;
+        buildCells();
       }
     } else if (viewId == R.id.btn_paymentSubmit) {
       if (validateCard()) {
-        processNewCardPayment();
+        ensureOrderInfoThenPay(this::processNewCardPayment);
       }
     }
   }
@@ -465,14 +722,76 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
     }
   }
 
+  private TdApi.Invoice invoice () {
+    return paymentForm.type instanceof TdApi.PaymentFormTypeRegular
+      ? ((TdApi.PaymentFormTypeRegular) paymentForm.type).invoice : null;
+  }
+
+  private boolean needsOrderInfo () {
+    TdApi.Invoice inv = invoice();
+    return inv != null && (inv.needName || inv.needPhoneNumber || inv.needEmailAddress || inv.needShippingAddress);
+  }
+
+  /**
+   * Validates collected contact/shipping info (if required) before paying. When the
+   * invoice needs shipping, ValidateOrderInfo returns shipping options the user must
+   * pick from: in that case they are shown and payment happens on the next tap.
+   */
+  private void ensureOrderInfoThenPay (Runnable pay) {
+    TdApi.Invoice inv = invoice();
+    if (!needsOrderInfo()) {
+      pay.run();
+      return;
+    }
+    if (!StringUtils.isEmpty(validatedOrderInfoId)) {
+      if (inv != null && inv.needShippingAddress && StringUtils.isEmpty(selectedShippingOptionId)
+        && shippingOptions != null && shippingOptions.length > 0) {
+        UI.showToast(R.string.PaymentSelectShipping, Toast.LENGTH_SHORT);
+        return;
+      }
+      pay.run();
+      return;
+    }
+    isProcessing = true;
+    TdApi.Address address = (inv != null && inv.needShippingAddress)
+      ? new TdApi.Address(orderCountry, orderState, orderCity, orderStreet1, orderStreet2, orderPostcode) : null;
+    TdApi.OrderInfo orderInfo = new TdApi.OrderInfo(orderName, orderPhone, orderEmail, address);
+    tdlib.send(new TdApi.ValidateOrderInfo(inputInvoice, orderInfo, false), (result, error) -> runOnUiThreadOptional(() -> {
+      isProcessing = false;
+      if (error != null) {
+        UI.showToast(Lang.getString(R.string.PaymentOrderInfoError, TD.toErrorString(error)), Toast.LENGTH_SHORT);
+      } else if (result != null) {
+        validatedOrderInfoId = result.orderInfoId;
+        shippingOptions = result.shippingOptions;
+        if (shippingOptions != null && shippingOptions.length > 0) {
+          // Auto-select a single option, otherwise show the list and wait for a choice.
+          if (shippingOptions.length == 1) {
+            selectedShippingOptionId = shippingOptions[0].id;
+            buildCells();
+            pay.run();
+          } else {
+            selectedShippingOptionId = "";
+            buildCells();
+            UI.showToast(R.string.PaymentSelectShipping, Toast.LENGTH_SHORT);
+          }
+        } else {
+          shippingOptions = null;
+          selectedShippingOptionId = "";
+          buildCells();
+          pay.run();
+        }
+      }
+    }));
+  }
+
   private void sendPaymentForm(TdApi.InputCredentials credentials) {
     TdApi.SendPaymentForm request = new TdApi.SendPaymentForm(
       inputInvoice,
       paymentForm.id,
-      "", // orderInfoId
-      "", // shippingOptionId
+      validatedOrderInfoId,
+      selectedShippingOptionId,
       credentials,
-      0   // tipAmount
+      tipAmount
     );
 
     tdlib.send(request, (result, error) -> {
@@ -512,7 +831,8 @@ public class PaymentFormController extends RecyclerViewController<PaymentFormCon
   }
 
   private String formatPrice(String currency, long amount) {
-    double price = amount / 100.0;
-    return String.format("%s %.2f", currency, price);
+    // amount/100.0 is wrong for zero-decimal (JPY) and 3-decimal currencies and
+    // ignores locale/symbol. CurrencyUtils handles per-currency exponent + format.
+    return CurrencyUtils.buildAmount(currency, amount);
   }
 }
