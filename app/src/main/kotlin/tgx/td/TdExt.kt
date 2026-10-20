@@ -353,4 +353,5 @@ fun Array<MessageWithProperties>?.toMessageIdsMap (): LongSparseArray<LongArray>
   return result
 }
 
-fun ReactionType?.isUnsupported (): Boolean = this?.constructor == ReactionTypePaid.CONSTRUCTOR
+// Paid (Star) reactions are supported: they are spent via AddPendingPaidMessageReaction + CommitPendingPaidMessageReactions.
+fun ReactionType?.isUnsupported (): Boolean = false

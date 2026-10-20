@@ -71,7 +71,7 @@ public class TGReaction {
     this.customReaction = null;
     this.isPaid = true;
 
-    initialize();
+    initializePaid();
   }
 
   private void initialize () {
@@ -89,6 +89,17 @@ public class TGReaction {
     }
 
     loadAllAnimationsAndCache();
+  }
+
+  private void initializePaid () {
+    // For paid reactions, use a star icon instead of stickers
+    TGStickerObj paidStar = TGStickerObj.makePaidReactionStar(tdlib);
+    _staticIconSicker = paidStar;
+    _activateAnimationSicker = paidStar;
+    _effectAnimationSicker = null;
+    _aroundAnimationSicker = null;
+    _centerAnimationSicker = paidStar;
+    _staticCenterAnimationSicker = paidStar;
   }
 
   public boolean needThemedColorFilter () {
@@ -183,6 +194,9 @@ public class TGReaction {
   }
 
   public int getId () {
+    if (isPaid) {
+      return -1; // Special ID for paid reactions
+    }
     return _staticIconSicker.getId();
   }
 

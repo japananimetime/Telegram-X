@@ -155,6 +155,9 @@
   <string name="StarsPaymentFailed">Payment failed: %1$s</string>
   <string name="StarsInsufficientBalance">Insufficient Stars balance. You need %1$s more Stars.</string>
   <string name="PaidReactionInsufficientStars">You don\'t have enough Stars for this reaction. Buy Stars in Settings.</string>
+  <string name="PaidReactionChoose">How many Stars would you like to send?</string>
+  <string name="PaidReactionCustom">Custom amount…</string>
+  <string name="PaidReactionAmountHint">Number of Stars</string>
   <string name="StarTransactions">Transaction History</string>
   <string name="NoStarTransactions">No transactions yet</string>
   <string name="xStars_one">%1$s Star</string>

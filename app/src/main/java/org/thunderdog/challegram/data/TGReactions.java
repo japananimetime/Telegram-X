@@ -4,6 +4,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -13,6 +14,7 @@ import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.community.CommunityConfig;
 import org.thunderdog.challegram.component.chat.MessageView;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
@@ -27,6 +29,7 @@ import org.thunderdog.challegram.telegram.ReactionLoadListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
@@ -613,6 +616,11 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
   }
 
   public boolean toggleReaction (TdApi.ReactionType reactionType, boolean isBig, boolean updateRecentReactions, Client.ResultHandler handler) {
+    if (reactionType.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+      // Paid reactions spend Stars and must go through sendPaidReaction()
+      // (via TGMessage.confirmPaidReaction), never through the plain toggle path.
+      return false;
+    }
     TdApi.Message message = parent.getOldestMessage();
     boolean hasReaction = !hasReaction(reactionType);
     if (hasReaction) {
@@ -621,6 +629,24 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
       tdlib.client().send(new TdApi.RemoveMessageReaction(parent.getChatId(), message.id, reactionType), handler);
     }
     return hasReaction;
+  }
+
+  /**
+   * Adds {@code starCount} pending paid reactions and immediately commits them,
+   * actually spending the Stars. Without the commit, TDLib keeps the reaction
+   * pending and the Stars are never spent.
+   */
+  public void sendPaidReaction (long starCount, @Nullable TdApi.PaidReactionType type, Client.ResultHandler handler) {
+    TdApi.Message message = parent.getOldestMessage();
+    final long chatId = parent.getChatId();
+    final long messageId = message.id;
+    tdlib.client().send(new TdApi.AddPendingPaidMessageReaction(chatId, messageId, starCount, type), result -> {
+      if (result.getConstructor() == TdApi.Ok.CONSTRUCTOR) {
+        tdlib.client().send(new TdApi.CommitPendingPaidMessageReactions(chatId, messageId), handler);
+      } else {
+        handler.onResult(result);
+      }
+    });
   }
 
   public static class MessageReactionEntry implements TextColorSet, FactorAnimator.Target {
@@ -642,6 +668,7 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
     private final float staticAnimationFileScale;
     private final ImageFile staticImageFile;
     private final float staticImageFileScale;
+    @Nullable private final Drawable paidReactionDrawable; // Star icon for paid reactions
 
     private final MessageReactionsDelegate delegate;
 
@@ -667,6 +694,18 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
       } else {
         this.avatars = null;
       }
+
+      if (reaction.isPaid()) {
+        this.paidReactionDrawable = Drawables.get(R.drawable.baseline_star_24);
+        this.animation = null;
+        this.animationScale = 1f;
+        this.staticAnimationFile = null;
+        this.staticAnimationFileScale = 1f;
+        this.staticImageFile = null;
+        this.staticImageFileScale = 1f;
+        return;
+      }
+      this.paidReactionDrawable = null;
 
       TGStickerObj stickerObj = reactionObj.newCenterAnimationSicker();
       animation = stickerObj.getFullAnimation();
@@ -965,6 +1004,14 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
     private boolean isTagMode;
 
     private void drawReceiver (Canvas c, int l, int t, int r, int b, float alpha) {
+      if (paidReactionDrawable != null) {
+        paidReactionDrawable.setBounds(l, t, r, b);
+        paidReactionDrawable.setAlpha((int) (alpha * 255));
+        paidReactionDrawable.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.iconActive)));
+        paidReactionDrawable.draw(c);
+        return;
+      }
+
       Receiver receiver = inAnimation ? centerAnimationReceiver : staticCenterAnimationReceiver;
       float scale = inAnimation ? animationScale : staticAnimationFile != null ? staticAnimationFileScale : staticImageFileScale;
       if (receiver != null) {

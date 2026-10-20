@@ -18,7 +18,7 @@ One row per fork feature. "Open" lists the items still flagged by the audits ([[
 | Playback speed | `feature/playback-speed` | `player/TGPlayerController` | listener add/remove swap fixed |
 | Disposable voices | `feature/disposable-voices` | compose/send path | |
 | Voice transcription | `feature/voice-transcription` | `SpeechRecognitionManager` + TDLib/local/HTTP providers, settings screens | |
-| Reactions improvements | `feature/reactions-improvements` | `TGReactions`, paid reactions (`TdExt.kt`) | paid-reaction amount picker done |
+| Reactions improvements | `feature/reactions-improvements` | `TGReactions`, `TGMessage.confirmPaidReaction`, `TdExt.isUnsupported` | paid (Star) reactions: amount picker (1/5/10/50/custom) → `AddPendingPaidMessageReaction` + `CommitPendingPaidMessageReactions`; lost in the June reconstruction, restored on `feature/restore-june-features` (2026-10, not yet device-tested). `toggleReaction` refuses paid types — every entry point (bubble, picker sheet, quick-swipe) must route via `confirmPaidReaction` |
 | Business suite | parity | `SettingsBusinessController` + editors | editors for hours/greeting/away/start page/location/links/connected bot done |
 | Quick replies / Downloads / Boosts / Sticker packs | parity | `QuickRepliesController`, `DownloadsController`, `ChatBoostController`, `StickerSetsController` | quick-reply create + "/" picker, boost chart, sticker emoji edit/reorder are follow-ups |
 | Push (FCM) | `parity-fixes` | `PushProcessor`, `ForegroundService`, `PushHandler`, `app/src/google/*` | Android 12+ FGS-from-background fix ported; real `google-services.json`; **device-test pending** |
